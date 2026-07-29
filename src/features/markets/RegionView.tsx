@@ -17,9 +17,10 @@ interface Props {
   onSelect: (q: Quote) => void;
   watchlist?: boolean;
   onEdit?: () => void;
+  enableSignals?: boolean;
 }
 
-export default function RegionView({ open, onClose, title, flag, indices, symbols, onSelect, watchlist, onEdit }: Props) {
+export default function RegionView({ open, onClose, title, flag, indices, symbols, onSelect, watchlist, onEdit, enableSignals = true }: Props) {
   const prefs = usePrefs();
   const [activeIdx, setActiveIdx] = useState(0);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -44,22 +45,26 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
     let cancelled = false;
     setLoading(true);
     setSignals({});
-    setSignalsLoading(true);
     fetchQuotes(activeSymbols)
       .then((r) => !cancelled && setQuotes(r.quotes))
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
     // Signals need per-symbol history, so they load a beat later — the rows
-    // show a shimmer until each arrives.
-    fetchSignals(activeSymbols)
-      .then((r) => {
-        if (cancelled) return;
-        const map: Record<string, Signal> = {};
-        r.signals.forEach((s) => (map[s.symbol.toUpperCase()] = s));
-        setSignals(map);
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setSignalsLoading(false));
+    // show a shimmer until each arrives. Skipped for bonds/FX.
+    if (enableSignals) {
+      setSignalsLoading(true);
+      fetchSignals(activeSymbols)
+        .then((r) => {
+          if (cancelled) return;
+          const map: Record<string, Signal> = {};
+          r.signals.forEach((s) => (map[s.symbol.toUpperCase()] = s));
+          setSignals(map);
+        })
+        .catch(() => {})
+        .finally(() => !cancelled && setSignalsLoading(false));
+    } else {
+      setSignalsLoading(false);
+    }
     return () => {
       cancelled = true;
     };

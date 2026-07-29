@@ -3,7 +3,7 @@ import Sheet from "../../components/Sheet";
 import PriceChart from "../../components/PriceChart";
 import { fetchHistory, fetchSignals, fetchNews, type History, type Quote, type Signal, type NewsItem } from "../../lib/api";
 import { computeAnalytics } from "../../lib/analytics";
-import { fmtPrice, fmtPct, fmtNum, cleanSymbol, timeAgo } from "../../lib/format";
+import { fmtPct, fmtNum, cleanSymbol, timeAgo, displayPrice, isBond, isFx } from "../../lib/format";
 import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
 import SignalPill from "../../components/SignalPill";
 import ArticleReader from "../news/ArticleReader";
@@ -41,8 +41,10 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
     };
   }, [quote, prefs.countries]);
 
+  const noSignal = !!quote && (isBond(quote.symbol) || isFx(quote.symbol));
+
   useEffect(() => {
-    if (!quote) return;
+    if (!quote || noSignal) return;
     let cancelled = false;
     setSignal(null);
     setSignalLoading(true);
@@ -53,7 +55,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
     return () => {
       cancelled = true;
     };
-  }, [quote]);
+  }, [quote, noSignal]);
 
   useEffect(() => {
     if (!quote) return;
@@ -85,7 +87,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           </div>
           <div className="flex items-baseline gap-3 mt-1">
             <span className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-              {fmtPrice(quote.price, quote.currency)}
+              {displayPrice(quote.price, quote.currency, quote.symbol)}
             </span>
             <span className={`inline-flex items-center gap-1 text-sm font-semibold ${dayUp ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
               {dayUp ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
@@ -110,6 +112,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         </div>
 
         {/* Smart Signal */}
+        {!noSignal && (
         <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -166,6 +169,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
             </>
           )}
         </div>
+        )}
 
         <div>
           {loading && <div style={{ height: 180 }} className="skeleton rounded-xl" />}
@@ -194,10 +198,10 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           <div className="grid grid-cols-2 gap-2.5">
             <Stat label="Range change" value={fmtPct(a.changePct)} tone={a.trend === "up" ? "pos" : a.trend === "down" ? "neg" : "flat"} />
             <Stat label="Volatility" value={a.volatilityPct != null ? `${fmtNum(a.volatilityPct)}%` : "—"} />
-            <Stat label="Period high" value={fmtPrice(a.high, quote.currency)} />
-            <Stat label="Period low" value={fmtPrice(a.low, quote.currency)} />
-            <Stat label="Avg (SMA)" value={fmtPrice(a.sma, quote.currency)} />
-            <Stat label="Prev. close" value={fmtPrice(quote.previousClose, quote.currency)} />
+            <Stat label="Period high" value={displayPrice(a.high, quote.currency, quote.symbol)} />
+            <Stat label="Period low" value={displayPrice(a.low, quote.currency, quote.symbol)} />
+            <Stat label="Avg (SMA)" value={displayPrice(a.sma, quote.currency, quote.symbol)} />
+            <Stat label="Prev. close" value={displayPrice(quote.previousClose, quote.currency, quote.symbol)} />
           </div>
         </div>
 

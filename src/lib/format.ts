@@ -58,9 +58,25 @@ export function cleanSymbol(sym: string): string {
     .replace(/-USD$/, "")
     .replace(/=X$/, "")
     .replace(/=F$/, "")
+    .replace(/=$/, "")
     .replace(/^@/, "")
     .replace(/\.\d+$/, "")
     .replace(/^\^/, "");
+}
+
+export function isBond(sym: string): boolean {
+  return /\d+Y$/.test(sym.toUpperCase());
+}
+export function isFx(sym: string): boolean {
+  return /=X?$/.test(sym) && !isBond(sym);
+}
+
+/** Format a quote value by instrument type: yields as %, FX as a plain rate. */
+export function displayPrice(price: number | null, currency: string, symbol: string): string {
+  if (price == null) return "—";
+  if (isBond(symbol)) return `${price.toFixed(3)}%`;
+  if (isFx(symbol)) return price.toFixed(4);
+  return fmtPrice(price, currency);
 }
 
 export function hostOf(url: string): string {

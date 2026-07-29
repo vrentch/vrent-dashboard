@@ -3,6 +3,8 @@ import { ChevronRight, RefreshCw } from "lucide-react";
 import { fetchQuotes, fetchSignals, fetchNews, type Quote, type Signal, type NewsItem } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { greeting } from "../../lib/marketStatus";
+import { useEvents, eventsOn, todayKey } from "../../lib/calendar";
+import { fmtPct } from "../../lib/format";
 import MarketStatusBar from "../../components/MarketStatusBar";
 import StockRow from "../markets/StockRow";
 import StockDetail from "../markets/StockDetail";
@@ -67,6 +69,14 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
+  const events = useEvents();
+  const todayEvents = useMemo(() => eventsOn(events, todayKey()), [events]);
+  const avgChange = useMemo(() => {
+    const w = quotes.filter((q) => q.changePercent != null);
+    return w.length ? w.reduce((a, b) => a + (b.changePercent ?? 0), 0) / w.length : null;
+  }, [quotes]);
+  const nextEvent = todayEvents.find((e) => !e.done);
+
   return (
     <div>
       <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
@@ -86,6 +96,35 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+        {/* Daily briefing */}
+        <section className="rounded-2xl bg-gradient-to-br from-brand-600 to-indigo-700 text-white p-4 card-shadow">
+          <h2 className="text-sm font-semibold text-white/80 mb-2">Today's briefing</h2>
+          <ul className="space-y-1.5 text-[15px] font-medium">
+            <li className="flex items-center gap-2">
+              <span>📈</span>
+              {avgChange != null ? (
+                <span>Your watchlist is {avgChange >= 0 ? "up" : "down"} {fmtPct(avgChange)} on average today</span>
+              ) : (
+                <span className="text-white/80">Add symbols to track your watchlist</span>
+              )}
+            </li>
+            <li className="flex items-center gap-2">
+              <span>🗓️</span>
+              <span>
+                {todayEvents.length === 0
+                  ? "No events scheduled today"
+                  : `${todayEvents.length} event${todayEvents.length > 1 ? "s" : ""} today${nextEvent ? ` · next: ${nextEvent.title}${nextEvent.allDay ? "" : " " + (nextEvent.start ?? "")}` : ""}`}
+              </span>
+            </li>
+            {news[0] && (
+              <li className="flex items-start gap-2">
+                <span>📰</span>
+                <span className="line-clamp-2 text-white/95">{news[0].title}</span>
+              </li>
+            )}
+          </ul>
+        </section>
+
         {/* Market status */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Markets</h2>

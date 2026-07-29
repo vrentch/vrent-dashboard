@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Star, ChevronRight } from "lucide-react";
 import { fetchQuotes, type Quote } from "../../lib/api";
 import { usePrefs, activeWatchlist } from "../../lib/store";
-import { fmtPrice, fmtPct } from "../../lib/format";
-import { REGIONS, primaryIndex, type MarketRegion } from "../../data/markets";
+import { fmtPct, displayPrice } from "../../lib/format";
+import { REGIONS, primaryIndex, NO_SIGNAL_REGIONS, type MarketRegion } from "../../data/markets";
 import RegionView from "./RegionView";
 import StockDetail from "./StockDetail";
 import WatchlistEditor from "./WatchlistEditor";
@@ -79,7 +79,7 @@ export default function MarketsScreen() {
                     <div className="h-5 w-20 rounded skeleton" />
                   ) : (
                     <p className="text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                      {q ? fmtPrice(q.price, q.currency) : "—"}
+                      {q ? displayPrice(q.price, q.currency, q.symbol) : "—"}
                     </p>
                   )}
                   {q?.changePercent != null && (
@@ -126,6 +126,7 @@ export default function MarketsScreen() {
         title={openRegion?.name ?? ""}
         flag={openRegion?.flag ?? ""}
         indices={openRegion?.indices}
+        enableSignals={openRegion ? !NO_SIGNAL_REGIONS.has(openRegion.key) : true}
         onSelect={setSelected}
       />
 

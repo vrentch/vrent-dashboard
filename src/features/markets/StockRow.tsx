@@ -1,5 +1,5 @@
 import type { Quote, Signal } from "../../lib/api";
-import { fmtPrice, fmtPct, cleanSymbol } from "../../lib/format";
+import { fmtPct, cleanSymbol, displayPrice } from "../../lib/format";
 import Sparkline from "../../components/Sparkline";
 import SignalPill from "../../components/SignalPill";
 import { Star } from "lucide-react";
@@ -44,7 +44,7 @@ export default function StockRow({
         )}
 
         <div className="text-right shrink-0 min-w-[84px]">
-          <p className="font-semibold text-slate-900 dark:text-slate-100 text-[15px] tabular-nums">{fmtPrice(quote.price, quote.currency)}</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100 text-[15px] tabular-nums">{displayPrice(quote.price, quote.currency, quote.symbol)}</p>
           <p
             className={`inline-block text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md ${
               up ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15" : "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/15"

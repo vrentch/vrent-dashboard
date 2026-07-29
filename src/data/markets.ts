@@ -109,7 +109,28 @@ export const REGIONS: MarketRegion[] = [
       { key: "agri", symbol: "@C.1", label: "Agriculture", constituents: ["@C.1", "@W.1", "@S.1", "@KC.1", "@SB.1", "@CT.1", "@CC.1"] },
     ],
   },
+  {
+    key: "bonds",
+    name: "Bonds & rates",
+    flag: "🏦",
+    indices: [
+      { key: "gov10y", symbol: "US10Y", label: "10-year yields", constituents: ["US10Y", "DE10Y", "GB10Y", "CH10Y", "FR10Y", "IT10Y", "JP10Y"] },
+      { key: "uscurve", symbol: "US10Y", label: "US curve", constituents: ["US2Y", "US5Y", "US10Y", "US30Y"] },
+    ],
+  },
+  {
+    key: "fx",
+    name: "Currencies",
+    flag: "💱",
+    indices: [
+      { key: "majors", symbol: "EUR=", label: "Majors", constituents: ["EUR=", "GBP=", "JPY=", "CHF=", "AUD=", "CAD=", "CNY="] },
+      { key: "chf", symbol: "EURCHF=", label: "CHF crosses", constituents: ["EURCHF=", "GBPCHF=", "EUR=", "CHF="] },
+    ],
+  },
 ];
+
+// Regions where a technical Buy/Sell signal would be ambiguous or misleading.
+export const NO_SIGNAL_REGIONS = new Set(["bonds", "fx"]);
 
 export function primaryIndex(r: MarketRegion): IndexDef {
   return r.indices[0];
