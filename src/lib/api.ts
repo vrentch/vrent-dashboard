@@ -31,6 +31,8 @@ export interface Quote {
   changePercent: number | null;
   marketState: string;
   exchange: string;
+  region: string;
+  flag: string;
 }
 
 export interface History {

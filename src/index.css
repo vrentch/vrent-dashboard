@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink-950: #0b1120;
-  --color-ink-900: #0f172a;
-  --color-ink-850: #131c31;
-  --color-ink-800: #1e293b;
-  --color-ink-700: #334155;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
@@ -21,10 +21,11 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-ink-950);
-  color: #e2e8f0;
+  background: #f6f7f9;
+  color: #0f172a;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
 }
 
@@ -36,7 +37,7 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Hide scrollbars on horizontal chip rows while keeping scroll. */
+/* Hide scrollbars on horizontal rows while keeping scroll. */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -45,10 +46,18 @@ body {
   scrollbar-width: none;
 }
 
+/* Horizontal snap carousel */
+.snap-row {
+  scroll-snap-type: x mandatory;
+}
+.snap-item {
+  scroll-snap-align: start;
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -56,7 +65,7 @@ body {
   }
 }
 .animate-in {
-  animation: fade-in-up 0.35s ease both;
+  animation: fade-in-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes shimmer {
@@ -68,12 +77,16 @@ body {
   }
 }
 .skeleton {
-  background: linear-gradient(90deg, #1e293b 25%, #263449 50%, #1e293b 75%);
+  background: linear-gradient(90deg, #eceef1 25%, #f4f5f7 50%, #eceef1 75%);
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
 }
 
-/* Tap feedback */
+/* Soft elevated card shadow */
+.card-shadow {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
 }

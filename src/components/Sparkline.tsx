@@ -33,7 +33,7 @@ export default function Sparkline({
 
   const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   const up = values[values.length - 1] >= values[0];
-  const stroke = color || (up ? "#34d399" : "#f87171");
+  const stroke = color || (up ? "#059669" : "#e11d48");
   const area = `${line} L${width},${height} L0,${height} Z`;
   const gid = `sg-${Math.round(pts[0][1])}-${values.length}-${up ? "u" : "d"}`;
 

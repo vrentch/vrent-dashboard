@@ -38,17 +38,20 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
     <Sheet open={!!quote} onClose={onClose} title={quote.symbol}>
       <div className="space-y-5">
         <div>
-          <p className="text-sm text-slate-400 truncate">{quote.name}</p>
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>{quote.flag}</span>
+            <span className="truncate">{quote.name}</span>
+          </div>
           <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-3xl font-bold text-white tracking-tight">
+            <span className="text-3xl font-bold text-slate-900 tracking-tight">
               {fmtPrice(quote.price, quote.currency)}
             </span>
-            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${dayUp ? "text-emerald-400" : "text-rose-400"}`}>
+            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${dayUp ? "text-emerald-600" : "text-rose-600"}`}>
               {dayUp ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
               {fmtPct(quote.changePercent)} today
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             {quote.exchange} {quote.marketState && `· ${quote.marketState}`}
           </p>
         </div>
@@ -56,18 +59,18 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         <div>
           {loading && <div style={{ height: 180 }} className="skeleton rounded-xl" />}
           {!loading && error && (
-            <div style={{ height: 180 }} className="grid place-items-center text-sm text-rose-400">{error}</div>
+            <div style={{ height: 180 }} className="grid place-items-center text-sm text-rose-600">{error}</div>
           )}
           {!loading && !error && <PriceChart values={history?.closes || []} up={rangeUp} />}
         </div>
 
-        <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
           {RANGES.map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
-                range === r ? "bg-sky-500 text-white" : "text-slate-400 active:bg-white/5"
+                range === r ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 active:bg-slate-200"
               }`}
             >
               {r}
@@ -76,13 +79,9 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-white mb-2.5">Analytics · {range}</h3>
+          <h3 className="text-sm font-semibold text-slate-900 mb-2.5">Analytics · {range}</h3>
           <div className="grid grid-cols-2 gap-2.5">
-            <Stat
-              label="Range change"
-              value={fmtPct(a.changePct)}
-              tone={a.trend === "up" ? "pos" : a.trend === "down" ? "neg" : "flat"}
-            />
+            <Stat label="Range change" value={fmtPct(a.changePct)} tone={a.trend === "up" ? "pos" : a.trend === "down" ? "neg" : "flat"} />
             <Stat label="Volatility" value={a.volatilityPct != null ? `${fmtNum(a.volatilityPct)}%` : "—"} />
             <Stat label="Period high" value={fmtPrice(a.high, quote.currency)} />
             <Stat label="Period low" value={fmtPrice(a.low, quote.currency)} />
@@ -92,12 +91,12 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         </div>
 
         <a
-          href={`https://finance.yahoo.com/quote/${encodeURIComponent(quote.symbol)}`}
+          href={`https://www.cnbc.com/quotes/${encodeURIComponent(quote.symbol)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-center text-xs text-slate-500 hover:text-sky-400"
+          className="block text-center text-xs text-slate-400 hover:text-brand-600"
         >
-          View full profile on Yahoo Finance →
+          View full profile on CNBC →
         </a>
       </div>
     </Sheet>
@@ -105,11 +104,11 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
 }
 
 function Stat({ label, value, tone = "flat" }: { label: string; value: string; tone?: "pos" | "neg" | "flat" }) {
-  const color = tone === "pos" ? "text-emerald-400" : tone === "neg" ? "text-rose-400" : "text-white";
+  const color = tone === "pos" ? "text-emerald-600" : tone === "neg" ? "text-rose-600" : "text-slate-900";
   const Icon = tone === "pos" ? TrendingUp : tone === "neg" ? TrendingDown : Minus;
   return (
-    <div className="rounded-xl bg-white/5 border border-white/5 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
       <p className={`mt-1 text-base font-bold flex items-center gap-1 ${color}`}>
         {tone !== "flat" && <Icon size={14} />}
         {value}

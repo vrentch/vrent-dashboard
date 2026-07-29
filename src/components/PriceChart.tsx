@@ -28,7 +28,7 @@ export default function PriceChart({ values, height = 180, up }: Props) {
 
   if (!geom) return <div style={{ height }} className="grid place-items-center text-sm text-slate-500">No chart data</div>;
 
-  const color = up ? "#34d399" : "#f87171";
+  const color = up ? "#059669" : "#e11d48";
 
   return (
     <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible">

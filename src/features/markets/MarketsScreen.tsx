@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, RefreshCw, AlertCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Pencil, RefreshCw, AlertCircle } from "lucide-react";
 import { fetchQuotes, fetchHistory, type Quote } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { fmtPct } from "../../lib/format";
@@ -56,84 +56,90 @@ export default function MarketsScreen() {
     load();
   }, [load]);
 
-  const summary = useMemo(() => {
-    const withPct = quotes.filter((q) => q.changePercent != null);
-    const gainers = withPct.filter((q) => (q.changePercent ?? 0) > 0).length;
-    const losers = withPct.filter((q) => (q.changePercent ?? 0) < 0).length;
-    const best = [...withPct].sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0))[0];
-    const worst = [...withPct].sort((a, b) => (a.changePercent ?? 0) - (b.changePercent ?? 0))[0];
-    return { gainers, losers, best, worst };
+  // Group by region, preserving the order regions first appear in the watchlist.
+  const groups = useMemo(() => {
+    const map = new Map<string, { region: string; flag: string; items: Quote[] }>();
+    for (const q of quotes) {
+      const g = map.get(q.region) ?? { region: q.region, flag: q.flag, items: [] };
+      g.items.push(q);
+      map.set(q.region, g);
+    }
+    return [...map.values()].map((g) => {
+      const withPct = g.items.filter((q) => q.changePercent != null);
+      const avg = withPct.length
+        ? withPct.reduce((a, b) => a + (b.changePercent ?? 0), 0) / withPct.length
+        : null;
+      return { ...g, avg };
+    });
   }, [quotes]);
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-ink-950/85 backdrop-blur-xl border-b border-white/5 safe-top">
+      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 backdrop-blur-xl border-b border-slate-200/70 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">Markets</h1>
-              <p className="text-xs text-slate-500">{prefs.watchlist.length} instruments · live</p>
+              <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Markets</h1>
+              <p className="text-xs text-slate-400">{prefs.watchlist.length} instruments · live</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => load(true)}
-                className="grid place-items-center w-10 h-10 rounded-full bg-white/5 text-slate-300 active:scale-95"
+                className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
                 aria-label="Refresh"
               >
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
               <button
                 onClick={() => setEditorOpen(true)}
-                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-sky-500 text-white text-sm font-semibold active:scale-95"
+                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-slate-900 text-white text-sm font-semibold active:scale-95"
               >
                 <Pencil size={15} /> Edit
               </button>
             </div>
           </div>
-
-          {!loading && quotes.length > 0 && (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <MoverCard label="Top gainer" quote={summary.best} up />
-              <MoverCard label="Top loser" quote={summary.worst} up={false} />
-            </div>
-          )}
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-2.5">
+      <div className="max-w-lg mx-auto px-4 py-4">
         {loading &&
           Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-[68px] rounded-2xl skeleton" />
+            <div key={i} className="h-[68px] rounded-2xl skeleton mb-2.5" />
           ))}
 
         {!loading && error && quotes.length === 0 && (
-          <div className="text-center py-16 px-6">
-            <AlertCircle className="mx-auto text-slate-600 mb-3" size={32} />
-            <p className="text-slate-400 text-sm">{error}</p>
-            <button
-              onClick={() => setEditorOpen(true)}
-              className="mt-4 px-4 py-2 rounded-xl bg-sky-500 text-white text-sm font-semibold"
-            >
-              Edit watchlist
-            </button>
-          </div>
+          <Empty message={error} onAction={() => setEditorOpen(true)} label="Edit watchlist" />
         )}
 
         {!loading && !prefs.watchlist.length && (
-          <div className="text-center py-16 px-6">
-            <p className="text-slate-400 text-sm">Your watchlist is empty.</p>
-            <button
-              onClick={() => setEditorOpen(true)}
-              className="mt-4 px-4 py-2 rounded-xl bg-sky-500 text-white text-sm font-semibold"
-            >
-              Add symbols
-            </button>
-          </div>
+          <Empty message="Your watchlist is empty." onAction={() => setEditorOpen(true)} label="Add symbols" />
         )}
 
         {!loading &&
-          quotes.map((q) => (
-            <StockRow key={q.symbol} quote={q} spark={sparks[q.symbol]} onClick={() => setSelected(q)} />
+          groups.map((g) => (
+            <section key={g.region} className="mb-6">
+              <div className="flex items-center justify-between mb-2.5 px-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg leading-none">{g.flag}</span>
+                  <h2 className="text-[15px] font-bold text-slate-900">{g.region}</h2>
+                  <span className="text-xs text-slate-400 font-medium">{g.items.length}</span>
+                </div>
+                {g.avg != null && (
+                  <span
+                    className={`text-xs font-semibold tabular-nums px-2 py-0.5 rounded-md ${
+                      g.avg >= 0 ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+                    }`}
+                  >
+                    avg {fmtPct(g.avg)}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-2.5">
+                {g.items.map((q) => (
+                  <StockRow key={q.symbol} quote={q} spark={sparks[q.symbol]} onClick={() => setSelected(q)} />
+                ))}
+              </div>
+            </section>
           ))}
       </div>
 
@@ -143,20 +149,14 @@ export default function MarketsScreen() {
   );
 }
 
-function MoverCard({ label, quote, up }: { label: string; quote?: Quote; up: boolean }) {
-  if (!quote) return <div className="rounded-xl bg-white/5 h-14" />;
-  const Icon = up ? ArrowUpRight : ArrowDownRight;
-  const color = (quote.changePercent ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400";
+function Empty({ message, onAction, label }: { message: string; onAction: () => void; label: string }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="flex items-center justify-between mt-0.5">
-        <span className="font-semibold text-white text-sm">{quote.symbol}</span>
-        <span className={`inline-flex items-center gap-0.5 text-sm font-semibold ${color}`}>
-          <Icon size={14} />
-          {fmtPct(quote.changePercent)}
-        </span>
-      </div>
+    <div className="text-center py-16 px-6">
+      <AlertCircle className="mx-auto text-slate-300 mb-3" size={32} />
+      <p className="text-slate-500 text-sm">{message}</p>
+      <button onClick={onAction} className="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold">
+        {label}
+      </button>
     </div>
   );
 }

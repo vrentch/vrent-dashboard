@@ -226,6 +226,42 @@ function num(s: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
+// Group each instrument into a country/region section for the Markets overview.
+const INDEX_COUNTRY: Record<string, string> = {
+  ".SPX": "US", ".IXIC": "US", ".DJI": "US", ".RUT": "US",
+  ".GDAXI": "DE", ".FTSE": "GB", ".FCHI": "FR", ".N225": "JP", ".HSI": "HK", ".SSMI": "CH",
+};
+const REGION_META: Record<string, { region: string; flag: string }> = {
+  US: { region: "United States", flag: "🇺🇸" },
+  DE: { region: "Germany", flag: "🇩🇪" },
+  GB: { region: "United Kingdom", flag: "🇬🇧" },
+  FR: { region: "France", flag: "🇫🇷" },
+  CH: { region: "Switzerland", flag: "🇨🇭" },
+  JP: { region: "Japan", flag: "🇯🇵" },
+  HK: { region: "Hong Kong", flag: "🇭🇰" },
+  CA: { region: "Canada", flag: "🇨🇦" },
+};
+
+function regionOf(cnbcSymbol: string, exchange: string): { region: string; flag: string } {
+  const c = cnbcSymbol.toUpperCase();
+  if (c.includes(".CM=")) return { region: "Crypto", flag: "🪙" };
+  if (c.startsWith("@")) return { region: "Commodities", flag: "🛢️" };
+  if (/^[A-Z]{3}=$/.test(c)) return { region: "Currencies", flag: "💱" };
+  let cc = INDEX_COUNTRY[c];
+  if (!cc) {
+    const ex = (exchange || "").toUpperCase();
+    if (/NASDAQ|NYSE|AMEX|ARCA|BATS|\bUS\b/.test(ex)) cc = "US";
+    else if (/XETRA|FRANKFURT|GER|DAX/.test(ex)) cc = "DE";
+    else if (/LONDON|LSE/.test(ex)) cc = "GB";
+    else if (/PARIS|EURONEXT/.test(ex)) cc = "FR";
+    else if (/SWISS|\bSIX\b/.test(ex)) cc = "CH";
+    else if (/TOKYO|JPX|JAPAN/.test(ex)) cc = "JP";
+    else if (/TORONTO|TSX/.test(ex)) cc = "CA";
+    else if (/HONG KONG|HKEX/.test(ex)) cc = "HK";
+  }
+  return (cc && REGION_META[cc]) || { region: "Other markets", flag: "🌐" };
+}
+
 async function getQuotes(symbols: string[]) {
   const clean = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
   if (!clean.length) return { quotes: [], errors: [] };
@@ -259,6 +295,7 @@ async function getQuotes(symbols: string[]) {
     // CNBC's previous_day_closing can equal the day's close after hours, so
     // derive the true previous close from price − change instead.
     const previousClose = price != null && change != null ? price - change : num(q.previous_day_closing);
+    const { region, flag } = regionOf(cnbcSyms[i], q.exchange || "");
     quotes.push({
       symbol: orig,
       name: q.name || q.shortName || orig,
@@ -269,6 +306,8 @@ async function getQuotes(symbols: string[]) {
       changePercent,
       marketState: q.realTime === "true" ? "REALTIME" : q.curmktstatus || "",
       exchange: q.exchange || "",
+      region,
+      flag,
     });
   });
   return { quotes, errors };

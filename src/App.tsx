@@ -16,14 +16,14 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("news");
 
   return (
-    <div className="min-h-full flex flex-col bg-ink-950">
+    <div className="min-h-full flex flex-col">
       <main className="flex-1 pb-20">
         {tab === "news" && <NewsScreen />}
         {tab === "markets" && <MarketsScreen />}
         {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
       </main>
 
-      <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/10 bg-ink-900/90 backdrop-blur-xl safe-bottom">
+      <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white/85 backdrop-blur-xl safe-bottom">
         <div className="max-w-lg mx-auto grid grid-cols-3">
           {TABS.map(({ key, label, icon: Icon }) => {
             const active = tab === key;
@@ -35,10 +35,10 @@ export default function App() {
               >
                 <Icon
                   size={22}
-                  className={active ? "text-sky-400" : "text-slate-500"}
+                  className={active ? "text-brand-600" : "text-slate-400"}
                   strokeWidth={active ? 2.4 : 2}
                 />
-                <span className={`text-[11px] font-medium ${active ? "text-sky-400" : "text-slate-500"}`}>
+                <span className={`text-[11px] font-medium ${active ? "text-brand-600" : "text-slate-400"}`}>
                   {label}
                 </span>
               </button>
