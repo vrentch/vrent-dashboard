@@ -92,6 +92,23 @@ export const REGIONS: MarketRegion[] = [
     flag: "🪙",
     indices: [{ key: "coins", symbol: "BTC-USD", label: "Top coins", constituents: CRYPTO }],
   },
+  {
+    key: "metals",
+    name: "Metals",
+    flag: "🥇",
+    indices: [
+      { key: "metals", symbol: "@GC.1", label: "Gold", constituents: ["@GC.1", "@SI.1", "@PL.1", "@PA.1", "@HG.1"] },
+    ],
+  },
+  {
+    key: "materials",
+    name: "Raw materials",
+    flag: "🛢️",
+    indices: [
+      { key: "energy", symbol: "@CL.1", label: "Energy", constituents: ["@CL.1", "@BZ.1", "@NG.1", "@RB.1", "@HO.1"] },
+      { key: "agri", symbol: "@C.1", label: "Agriculture", constituents: ["@C.1", "@W.1", "@S.1", "@KC.1", "@SB.1", "@CT.1", "@CC.1"] },
+    ],
+  },
 ];
 
 export function primaryIndex(r: MarketRegion): IndexDef {

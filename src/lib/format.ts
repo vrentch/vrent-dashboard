@@ -42,13 +42,24 @@ export function fmtPct(v: number | null): string {
   return `${sign}${v.toFixed(2)}%`;
 }
 
-/** Tidy a provider ticker for display: NESN-CH → NESN, BTC-USD → BTC. */
+// Friendly names for commodity futures (CNBC uses "@GC.1" etc.).
+const COMMODITY_NAMES: Record<string, string> = {
+  "@GC.1": "Gold", "@SI.1": "Silver", "@PL.1": "Platinum", "@PA.1": "Palladium", "@HG.1": "Copper",
+  "@CL.1": "WTI Crude", "@BZ.1": "Brent", "@LCO.1": "Brent", "@NG.1": "Nat Gas", "@RB.1": "Gasoline", "@HO.1": "Heating Oil",
+  "@C.1": "Corn", "@W.1": "Wheat", "@S.1": "Soybeans", "@KC.1": "Coffee", "@SB.1": "Sugar", "@CT.1": "Cotton", "@CC.1": "Cocoa",
+};
+
+/** Tidy a provider ticker for display: NESN-CH → NESN, BTC-USD → BTC, @GC.1 → Gold. */
 export function cleanSymbol(sym: string): string {
+  const upper = sym.toUpperCase();
+  if (COMMODITY_NAMES[upper]) return COMMODITY_NAMES[upper];
   return sym
     .replace(/-CH$/, "")
     .replace(/-USD$/, "")
     .replace(/=X$/, "")
     .replace(/=F$/, "")
+    .replace(/^@/, "")
+    .replace(/\.\d+$/, "")
     .replace(/^\^/, "");
 }
 
