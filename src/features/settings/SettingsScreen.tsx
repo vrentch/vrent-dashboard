@@ -80,7 +80,8 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           <InfoRow icon={Rss} title="Where the data comes from">
             Headlines are aggregated live from public news feeds (Google News, which
             surfaces outlets like CNBC, 20 Minuten, DZEN and thousands more). Market
-            data comes from public Yahoo Finance endpoints. No account or API key needed.
+            quotes and charts come from CNBC's public market data. No account or API
+            key needed.
           </InfoRow>
           <InfoRow icon={ShieldCheck} title="Privacy">
             There are no logins and no tracking. Your country, topic and watchlist

@@ -193,77 +193,114 @@ async function getNews(specs: FeedSpec[], query?: string) {
   return { items: merged.slice(0, 150), errors, count: merged.length };
 }
 
-// ── Stocks (Yahoo Finance public chart endpoint) ────────────────────────────
+// ── Stocks (CNBC public quote + chart endpoints) ─────────────────────────────
+//
+// Keyless and reachable from data-center IPs (unlike Yahoo, which rate-limits
+// cloud servers with HTTP 429). Quotes for all symbols come back in a single
+// request; charts come from the harmony chart service.
 
-const Y_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
-const Y_UA =
+const CNBC_QUOTE = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol";
+const CNBC_CHART = "https://ts-api.cnbc.com/harmony/app/charts";
+const CNBC_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
-const RANGES: Record<string, { range: string; interval: string }> = {
-  "1D": { range: "1d", interval: "5m" },
-  "5D": { range: "5d", interval: "30m" },
-  "1M": { range: "1mo", interval: "1d" },
-  "6M": { range: "6mo", interval: "1d" },
-  "1Y": { range: "1y", interval: "1d" },
-  "5Y": { range: "5y", interval: "1wk" },
+// Translate common Yahoo-style tickers to CNBC symbols. Plain stock tickers
+// (AAPL, MSFT, …) pass through unchanged.
+const SYMBOL_MAP: Record<string, string> = {
+  "^GSPC": ".SPX", "^IXIC": ".IXIC", "^DJI": ".DJI", "^RUT": ".RUT",
+  "^GDAXI": ".GDAXI", "^FTSE": ".FTSE", "^FCHI": ".FCHI", "^N225": ".N225",
+  "^HSI": ".HSI", "^SSMI": ".SSMI",
+  "BTC-USD": "BTC.CM=", "ETH-USD": "ETH.CM=", "SOL-USD": "SOL.CM=", "XRP-USD": "XRP.CM=",
+  "EURUSD=X": "EUR=", "GBPUSD=X": "GBP=", "USDJPY=X": "JPY=", "USDCHF=X": "CHF=",
+  "GC=F": "@GC.1", "SI=F": "@SI.1", "CL=F": "@CL.1", "NG=F": "@NG.1",
 };
 
-async function fetchChart(symbol: string, range: string, interval: string) {
-  const url = `${Y_BASE}/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": Y_UA, Accept: "application/json" },
-    signal: AbortSignal.timeout(9000),
-  });
-  if (!res.ok) throw new Error(`yahoo ${res.status}`);
-  const json: any = await res.json();
-  const result = json?.chart?.result?.[0];
-  if (!result) throw new Error(`no data for ${symbol}`);
-  return result;
+function toCnbc(sym: string): string {
+  const s = sym.trim().toUpperCase();
+  return SYMBOL_MAP[s] || s;
+}
+
+function num(s: unknown): number | null {
+  if (s == null) return null;
+  const n = parseFloat(String(s).replace(/[,%+\s]/g, ""));
+  return isNaN(n) ? null : n;
 }
 
 async function getQuotes(symbols: string[]) {
   const clean = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
-  const settled = await Promise.allSettled(clean.map((s) => fetchChart(s, "1d", "5m")));
+  if (!clean.length) return { quotes: [], errors: [] };
+  const cnbcSyms = clean.map(toCnbc);
+  const url = `${CNBC_QUOTE}?symbols=${encodeURIComponent(cnbcSyms.join("|"))}&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": CNBC_UA, Accept: "application/json" },
+    signal: AbortSignal.timeout(9000),
+  });
+  if (!res.ok) throw new Error(`cnbc ${res.status}`);
+  const json: any = await res.json();
+  const arr: any[] = json?.FormattedQuoteResult?.FormattedQuote || [];
+  const byCnbc = new Map<string, any>(arr.map((q) => [String(q.symbol).toUpperCase(), q]));
+
   const quotes: any[] = [];
   const errors: string[] = [];
-  settled.forEach((r, i) => {
-    if (r.status !== "fulfilled") {
-      errors.push(`${clean[i]}: ${String(r.reason).slice(0, 100)}`);
+  clean.forEach((orig, i) => {
+    const q = byCnbc.get(cnbcSyms[i].toUpperCase());
+    if (!q || q.code !== 0) {
+      errors.push(`${orig}: no data`);
       return;
     }
-    const meta = r.value.meta || {};
-    const price = meta.regularMarketPrice ?? null;
-    const prev = meta.chartPreviousClose ?? meta.previousClose ?? null;
-    const change = price != null && prev != null ? price - prev : null;
-    const changePercent = change != null && prev ? (change / prev) * 100 : null;
+    const price = num(q.last);
+    let change = num(q.change);
+    let changePercent = num(q.change_pct);
+    if (q.changetype === "DOWN") {
+      if (change != null) change = -Math.abs(change);
+      if (changePercent != null) changePercent = -Math.abs(changePercent);
+    }
+    // CNBC's previous_day_closing can equal the day's close after hours, so
+    // derive the true previous close from price − change instead.
+    const previousClose = price != null && change != null ? price - change : num(q.previous_day_closing);
     quotes.push({
-      symbol: meta.symbol || clean[i],
-      name: meta.longName || meta.shortName || meta.symbol || clean[i],
-      currency: meta.currency || "USD",
-      price, previousClose: prev, change, changePercent,
-      marketState: meta.marketState || "",
-      exchange: meta.fullExchangeName || meta.exchangeName || "",
+      symbol: orig,
+      name: q.name || q.shortName || orig,
+      currency: q.currencyCode || "USD",
+      price,
+      previousClose,
+      change,
+      changePercent,
+      marketState: q.realTime === "true" ? "REALTIME" : q.curmktstatus || "",
+      exchange: q.exchange || "",
     });
   });
-  quotes.sort((a, b) => clean.indexOf(a.symbol.toUpperCase()) - clean.indexOf(b.symbol.toUpperCase()));
   return { quotes, errors };
 }
 
+const CNBC_RANGES: Record<string, string> = {
+  "1D": "1D", "5D": "5D", "1M": "1M", "6M": "6M", "1Y": "1Y", "5Y": "5Y",
+};
+
 async function getHistory(symbol: string, uiRange: string) {
-  const r = RANGES[uiRange] || RANGES["1M"];
-  const result = await fetchChart(symbol, r.range, r.interval);
-  const meta = result.meta || {};
-  const timestamps: number[] = result.timestamp || [];
-  const closesRaw: (number | null)[] = result.indicators?.quote?.[0]?.close || [];
-  const timestampsOut: number[] = [];
+  const range = CNBC_RANGES[uiRange] || "1M";
+  const cs = toCnbc(symbol);
+  const url = `${CNBC_CHART}/${range}.json?symbol=${encodeURIComponent(cs)}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": CNBC_UA, Accept: "application/json" },
+    signal: AbortSignal.timeout(9000),
+  });
+  if (!res.ok) throw new Error(`cnbc chart ${res.status}`);
+  const json: any = await res.json();
+  const bars: any[] = json?.barData?.priceBars || [];
+
+  const timestamps: number[] = [];
   const closes: number[] = [];
-  for (let i = 0; i < timestamps.length; i++) {
-    const c = closesRaw[i];
-    if (c == null) continue;
-    timestampsOut.push(timestamps[i]);
+  for (const b of bars) {
+    const c = num(b.close);
+    const ms = Number(b.tradeTimeinMills);
+    if (c == null || !isFinite(ms)) continue;
+    timestamps.push(Math.floor(ms / 1000));
     closes.push(c);
   }
-  return { symbol: meta.symbol || symbol.toUpperCase(), range: uiRange, currency: meta.currency || "USD", timestamps: timestampsOut, closes };
+  const currency = json?.barData?.currencyCode || "USD";
+  return { symbol: symbol.toUpperCase(), range: uiRange, currency, timestamps, closes };
 }
 
 // ── Router (shared by dev middleware and the serverless handler) ─────────────
