@@ -643,10 +643,10 @@ export async function handleApi(
   try {
     const route = pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
 
-    if (route === "push/status") return { status: 200, body: { configured: pushConfigured() } };
-    if (route === "push/subscribe") return await subscribeHandler(ctx.body);
-    if (route === "push/unsubscribe") return await unsubscribeHandler(ctx.body);
-    if (route === "push/test") return await testHandler(ctx.body);
+    if (route === "push-status") return { status: 200, body: { configured: pushConfigured() } };
+    if (route === "push-subscribe") return await subscribeHandler(ctx.body);
+    if (route === "push-unsubscribe") return await unsubscribeHandler(ctx.body);
+    if (route === "push-test") return await testHandler(ctx.body);
     if (route === "tick") return await tickHandler();
 
     if (route === "news") {
@@ -714,7 +714,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   // Push/tick endpoints must never be cached.
-  const noCache = url.pathname.includes("/push/") || url.pathname.endsWith("/tick");
+  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick");
   res.setHeader("Cache-Control", noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300");
   res.end(JSON.stringify(out));
 }

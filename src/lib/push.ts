@@ -63,7 +63,7 @@ export function pushSupported(): boolean {
 
 export async function serverConfigured(): Promise<boolean> {
   try {
-    const r = await fetch("/api/push/status");
+    const r = await fetch("/api/push-status");
     const j = await r.json();
     return !!j.configured;
   } catch {
@@ -104,7 +104,7 @@ export async function enablePush(settings: PushSettings): Promise<{ ok: boolean;
   if (!sub) {
     sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toUint8(VAPID_PUBLIC) as BufferSource });
   }
-  const res = await fetch("/api/push/subscribe", {
+  const res = await fetch("/api/push-subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ subscription: sub, settings, tz: tz() }),
@@ -119,7 +119,7 @@ export async function enablePush(settings: PushSettings): Promise<{ ok: boolean;
 export async function syncPush(settings: PushSettings): Promise<void> {
   const sub = await currentSubscription();
   if (!sub) return;
-  await fetch("/api/push/subscribe", {
+  await fetch("/api/push-subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ subscription: sub, settings, tz: tz() }),
@@ -129,7 +129,7 @@ export async function syncPush(settings: PushSettings): Promise<void> {
 export async function disablePush(): Promise<void> {
   const sub = await currentSubscription();
   if (sub) {
-    await fetch("/api/push/unsubscribe", {
+    await fetch("/api/push-unsubscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: sub.endpoint }),
@@ -142,7 +142,7 @@ export async function disablePush(): Promise<void> {
 export async function sendTestPush(): Promise<boolean> {
   const sub = await currentSubscription();
   if (!sub) return false;
-  const r = await fetch("/api/push/test", {
+  const r = await fetch("/api/push-test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ subscription: sub }),
