@@ -1,0 +1,95 @@
+{%- comment -%}
+  vrent-hero.liquid — VRENT.ch
+  Clean, modern, vision-led homepage hero. 100% of the copy lives in schema
+  settings (text / inline_richtext), so translation apps (T-Lab, Translate &
+  Adapt) can read and translate every word — no Custom Liquid, no hardcoded text.
+{%- endcomment -%}
+
+{%- liquid
+  assign s = section.settings
+-%}
+
+<section class="vh" id="vh-{{ section.id }}">
+  <div class="vh__wrap">
+    {%- if s.eyebrow != blank -%}<p class="vh__eyebrow">{{ s.eyebrow }}</p>{%- endif -%}
+    {%- if s.heading != blank -%}<h1 class="vh__title">{{ s.heading }}</h1>{%- endif -%}
+    {%- if s.subheading != blank -%}<div class="vh__sub">{{ s.subheading }}</div>{%- endif -%}
+
+    {%- if s.primary_label != blank or s.secondary_label != blank -%}
+      <div class="vh__cta">
+        {%- if s.primary_label != blank -%}
+          <a class="vh__btn vh__btn--solid" href="{{ s.primary_link | default: '#' }}">{{ s.primary_label }}</a>
+        {%- endif -%}
+        {%- if s.secondary_label != blank -%}
+          <a class="vh__btn vh__btn--ghost" href="{{ s.secondary_link | default: '#' }}">{{ s.secondary_label }}</a>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    {%- assign chips = s.chips | default: '' -%}
+    {%- if chips != blank -%}
+      <ul class="vh__chips">
+        {%- assign chiplist = chips | split: '|' -%}
+        {%- for c in chiplist -%}<li>{{ c | strip }}</li>{%- endfor -%}
+      </ul>
+    {%- endif -%}
+  </div>
+
+  {%- if s.image != blank -%}
+    <div class="vh__media">
+      <img
+        src="{{ s.image | image_url: width: 1600 }}"
+        srcset="{{ s.image | image_url: width: 600 }} 600w, {{ s.image | image_url: width: 1000 }} 1000w, {{ s.image | image_url: width: 1600 }} 1600w"
+        sizes="(max-width: 1100px) 100vw, 1100px"
+        width="{{ s.image.width }}" height="{{ s.image.height }}"
+        alt="{{ s.image_alt | escape }}" loading="eager" fetchpriority="high">
+    </div>
+  {%- endif -%}
+</section>
+
+{% style %}
+  #vh-{{ section.id }}{ --vh-accent: {{ s.accent | default: '#2846A6' }}; }
+  .vh{ max-width: 1160px; margin: 0 auto; padding: {{ s.pad_top }}px 20px {{ s.pad_bottom }}px; text-align: center; }
+  .vh__wrap{ max-width: 820px; margin: 0 auto; }
+  .vh__eyebrow{ font-size: .78rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--vh-accent); margin: 0 0 18px; }
+  .vh__title{ font-size: clamp(2.1rem, 5.2vw, 3.9rem); line-height: 1.05; letter-spacing: -0.02em; font-weight: 800; color: #0e1116; margin: 0 0 20px; }
+  .vh__title em{ font-style: normal; color: var(--vh-accent); }
+  .vh__sub{ font-size: clamp(1.02rem, 1.6vw, 1.22rem); line-height: 1.6; color: #5b6472; max-width: 620px; margin: 0 auto 30px; }
+  .vh__sub p{ margin: 0 0 .6em; }
+  .vh__cta{ display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .vh__btn{ display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 13px 26px; font-size: 1rem; font-weight: 600; text-decoration: none; transition: transform .15s ease, background .15s ease, box-shadow .15s ease; }
+  .vh__btn--solid{ background: var(--vh-accent); color: #fff; box-shadow: 0 6px 20px -8px var(--vh-accent); }
+  .vh__btn--solid:hover{ transform: translateY(-1px); filter: brightness(1.05); }
+  .vh__btn--ghost{ background: transparent; color: #0e1116; box-shadow: inset 0 0 0 1.5px rgba(14,17,22,.14); }
+  .vh__btn--ghost:hover{ box-shadow: inset 0 0 0 1.5px rgba(14,17,22,.4); }
+  .vh__chips{ list-style: none; display: flex; gap: 10px 22px; justify-content: center; flex-wrap: wrap; padding: 0; margin: 28px 0 0; }
+  .vh__chips li{ font-size: .9rem; color: #5b6472; display: flex; align-items: center; gap: 7px; }
+  .vh__chips li::before{ content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--vh-accent); display: inline-block; }
+  .vh__media{ max-width: 1100px; margin: 44px auto 0; padding: 0 20px; }
+  .vh__media img{ width: 100%; height: auto; border-radius: 20px; box-shadow: 0 30px 60px -30px rgba(14,17,22,.35); }
+  @media (max-width: 600px){ .vh{ padding-top: 40px; } .vh__btn{ width: 100%; } }
+{% endstyle %}
+
+{% schema %}
+{
+  "name": "VRENT Hero",
+  "tag": "section",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "Mixed & virtual reality, delivered" },
+    { "type": "inline_richtext", "id": "heading", "label": "Heading", "default": "The future of immersive tech — <em>rented, run and delivered</em> across Switzerland." },
+    { "type": "richtext", "id": "subheading", "label": "Subheading", "default": "<p>From a single headset to a full corporate VR event. We supply, deliver, set up and support the hardware — you focus on the experience.</p>" },
+    { "type": "text", "id": "primary_label", "label": "Primary button label", "default": "Browse rentals" },
+    { "type": "url", "id": "primary_link", "label": "Primary button link" },
+    { "type": "text", "id": "secondary_label", "label": "Secondary button label", "default": "For business & events" },
+    { "type": "url", "id": "secondary_link", "label": "Secondary button link" },
+    { "type": "text", "id": "chips", "label": "Trust chips (separate with | )", "info": "e.g. Free delivery & return | 1–2 day delivery | Apps pre-installed", "default": "Free delivery & return | 1–2 day delivery | Apps pre-installed" },
+    { "type": "image_picker", "id": "image", "label": "Hero image (optional)" },
+    { "type": "text", "id": "image_alt", "label": "Hero image alt text", "default": "VR and AR equipment from VRENT" },
+    { "type": "header", "content": "Style" },
+    { "type": "color", "id": "accent", "label": "Accent colour", "default": "#2846A6" },
+    { "type": "range", "id": "pad_top", "label": "Padding top", "min": 24, "max": 140, "step": 4, "unit": "px", "default": 84 },
+    { "type": "range", "id": "pad_bottom", "label": "Padding bottom", "min": 24, "max": 140, "step": 4, "unit": "px", "default": 64 }
+  ],
+  "presets": [{ "name": "VRENT Hero" }]
+}
+{% endschema %}

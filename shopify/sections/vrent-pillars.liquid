@@ -1,0 +1,88 @@
+{%- comment -%}
+  vrent-pillars.liquid — VRENT.ch
+  The three-pillar "what we do" band: Rent · Corporate & Events · Consulting.
+  Each pillar is a block whose title / description / link label live in schema
+  settings, so translation apps (T-Lab) can translate every pillar.
+{%- endcomment -%}
+
+{%- liquid
+  assign s = section.settings
+-%}
+
+<section class="vp" id="vp-{{ section.id }}">
+  <div class="vp__wrap">
+    {%- if s.eyebrow != blank -%}<p class="vp__eyebrow">{{ s.eyebrow }}</p>{%- endif -%}
+    {%- if s.heading != blank -%}<h2 class="vp__title">{{ s.heading }}</h2>{%- endif -%}
+    {%- if s.subheading != blank -%}<p class="vp__sub">{{ s.subheading }}</p>{%- endif -%}
+
+    <div class="vp__grid">
+      {%- for block in section.blocks -%}
+        {%- assign b = block.settings -%}
+        <a class="vp__card" href="{{ b.link | default: '#' }}" {{ block.shopify_attributes }}>
+          {%- if b.icon != blank -%}<span class="vp__icon" aria-hidden="true">{{ b.icon }}</span>{%- endif -%}
+          {%- if b.title != blank -%}<h3 class="vp__cardtitle">{{ b.title }}</h3>{%- endif -%}
+          {%- if b.description != blank -%}<div class="vp__cardtext">{{ b.description }}</div>{%- endif -%}
+          {%- if b.link_label != blank -%}<span class="vp__link">{{ b.link_label }} <span aria-hidden="true">→</span></span>{%- endif -%}
+        </a>
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% style %}
+  #vp-{{ section.id }}{ --vp-accent: {{ s.accent | default: '#2846A6' }}; }
+  .vp{ max-width: 1160px; margin: 0 auto; padding: {{ s.pad_top }}px 20px {{ s.pad_bottom }}px; }
+  .vp__wrap{ text-align: center; }
+  .vp__eyebrow{ font-size: .78rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--vp-accent); margin: 0 0 14px; }
+  .vp__title{ font-size: clamp(1.7rem, 3.4vw, 2.5rem); line-height: 1.12; letter-spacing: -0.02em; font-weight: 800; color: #0e1116; margin: 0 0 12px; }
+  .vp__sub{ font-size: 1.05rem; line-height: 1.6; color: #5b6472; max-width: 620px; margin: 0 auto 40px; }
+  .vp__grid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: left; }
+  .vp__card{ display: flex; flex-direction: column; background: #fff; border: 1px solid rgba(14,17,22,.08); border-radius: 18px; padding: 28px; text-decoration: none; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+  .vp__card:hover{ transform: translateY(-3px); box-shadow: 0 22px 40px -26px rgba(14,17,22,.4); border-color: rgba(40,70,166,.35); }
+  .vp__icon{ font-size: 1.9rem; line-height: 1; margin-bottom: 16px; }
+  .vp__cardtitle{ font-size: 1.28rem; font-weight: 700; color: #0e1116; margin: 0 0 8px; }
+  .vp__cardtext{ font-size: .98rem; line-height: 1.6; color: #5b6472; margin: 0 0 18px; flex: 1; }
+  .vp__cardtext p{ margin: 0; }
+  .vp__link{ font-size: .95rem; font-weight: 600; color: var(--vp-accent); margin-top: auto; }
+  @media (max-width: 860px){ .vp__grid{ grid-template-columns: 1fr; } }
+{% endstyle %}
+
+{% schema %}
+{
+  "name": "VRENT Pillars",
+  "tag": "section",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "What we do" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "One partner for the whole reality spectrum" },
+    { "type": "text", "id": "subheading", "label": "Subheading", "default": "Rent the latest hardware, run an unforgettable corporate event, or design a bespoke MR/VR programme — all delivered and supported across Switzerland." },
+    { "type": "header", "content": "Style" },
+    { "type": "color", "id": "accent", "label": "Accent colour", "default": "#2846A6" },
+    { "type": "range", "id": "pad_top", "label": "Padding top", "min": 0, "max": 140, "step": 4, "unit": "px", "default": 24 },
+    { "type": "range", "id": "pad_bottom", "label": "Padding bottom", "min": 0, "max": 140, "step": 4, "unit": "px", "default": 72 }
+  ],
+  "blocks": [
+    {
+      "type": "pillar",
+      "name": "Pillar",
+      "settings": [
+        { "type": "text", "id": "icon", "label": "Icon (emoji)", "default": "🎮" },
+        { "type": "text", "id": "title", "label": "Title", "default": "Rent" },
+        { "type": "richtext", "id": "description", "label": "Description", "default": "<p>Meta Quest, Apple Vision Pro, XREAL, Insta360 and more — delivered to your door with apps pre-installed. From one week.</p>" },
+        { "type": "text", "id": "link_label", "label": "Link label", "default": "Browse equipment" },
+        { "type": "url", "id": "link", "label": "Link" }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [
+    {
+      "name": "VRENT Pillars",
+      "blocks": [
+        { "type": "pillar", "settings": { "icon": "🎮", "title": "Rent", "description": "<p>Meta Quest, Apple Vision Pro, XREAL, Insta360 and more — delivered to your door with apps pre-installed. From one week.</p>", "link_label": "Browse equipment" } },
+        { "type": "pillar", "settings": { "icon": "🏢", "title": "Corporate & Events", "description": "<p>VR corners, training and team experiences for 4 to 500 people. We deliver, set up, run and collect — turnkey.</p>", "link_label": "Plan an event" } },
+        { "type": "pillar", "settings": { "icon": "🧭", "title": "Consulting", "description": "<p>360° tours, VR training programmes and mixed-reality strategy — built around your goals with expert guidance.</p>", "link_label": "Talk to us" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
