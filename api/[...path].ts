@@ -606,10 +606,22 @@ async function getSportsStandings(sport: string, league: string) {
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const AI_KEY = process.env.ANTHROPIC_API_KEY;
 const AI_MODEL = process.env.AI_MODEL || "claude-haiku-4-5";
+// Optional shared access code that gates the paid AI features. When set, every
+// AI request must include the matching code or it is rejected BEFORE any
+// Anthropic call is made — so a stranger with the URL can never spend credit.
+const AI_CODE = process.env.AI_ACCESS_CODE;
 
 function aiConfigured(): boolean {
   return !!AI_KEY;
 }
+function aiLocked(): boolean {
+  return !!AI_CODE;
+}
+function codeMatches(code: unknown): boolean {
+  return !AI_CODE || (typeof code === "string" && code === AI_CODE);
+}
+// Returned (no Anthropic call) when the code is missing/wrong — zero cost.
+const NEED_CODE = { status: 200, body: { ok: false, needCode: true, error: "Enter the access code to use AI features." } };
 
 async function anthropic(body: any): Promise<any> {
   const res = await fetch(ANTHROPIC_URL, {
@@ -684,8 +696,9 @@ const FOOD_PROMPT = `You are a nutrition estimator. Look at the food photo and e
 }
 Estimate realistic values for a normal serving as shown. Round to whole numbers. If the image is not food, return empty items, zeroed total, and explain in note.`;
 
-async function aiVision(task: string, image: string, mediaType: string) {
+async function aiVision(task: string, image: string, mediaType: string, code?: unknown) {
   if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
+  if (!codeMatches(code)) return NEED_CODE;
   const prompt = task === "food" ? FOOD_PROMPT : IDENTIFY_PROMPT;
   const json = await anthropic({
     model: AI_MODEL,
@@ -707,6 +720,7 @@ async function aiVision(task: string, image: string, mediaType: string) {
 
 async function aiTextTask(body: any) {
   if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
+  if (!codeMatches(body?.code)) return NEED_CODE;
   const task = body?.task;
   let prompt = "";
   let maxTokens = 700;
@@ -1000,13 +1014,19 @@ export async function handleApi(
     }
 
     if (route === "ai-status") {
-      return { status: 200, body: { configured: aiConfigured(), model: aiConfigured() ? AI_MODEL : null } };
+      return { status: 200, body: { configured: aiConfigured(), model: aiConfigured() ? AI_MODEL : null, locked: aiLocked() } };
+    }
+
+    if (route === "ai-unlock") {
+      // Verify an access code without spending any credit.
+      if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false } };
+      return { status: 200, body: { ok: codeMatches(ctx.body?.code) } };
     }
 
     if (route === "ai-vision") {
       const b = ctx.body || {};
       if (!b.image) return { status: 400, body: { ok: false, error: "image required" } };
-      return await aiVision(b.task || "identify", String(b.image), b.mediaType || "image/jpeg");
+      return await aiVision(b.task || "identify", String(b.image), b.mediaType || "image/jpeg", b.code);
     }
 
     if (route === "ai-text") {

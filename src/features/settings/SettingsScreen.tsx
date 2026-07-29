@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchAiStatus } from "../../lib/api";
+import { fetchAiStatus, getAiCode, clearAiCode } from "../../lib/api";
 import { Sparkles } from "lucide-react";
 import {
   Newspaper,
@@ -249,11 +249,15 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 }
 
 function AiFeatures() {
-  const [state, setState] = useState<{ configured: boolean; model: string | null } | null>(null);
+  const [state, setState] = useState<{ configured: boolean; model: string | null; locked: boolean } | null>(null);
+  const [hasCode, setHasCode] = useState(false);
   useEffect(() => {
-    fetchAiStatus().then(setState).catch(() => setState({ configured: false, model: null }));
+    fetchAiStatus().then(setState).catch(() => setState({ configured: false, model: null, locked: false }));
+    setHasCode(!!getAiCode());
   }, []);
   const on = state?.configured;
+  const locked = state?.locked;
+  const label = on == null ? "…" : !on ? "Off" : locked ? "On · locked" : "On";
 
   return (
     <section className="rounded-2xl glass p-4">
@@ -268,23 +272,38 @@ function AiFeatures() {
           </div>
         </div>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${on == null ? "bg-slate-100 dark:bg-slate-800 text-slate-400" : on ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
-          {on == null ? "…" : on ? "On" : "Off"}
+          {label}
         </span>
       </div>
-      {on ? (
-        <p className="text-[13px] text-slate-500 dark:text-slate-400">
-          Ready{state?.model ? ` · ${state.model}` : ""}. Snap food in Health or scan anything in the Scan tab.
-        </p>
-      ) : (
+
+      {!on ? (
         <div className="text-[13px] text-slate-500 dark:text-slate-400 space-y-1.5">
           <p>To turn on the Scanner and food calorie counting, add an Anthropic API key to your Vercel project:</p>
-          <ol className="list-decimal list-inside space-y-0.5 text-slate-500 dark:text-slate-400">
+          <ol className="list-decimal list-inside space-y-0.5">
             <li>Get a key at console.anthropic.com (add a little billing credit).</li>
             <li>Vercel → your project → Settings → Environment Variables.</li>
             <li>Add <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">ANTHROPIC_API_KEY</code> = your key.</li>
             <li>Redeploy. (Optional: <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">AI_MODEL</code> to pick a model.)</li>
           </ol>
           <p className="text-[11px] text-slate-400 dark:text-slate-500">Costs pennies per scan. The key stays on the server — never in the app.</p>
+        </div>
+      ) : locked ? (
+        <div className="text-[13px] text-slate-500 dark:text-slate-400 space-y-2">
+          <p>Ready{state?.model ? ` · ${state.model}` : ""}, protected with an access code. Share the code with people you trust — they enter it once, then use AI on your credit.</p>
+          <p className="text-[12px]">To change or revoke the code: update <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">AI_ACCESS_CODE</code> in Vercel and redeploy (old code stops working).</p>
+          {hasCode && (
+            <button onClick={() => { clearAiCode(); setHasCode(false); }} className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+              Forget code on this device
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="text-[13px] text-slate-500 dark:text-slate-400 space-y-2">
+          <p>Ready{state?.model ? ` · ${state.model}` : ""}. Snap food in Health or scan anything in the Scan tab.</p>
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 p-3 text-[12px] text-amber-700 dark:text-amber-300">
+            <p className="font-semibold">Anyone with the app link can use AI on your credit.</p>
+            <p className="mt-0.5">To protect it, add <code className="px-1 rounded bg-amber-100/70 dark:bg-amber-500/20 text-[11px]">AI_ACCESS_CODE</code> (a password of your choice) in Vercel → Environment Variables, then redeploy. People enter it once. Set a spend limit at console.anthropic.com too.</p>
+          </div>
         </div>
       )}
     </section>

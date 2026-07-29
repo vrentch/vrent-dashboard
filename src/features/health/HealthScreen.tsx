@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Camera, Plus, SlidersHorizontal, Sparkles, Trash2, Footprints, Flame, RefreshCw, ChevronRight, Loader2 } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
   removeFood, savePlan, recentSummary, toKey,
 } from "../../lib/health";
-import { analyzeImage, aiPlan, fetchAiStatus, type FoodEstimate } from "../../lib/api";
+import { analyzeImage, aiPlan, type FoodEstimate } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
+import { useAiAccess } from "../../lib/aiAccess";
+import AiUnlock from "../ai/AiUnlock";
 import ProfileSheet from "./ProfileSheet";
 import LogSheet from "./LogSheet";
 import FoodConfirmSheet from "./FoodConfirmSheet";
@@ -14,7 +16,8 @@ import PlanSheet from "./PlanSheet";
 export default function HealthScreen() {
   const s = useHealth();
   const today = todayKey();
-  const [aiOn, setAiOn] = useState<boolean | null>(null);
+  const { status: aiStatus, unlock } = useAiAccess();
+  const aiReady = aiStatus === "ready";
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -27,10 +30,6 @@ export default function HealthScreen() {
   const [foodEstimate, setFoodEstimate] = useState<FoodEstimate | null>(null);
   const [foodPreview, setFoodPreview] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
-
-  useEffect(() => {
-    fetchAiStatus().then((r) => setAiOn(r.configured)).catch(() => setAiOn(false));
-  }, []);
 
   const eaten = macrosOn(s, today);
   const targets = macroTargets(s.profile);
@@ -108,12 +107,13 @@ export default function HealthScreen() {
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" />
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
-        {aiOn === false && (
+        {aiStatus === "off" && (
           <div className="rounded-2xl glass-subtle p-4">
             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Turn on AI for food scanning</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Add <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">ANTHROPIC_API_KEY</code> in Vercel to snap meals and get AI plans. Manual logging works without it.</p>
           </div>
         )}
+        {aiStatus === "locked" && <AiUnlock onSubmit={unlock} compact />}
 
         {/* Today ring */}
         <section className="rounded-3xl glass p-5">
@@ -139,12 +139,13 @@ export default function HealthScreen() {
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => fileRef.current?.click()}
-            className="relative overflow-hidden rounded-2xl p-4 text-white text-left active:scale-[0.98] transition"
+            disabled={!aiReady}
+            className="relative overflow-hidden rounded-2xl p-4 text-white text-left active:scale-[0.98] transition disabled:opacity-60"
             style={{ background: "linear-gradient(135deg, #059669 0%, #10b981 100%)", boxShadow: "0 10px 30px rgba(16,185,129,0.30)" }}
           >
             <Camera size={22} />
             <p className="mt-2 text-sm font-bold">Snap a meal</p>
-            <p className="text-[11px] text-white/80">AI counts the calories</p>
+            <p className="text-[11px] text-white/80">{aiReady ? "AI counts the calories" : aiStatus === "locked" ? "Unlock AI above" : "Needs AI setup"}</p>
           </button>
           <button onClick={() => setLogOpen(true)} className="rounded-2xl glass p-4 text-left active:scale-[0.98] transition">
             <Plus size={22} className="text-slate-700 dark:text-slate-200" />
@@ -172,7 +173,7 @@ export default function HealthScreen() {
               <p className="text-xs text-white/85 mt-1 line-clamp-2">{s.plan.today || s.plan.summary}</p>
             </button>
           ) : (
-            <button onClick={generatePlan} disabled={planLoading || aiOn === false} className="w-full inline-flex items-center justify-center gap-2 py-4 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98] disabled:opacity-50">
+            <button onClick={generatePlan} disabled={planLoading || !aiReady} className="w-full inline-flex items-center justify-center gap-2 py-4 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98] disabled:opacity-50">
               {planLoading ? <><Loader2 size={16} className="animate-spin" /> Building your plan…</> : <><Sparkles size={16} className="text-brand-500" /> Generate my plan</>}
             </button>
           )}

@@ -204,8 +204,25 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
-export function fetchAiStatus(): Promise<{ configured: boolean; model: string | null }> {
+export function fetchAiStatus(): Promise<{ configured: boolean; model: string | null; locked: boolean }> {
   return getJson(`/api/ai-status`);
+}
+
+// Shared AI access code (stored once per device). Attached to every AI request.
+const AI_CODE_KEY = "vrent.aicode.v1";
+export function getAiCode(): string {
+  try { return localStorage.getItem(AI_CODE_KEY) || ""; } catch { return ""; }
+}
+export function setAiCode(code: string) {
+  try { localStorage.setItem(AI_CODE_KEY, code); } catch { /* ignore */ }
+}
+export function clearAiCode() {
+  try { localStorage.removeItem(AI_CODE_KEY); } catch { /* ignore */ }
+}
+
+/** Verify an access code with the server (spends no credit). */
+export function aiUnlock(code: string): Promise<{ ok: boolean; configured?: boolean }> {
+  return postJson(`/api/ai-unlock`, { code });
 }
 
 export interface Identified {
@@ -226,15 +243,15 @@ export interface FoodEstimate {
 
 /** Send a base64 JPEG (no data-URL prefix) for identification or food analysis. */
 export function analyzeImage<T = Identified>(task: "identify" | "food", image: string, mediaType = "image/jpeg"): Promise<AiResult<T>> {
-  return postJson<AiResult<T>>(`/api/ai-vision`, { task, image, mediaType });
+  return postJson<AiResult<T>>(`/api/ai-vision`, { task, image, mediaType, code: getAiCode() });
 }
 
 export function aiTranslate(text: string, target: string): Promise<AiResult<{ translation: string; sourceLang: string }>> {
-  return postJson(`/api/ai-text`, { task: "translate", text, target });
+  return postJson(`/api/ai-text`, { task: "translate", text, target, code: getAiCode() });
 }
 
 export function aiExplain(topic: string): Promise<AiResult<{ explanation: string; keyPoints: string[] }>> {
-  return postJson(`/api/ai-text`, { task: "explain", topic });
+  return postJson(`/api/ai-text`, { task: "explain", topic, code: getAiCode() });
 }
 
 export interface HealthPlan {
@@ -247,5 +264,5 @@ export interface HealthPlan {
 }
 
 export function aiPlan(profile: unknown, recent: unknown): Promise<AiResult<HealthPlan>> {
-  return postJson(`/api/ai-text`, { task: "plan", profile, recent });
+  return postJson(`/api/ai-text`, { task: "plan", profile, recent, code: getAiCode() });
 }

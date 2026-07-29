@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, ImageIcon, Search, Languages, Sparkles, RotateCcw, X, Loader2 } from "lucide-react";
-import { analyzeImage, aiTranslate, aiExplain, fetchAiStatus, type Identified } from "../../lib/api";
+import { analyzeImage, aiTranslate, aiExplain, type Identified } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
+import { useAiAccess } from "../../lib/aiAccess";
+import AiUnlock from "../ai/AiUnlock";
 import Sheet from "../../components/Sheet";
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -30,7 +32,7 @@ function loadHistory(): ScanRecord[] {
 }
 
 export default function ScanScreen() {
-  const [status, setStatus] = useState<"checking" | "on" | "off">("checking");
+  const { status, unlock } = useAiAccess();
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Identified | null>(null);
@@ -39,12 +41,6 @@ export default function ScanScreen() {
   const [translateOpen, setTranslateOpen] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    fetchAiStatus()
-      .then((s) => setStatus(s.configured ? "on" : "off"))
-      .catch(() => setStatus("off"));
-  }, []);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -95,12 +91,13 @@ export default function ScanScreen() {
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
         {status === "off" && <AiOffNotice />}
+        {status === "locked" && <AiUnlock onSubmit={unlock} />}
 
         {/* Capture / preview */}
-        {!preview ? (
+        {status === "locked" ? null : !preview ? (
           <button
             onClick={() => fileRef.current?.click()}
-            disabled={status === "checking"}
+            disabled={status === "loading"}
             className="w-full relative overflow-hidden rounded-3xl p-8 text-white active:scale-[0.99] transition disabled:opacity-60"
             style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #6366f1 55%, #a855f7 100%)", boxShadow: "0 12px 40px rgba(99,102,241,0.35)" }}
           >
@@ -205,7 +202,7 @@ export default function ScanScreen() {
           </section>
         )}
 
-        {!preview && history.length === 0 && status !== "off" && (
+        {!preview && history.length === 0 && status === "ready" && (
           <button onClick={() => fileRef.current?.click()} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl glass-subtle text-sm font-medium text-slate-600 dark:text-slate-300">
             <ImageIcon size={16} /> Choose from library
           </button>
