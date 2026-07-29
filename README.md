@@ -41,11 +41,20 @@ The project is set up for **Vercel** (any host with Node serverless functions
 works). Vercel runs the static app and the `/api` function together, so the
 phone app has live data with no keys.
 
-1. Push this repo to GitHub.
-2. Import it at [vercel.com/new](https://vercel.com/new) — it auto-detects Vite;
-   no configuration needed.
-3. Open the deployed URL on your phone → browser menu → **Add to Home Screen**.
-   It launches full-screen like a native app.
+### One-click deploy
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/vrentch/vrent-dashboard&project-name=ac-news&repository-name=ac-news)
+
+Click the button, sign in with GitHub, and press **Deploy**. Vercel
+auto-detects Vite and the `/api` function — no configuration needed.
+
+Alternatively, import the existing repo at
+[vercel.com/new](https://vercel.com/new) (pick `vrent-dashboard` → Deploy).
+
+### Then install on your phone
+
+Open the deployed URL on your phone → browser menu → **Add to Home Screen**.
+It launches full-screen like a native app called **AC News**.
 
 ## How to use
 
