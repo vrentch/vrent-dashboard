@@ -107,7 +107,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           {didReset ? "Reset to defaults" : "Reset all preferences"}
         </button>
 
-        <p className="text-center text-xs text-slate-600 pt-2">Vrent · News &amp; Markets · v0.1</p>
+        <p className="text-center text-xs text-slate-600 pt-2">AC News · World news &amp; markets · v0.1</p>
       </div>
     </div>
   );

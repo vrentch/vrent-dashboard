@@ -1,4 +1,4 @@
-# Vrent — News & Markets
+# AC News
 
 A mobile-first **PWA** (installable web app) with two sections:
 

@@ -19,8 +19,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "icon.svg"],
       manifest: {
-        name: "Vrent — News & Markets",
-        short_name: "Vrent",
+        name: "AC News",
+        short_name: "AC News",
         description: "Live world news by country & topic, plus stock markets and analytics.",
         theme_color: "#0b1120",
         background_color: "#0b1120",
