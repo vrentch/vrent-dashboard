@@ -58,7 +58,7 @@ export default function NewsCard({ item, index, variant = "full", showCountry = 
   return (
     <button
       onClick={() => onOpen(item)}
-      className="group block w-full text-left rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow overflow-hidden active:scale-[0.99] transition animate-in"
+      className="group block w-full text-left rounded-2xl glass overflow-hidden active:scale-[0.99] transition animate-in"
       style={delay}
     >
       <div className="flex gap-3 p-3">

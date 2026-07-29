@@ -35,7 +35,7 @@ export default function MonthGrid({
   };
 
   return (
-    <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-3">
+    <div className="rounded-2xl glass p-3">
       <div className="flex items-center justify-between mb-2 px-1">
         <button onClick={onPrev} className="grid place-items-center w-8 h-8 rounded-full text-slate-500 dark:text-slate-400 active:bg-slate-100 dark:active:bg-slate-800" aria-label="Previous month">
           <ChevronLeft size={18} />

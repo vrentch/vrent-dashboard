@@ -31,7 +31,7 @@ export default function Sheet({ open, onClose, title, children, footer }: Props)
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative w-full sm:max-w-lg max-h-[88vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl animate-in">
+      <div className="relative w-full sm:max-w-lg max-h-[88vh] flex flex-col rounded-t-3xl sm:rounded-3xl glass-strong shadow-2xl animate-in">
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="mx-auto sm:mx-0">
             <div className="sm:hidden w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700 mx-auto mb-3" />

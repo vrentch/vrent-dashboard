@@ -51,7 +51,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
+      <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
           <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Settings</h1>
           <p className="text-xs text-slate-400 dark:text-slate-500">Your preferences are saved on this device</p>
@@ -59,7 +59,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
+        <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Appearance</h2>
           <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
             {THEMES.map(({ key, label, icon: Icon }) => {
@@ -79,7 +79,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           </div>
         </section>
 
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
+        <section className="rounded-2xl glass p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
@@ -109,7 +109,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
         <NotificationsSettings />
 
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
+        <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Your news feed</h2>
           <div className="space-y-2.5">
             <Row label="Countries">
@@ -146,7 +146,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           </button>
         </section>
 
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
+        <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Your watchlist</h2>
           <p className="text-sm text-slate-600 dark:text-slate-300">{prefs.watchlist.join(" · ") || "Empty"}</p>
           <button
@@ -165,7 +165,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           {copied ? "Link copied!" : "Share AC News with a friend"}
         </button>
 
-        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4 space-y-3">
+        <section className="rounded-2xl glass p-4 space-y-3">
           <InfoRow icon={Users} title="Sharing keeps everyone separate">
             Send friends the app link and each person adjusts their own countries,
             topics and watchlist. Every choice is saved only on that person's phone —

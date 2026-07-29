@@ -215,7 +215,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
                 <button
                   key={it.id}
                   onClick={() => setReadingNews(it)}
-                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 active:scale-[0.99]"
+                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl glass-subtle active:scale-[0.99]"
                 >
                   <div className="min-w-0">
                     <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 line-clamp-2">{it.title}</p>
@@ -253,7 +253,7 @@ function Stat({ label, value, tone = "flat" }: { label: string; value: string; t
   const color = tone === "pos" ? "text-emerald-600 dark:text-emerald-400" : tone === "neg" ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-slate-100";
   const Icon = tone === "pos" ? TrendingUp : tone === "neg" ? TrendingDown : Minus;
   return (
-    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 p-3">
+    <div className="rounded-xl glass-subtle p-3">
       <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
       <p className={`mt-1 text-base font-bold flex items-center gap-1 ${color}`}>
         {tone !== "flat" && <Icon size={14} />}

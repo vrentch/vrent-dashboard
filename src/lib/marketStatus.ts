@@ -47,17 +47,20 @@ function localParts(tz: string, now: Date) {
   return { dow, minutes: hour * 60 + minute };
 }
 
-function fmt(mins: number): string {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
 function humanGap(mins: number): string {
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+// Format an absolute moment in the *viewer's* local time zone (adapts per
+// device automatically — no hard-coded exchange clock).
+function localClock(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+function localWeekday(date: Date): string {
+  return date.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 export function statusFor(m: MarketDef, now: Date = new Date()): MarketStatus {
@@ -70,25 +73,31 @@ export function statusFor(m: MarketDef, now: Date = new Date()): MarketStatus {
   const closeMin = m.close[0] * 60 + m.close[1];
   const isWeekday = dow >= 1 && dow <= 5;
   const isOpen = isWeekday && minutes >= openMin && minutes < closeMin;
+  const at = (gapMin: number) => new Date(now.getTime() + gapMin * 60000);
 
   if (isOpen) {
     const toClose = closeMin - minutes;
-    return { ...base, open: true, detail: toClose <= 60 ? `Closes in ${humanGap(toClose)}` : `Closes ${fmt(closeMin)}` };
+    return { ...base, open: true, detail: toClose <= 60 ? `Closes in ${humanGap(toClose)}` : `Closes ${localClock(at(toClose))}` };
   }
 
-  // Compute the next open.
+  // Same-day open still ahead.
   if (isWeekday && minutes < openMin) {
-    return { ...base, open: false, detail: `Opens in ${humanGap(openMin - minutes)}` };
+    const toOpen = openMin - minutes;
+    return { ...base, open: false, detail: toOpen <= 90 ? `Opens in ${humanGap(toOpen)}` : `Opens ${localClock(at(toOpen))}` };
   }
-  // Next weekday (skip to Monday over the weekend).
+
+  // Next weekday open (skip the weekend). Gap in exchange-local minutes maps
+  // 1:1 to real elapsed minutes, so we can add it to `now` and show local time.
   let addDays = 1;
   let d = (dow + 1) % 7;
   while (d === 0 || d === 6) {
     d = (d + 1) % 7;
     addDays++;
   }
-  const dayLabel = addDays === 1 ? "tomorrow" : DOW[d];
-  return { ...base, open: false, detail: `Opens ${dayLabel} ${fmt(openMin)}` };
+  const gap = addDays * 1440 - minutes + openMin;
+  const moment = at(gap);
+  const dayLabel = addDays === 1 ? "tomorrow" : localWeekday(moment);
+  return { ...base, open: false, detail: `Opens ${dayLabel} ${localClock(moment)}` };
 }
 
 export function allStatuses(now: Date = new Date()): MarketStatus[] {

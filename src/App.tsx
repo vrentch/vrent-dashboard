@@ -42,7 +42,7 @@ export default function App() {
         {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
       </main>
 
-      <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl safe-bottom">
+      <nav className="fixed bottom-0 inset-x-0 z-40 glass-nav border-t border-white/40 dark:border-white/10 safe-bottom">
         <div className="max-w-lg mx-auto grid grid-cols-5">
           {TABS.map(({ key, label, icon: Icon }) => {
             const active = tab === key;

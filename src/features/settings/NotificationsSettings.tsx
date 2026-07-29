@@ -49,7 +49,7 @@ export default function NotificationsSettings() {
   }
 
   return (
-    <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
+    <section className="rounded-2xl glass p-4">
       <div className="flex items-center gap-2.5 mb-3">
         <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
           <Bell size={17} />

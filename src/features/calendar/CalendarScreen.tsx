@@ -60,7 +60,7 @@ export default function CalendarScreen() {
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
+      <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
           <div className="flex items-center justify-between">
             <div>
@@ -148,7 +148,7 @@ function EventRow({ ev, onEdit }: { ev: CalEvent; onEdit: () => void }) {
   const cat = categoryOf(ev.category);
   const time = ev.allDay ? "All day" : `${ev.start ?? ""}${ev.end ? " – " + ev.end : ""}`;
   return (
-    <div className="flex items-stretch gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow">
+    <div className="flex items-stretch gap-3 p-3 rounded-2xl glass">
       <span className="w-1 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
       <button
         onClick={(e) => {

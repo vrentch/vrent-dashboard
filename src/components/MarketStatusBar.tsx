@@ -15,7 +15,7 @@ export default function MarketStatusBar() {
       {statuses.map((s) => (
         <div
           key={s.key}
-          className="shrink-0 flex items-center gap-2 pl-2.5 pr-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow"
+          className="shrink-0 flex items-center gap-2 pl-2.5 pr-3 py-2 rounded-xl glass"
         >
           <span className="text-base leading-none">{s.flag}</span>
           <div className="leading-tight">

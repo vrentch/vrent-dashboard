@@ -3,15 +3,17 @@ import { ChevronRight, RefreshCw } from "lucide-react";
 import { fetchQuotes, fetchSignals, fetchNews, type Quote, type Signal, type NewsItem } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { greeting } from "../../lib/marketStatus";
-import { useEvents, eventsOn, todayKey } from "../../lib/calendar";
+import { useEvents, eventsOn, upcoming, todayKey, categoryOf } from "../../lib/calendar";
 import { fmtPct } from "../../lib/format";
 import MarketStatusBar from "../../components/MarketStatusBar";
 import StockRow from "../markets/StockRow";
 import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
+import BriefingSheet from "./BriefingSheet";
+import { ChevronRight as Chev, CalendarDays, Plus } from "lucide-react";
 
-type Tab = "home" | "news" | "markets" | "settings";
+type Tab = "home" | "news" | "markets" | "calendar" | "settings";
 
 export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const prefs = usePrefs();
@@ -70,7 +72,9 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const events = useEvents();
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const todayEvents = useMemo(() => eventsOn(events, todayKey()), [events]);
+  const upcomingEvents = useMemo(() => upcoming(events, todayKey()).slice(0, 3), [events]);
   const avgChange = useMemo(() => {
     const w = quotes.filter((q) => q.changePercent != null);
     return w.length ? w.reduce((a, b) => a + (b.changePercent ?? 0), 0) / w.length : null;
@@ -79,7 +83,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
+      <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
             <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{greeting()}</h1>
@@ -87,7 +91,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
           </div>
           <button
             onClick={load}
-            className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
+            className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
             aria-label="Refresh"
           >
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
@@ -96,34 +100,45 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
-        {/* Daily briefing */}
-        <section className="rounded-2xl bg-gradient-to-br from-brand-600 to-indigo-700 text-white p-4 card-shadow">
-          <h2 className="text-sm font-semibold text-white/80 mb-2">Today's briefing</h2>
-          <ul className="space-y-1.5 text-[15px] font-medium">
-            <li className="flex items-center gap-2">
-              <span>📈</span>
-              {avgChange != null ? (
-                <span>Your watchlist is {avgChange >= 0 ? "up" : "down"} {fmtPct(avgChange)} on average today</span>
-              ) : (
-                <span className="text-white/80">Add symbols to track your watchlist</span>
-              )}
-            </li>
-            <li className="flex items-center gap-2">
-              <span>🗓️</span>
-              <span>
-                {todayEvents.length === 0
-                  ? "No events scheduled today"
-                  : `${todayEvents.length} event${todayEvents.length > 1 ? "s" : ""} today${nextEvent ? ` · next: ${nextEvent.title}${nextEvent.allDay ? "" : " " + (nextEvent.start ?? "")}` : ""}`}
-              </span>
-            </li>
-            {news[0] && (
-              <li className="flex items-start gap-2">
-                <span>📰</span>
-                <span className="line-clamp-2 text-white/95">{news[0].title}</span>
+        {/* Daily briefing — tap to expand into the full one-pager */}
+        <button
+          onClick={() => setBriefingOpen(true)}
+          className="w-full text-left relative overflow-hidden rounded-3xl p-5 text-white active:scale-[0.99] transition"
+          style={{ background: "linear-gradient(135deg, #2563eb 0%, #4f46e5 55%, #7c3aed 100%)", boxShadow: "0 12px 40px rgba(79,70,229,0.35)" }}
+        >
+          <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-2.5">
+              <h2 className="text-sm font-semibold text-white/85">Today's briefing</h2>
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-white/90">Full brief <Chev size={14} /></span>
+            </div>
+            <ul className="space-y-1.5 text-[15px] font-medium">
+              <li className="flex items-center gap-2">
+                <span>📈</span>
+                {avgChange != null ? (
+                  <span>Your watchlist is {avgChange >= 0 ? "up" : "down"} <b>{fmtPct(avgChange)}</b> on average today</span>
+                ) : (
+                  <span className="text-white/85">Add symbols to track your watchlist</span>
+                )}
               </li>
-            )}
-          </ul>
-        </section>
+              <li className="flex items-center gap-2">
+                <span>🗓️</span>
+                <span>
+                  {todayEvents.length === 0
+                    ? "No events scheduled today"
+                    : `${todayEvents.length} event${todayEvents.length > 1 ? "s" : ""} today${nextEvent ? ` · next: ${nextEvent.title}${nextEvent.allDay ? "" : " " + (nextEvent.start ?? "")}` : ""}`}
+                </span>
+              </li>
+              {news[0] && (
+                <li className="flex items-start gap-2">
+                  <span>📰</span>
+                  <span className="line-clamp-2 text-white/95">{news[0].title}</span>
+                </li>
+              )}
+            </ul>
+            <p className="mt-3 text-xs text-white/70">Tap for a detailed overview of your day →</p>
+          </div>
+        </button>
 
         {/* Market status */}
         <section>
@@ -154,6 +169,44 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
           )}
         </section>
 
+        {/* Calendar widget */}
+        <section>
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">Your calendar</h2>
+            <button onClick={() => onNavigate("calendar")} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
+              Open <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="rounded-2xl glass p-2">
+            {upcomingEvents.length === 0 ? (
+              <button onClick={() => onNavigate("calendar")} className="w-full flex items-center justify-center gap-2 py-4 text-sm text-slate-500 dark:text-slate-400">
+                <Plus size={15} /> Add an event
+              </button>
+            ) : (
+              <div className="divide-y divide-white/40 dark:divide-white/5">
+                {upcomingEvents.map((e) => {
+                  const isToday = e.date === todayKey();
+                  return (
+                    <button key={e.id} onClick={() => onNavigate("calendar")} className="w-full flex items-center gap-3 p-2.5 text-left active:opacity-70">
+                      <div className="grid place-items-center w-10 shrink-0">
+                        <CalendarDays size={14} className="text-slate-400 dark:text-slate-500" />
+                      </div>
+                      <span className="w-1.5 h-8 rounded-full shrink-0" style={{ backgroundColor: categoryOf(e.category).color }} />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-semibold ${e.done ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>{e.title}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          {isToday ? "Today" : new Date(e.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+                          {e.allDay ? "" : ` · ${e.start ?? ""}`}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Top news */}
         <section>
           <div className="flex items-center justify-between mb-2.5">
@@ -176,6 +229,18 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
 
       <StockDetail quote={selected} onClose={() => setSelected(null)} />
       <ArticleReader item={reading} onClose={() => setReading(null)} />
+      <BriefingSheet
+        open={briefingOpen}
+        onClose={() => setBriefingOpen(false)}
+        movers={movers}
+        avgChange={avgChange}
+        news={news}
+        events={todayEvents}
+        onOpenArticle={(n) => {
+          setBriefingOpen(false);
+          setReading(n);
+        }}
+      />
     </div>
   );
 }

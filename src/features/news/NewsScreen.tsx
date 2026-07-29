@@ -86,7 +86,7 @@ export default function NewsScreen() {
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
+      <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-2.5">
           <div className="flex items-center justify-between">
             <div>
@@ -99,14 +99,14 @@ export default function NewsScreen() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSearchOpen(true)}
-                className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
+                className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
                 aria-label="Search"
               >
                 <Search size={18} />
               </button>
               <button
                 onClick={() => load(true)}
-                className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
+                className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
                 aria-label="Refresh"
               >
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />

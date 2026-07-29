@@ -24,20 +24,73 @@ body,
 
 body {
   margin: 0;
-  background: #f6f7f9;
   color: #0f172a;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
+  /* Liquid-glass backdrop: soft color mesh the glass panels refract. */
+  background:
+    radial-gradient(1100px 760px at 8% -12%, #c7d7fe 0%, transparent 58%),
+    radial-gradient(980px 680px at 112% 6%, #e4d4fe 0%, transparent 55%),
+    radial-gradient(900px 900px at 50% 118%, #bff3f4 0%, transparent 55%),
+    linear-gradient(180deg, #eef2f8 0%, #e9edf5 100%);
+  background-attachment: fixed;
 }
 
 :root.dark {
   color-scheme: dark;
 }
 :root.dark body {
-  background: #0b1120;
-  color: #e2e8f0;
+  color: #e6ebf5;
+  background:
+    radial-gradient(1100px 760px at 8% -12%, rgba(37, 99, 235, 0.35) 0%, transparent 58%),
+    radial-gradient(980px 680px at 112% 6%, rgba(124, 58, 237, 0.32) 0%, transparent 55%),
+    radial-gradient(900px 900px at 50% 120%, rgba(6, 148, 162, 0.28) 0%, transparent 55%),
+    linear-gradient(180deg, #070b16 0%, #0a0f1e 100%);
+  background-attachment: fixed;
+}
+
+/* ── Liquid Glass surfaces ─────────────────────────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+:root.dark .glass {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+/* Frosted bars (headers, bottom nav, sheets) */
+.glass-nav {
+  background: rgba(246, 248, 252, 0.65);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+}
+:root.dark .glass-nav {
+  background: rgba(10, 15, 30, 0.6);
+}
+.glass-strong {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+:root.dark .glass-strong {
+  background: rgba(17, 24, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+/* Subtle inner glass panel (e.g. inside a card) */
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+:root.dark .glass-subtle {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Respect device notches / home indicators. */

@@ -5,6 +5,7 @@ import { fetchQuotes, fetchSignals, type Quote, type Signal } from "../../lib/ap
 import { fmtPct, cleanSymbol } from "../../lib/format";
 import { usePrefs, setPrefs, toggleInList, setActiveWatchlist } from "../../lib/store";
 import type { IndexDef } from "../../data/markets";
+import CurrencyConverter from "./CurrencyConverter";
 import { TrendingUp, TrendingDown, Pencil, Plus } from "lucide-react";
 
 interface Props {
@@ -18,9 +19,10 @@ interface Props {
   watchlist?: boolean;
   onEdit?: () => void;
   enableSignals?: boolean;
+  converter?: boolean;
 }
 
-export default function RegionView({ open, onClose, title, flag, indices, symbols, onSelect, watchlist, onEdit, enableSignals = true }: Props) {
+export default function RegionView({ open, onClose, title, flag, indices, symbols, onSelect, watchlist, onEdit, enableSignals = true, converter }: Props) {
   const prefs = usePrefs();
   const [activeIdx, setActiveIdx] = useState(0);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -151,6 +153,27 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
 
       {!loading && quotes.length > 0 && (
         <div className="space-y-5">
+          {converter && <CurrencyConverter quotes={quotes} />}
+
+          {/* Quick overview strip */}
+          {(() => {
+            const withPct = quotes.filter((q) => q.changePercent != null);
+            const up = withPct.filter((q) => (q.changePercent ?? 0) > 0).length;
+            const down = withPct.filter((q) => (q.changePercent ?? 0) < 0).length;
+            const avg = withPct.length ? withPct.reduce((a, b) => a + (b.changePercent ?? 0), 0) / withPct.length : null;
+            return (
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">▲ {up}</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300">▼ {down}</span>
+                {avg != null && (
+                  <span className={`ml-auto px-2.5 py-1 rounded-full ${avg >= 0 ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300"}`}>
+                    avg {fmtPct(avg)}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           {(gainers.length > 0 || losers.length > 0) && (
             <div className="grid grid-cols-2 gap-3">
               <MoverPanel title="Top gainers" tone="pos" items={gainers} onSelect={onSelect} />
@@ -196,7 +219,7 @@ function MoverPanel({
   const Icon = tone === "pos" ? TrendingUp : TrendingDown;
   const color = tone === "pos" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
   return (
-    <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 p-3">
+    <div className="rounded-2xl glass-subtle p-3">
       <div className={`flex items-center gap-1.5 mb-2 text-xs font-semibold ${color}`}>
         <Icon size={14} /> {title}
       </div>

@@ -23,7 +23,7 @@ export default function StockRow({
 }) {
   const up = (quote.changePercent ?? 0) >= 0;
   return (
-    <div className="w-full flex items-center gap-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow">
+    <div className="w-full flex items-center gap-2.5 p-3 rounded-2xl glass">
       <button onClick={onClick} className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-70">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
