@@ -9,5 +9,6 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" }
       ]
     }
-  ]
+  ],
+  "crons": [{ "path": "/api/publish-news", "schedule": "0 8 * * 1" }]
 }
