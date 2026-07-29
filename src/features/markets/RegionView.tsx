@@ -3,7 +3,7 @@ import Sheet from "../../components/Sheet";
 import StockRow from "./StockRow";
 import { fetchQuotes, fetchSignals, type Quote, type Signal } from "../../lib/api";
 import { fmtPct, cleanSymbol } from "../../lib/format";
-import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
+import { usePrefs, setPrefs, toggleInList, setActiveWatchlist } from "../../lib/store";
 import type { IndexDef } from "../../data/markets";
 import { TrendingUp, TrendingDown, Pencil, Plus } from "lucide-react";
 
@@ -91,6 +91,23 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
         ) : undefined
       }
     >
+      {/* Watchlist switcher */}
+      {watchlist && prefs.watchlists.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 mb-4">
+          {prefs.watchlists.map((w) => (
+            <button
+              key={w.id}
+              onClick={() => setActiveWatchlist(w.id)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition border ${
+                w.id === prefs.activeWatchlistId ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
+              }`}
+            >
+              {w.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Index selector */}
       {indices && indices.length > 1 && (
         <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 mb-4">

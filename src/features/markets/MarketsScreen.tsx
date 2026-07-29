@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Star, ChevronRight } from "lucide-react";
 import { fetchQuotes, type Quote } from "../../lib/api";
-import { usePrefs } from "../../lib/store";
+import { usePrefs, activeWatchlist } from "../../lib/store";
 import { fmtPrice, fmtPct } from "../../lib/format";
 import { REGIONS, primaryIndex, type MarketRegion } from "../../data/markets";
 import RegionView from "./RegionView";
@@ -104,12 +104,14 @@ export default function MarketsScreen() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Star size={20} className="text-white" fill="currentColor" />
-                <h2 className="text-[15px] font-bold text-white">My list</h2>
+                <h2 className="text-[15px] font-bold text-white">My lists</h2>
               </div>
               <ChevronRight size={18} className="text-white/70" />
             </div>
             <p className="mt-1 text-xs text-white/80">
-              {prefs.watchlist.length
+              {prefs.watchlists.length > 1
+                ? `${prefs.watchlists.length} lists · ${activeWatchlist(prefs).name} active`
+                : prefs.watchlist.length
                 ? `${prefs.watchlist.length} symbols you picked · tap to view & edit`
                 : "Build your own watchlist — tap to add symbols"}
             </p>
@@ -131,7 +133,7 @@ export default function MarketsScreen() {
       <RegionView
         open={openWatchlist}
         onClose={() => setOpenWatchlist(false)}
-        title="My list"
+        title={activeWatchlist(prefs).name}
         flag="⭐"
         symbols={prefs.watchlist}
         onSelect={setSelected}
