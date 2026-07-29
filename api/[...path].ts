@@ -593,6 +593,162 @@ async function getSportsStandings(sport: string, league: string) {
   return { league: data?.name || league, hasDraws, groups };
 }
 
+// ── AI (Anthropic vision + planning) ────────────────────────────────────────
+//
+// Powers the camera Scanner (identify / explain / translate) and the Health
+// food-photo calorie estimator + AI plans. The API key lives ONLY in the
+// server env (ANTHROPIC_API_KEY) — never shipped to the client. Model is
+// configurable via AI_MODEL (defaults to the fast, low-cost Haiku). If the key
+// is missing the endpoints report "not configured" and the UI degrades kindly.
+// Called with plain fetch to keep this file self-contained (no bundled SDK),
+// matching every other data source here.
+
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const AI_KEY = process.env.ANTHROPIC_API_KEY;
+const AI_MODEL = process.env.AI_MODEL || "claude-haiku-4-5";
+
+function aiConfigured(): boolean {
+  return !!AI_KEY;
+}
+
+async function anthropic(body: any): Promise<any> {
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": AI_KEY as string,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`anthropic ${res.status}: ${t.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+function aiText(json: any): string {
+  return (json?.content || [])
+    .filter((b: any) => b.type === "text")
+    .map((b: any) => b.text)
+    .join("")
+    .trim();
+}
+
+// Pull the first JSON object/array out of a model response (tolerates prose or
+// ```json fences around it).
+function parseModelJson(s: string): any {
+  let t = s.trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1].trim();
+  try {
+    return JSON.parse(t);
+  } catch {
+    /* fall through */
+  }
+  const first = t.search(/[[{]/);
+  if (first >= 0) {
+    for (let end = t.length; end > first; end--) {
+      const slice = t.slice(first, end);
+      const last = slice[slice.length - 1];
+      if (last !== "}" && last !== "]") continue;
+      try {
+        return JSON.parse(slice);
+      } catch {
+        /* keep shrinking */
+      }
+    }
+  }
+  return null;
+}
+
+const IDENTIFY_PROMPT = `You are a visual identification assistant. Look at the image and identify the main subject. Respond with ONLY a JSON object, no prose, matching exactly:
+{
+  "title": "short name of the main subject",
+  "category": "one of: Object, Product, Plant, Animal, Food, Landmark, Artwork, Text, Person, Vehicle, Nature, Other",
+  "summary": "2-3 sentence plain-language explanation of what this is",
+  "details": [{"label": "short label", "value": "short fact"}],
+  "detectedText": "any readable text visible in the image, verbatim, or empty string",
+  "searchQuery": "a concise web search query to learn more"
+}
+Provide up to 5 useful details. Be accurate; if unsure, say so in the summary.`;
+
+const FOOD_PROMPT = `You are a nutrition estimator. Look at the food photo and estimate its nutrition. Respond with ONLY a JSON object, no prose, matching exactly:
+{
+  "items": [{"name": "food item", "portion": "estimated portion", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
+  "total": {"calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0},
+  "confidence": "low | medium | high",
+  "note": "one short caveat or tip"
+}
+Estimate realistic values for a normal serving as shown. Round to whole numbers. If the image is not food, return empty items, zeroed total, and explain in note.`;
+
+async function aiVision(task: string, image: string, mediaType: string) {
+  if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
+  const prompt = task === "food" ? FOOD_PROMPT : IDENTIFY_PROMPT;
+  const json = await anthropic({
+    model: AI_MODEL,
+    max_tokens: 900,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+  });
+  const data = parseModelJson(aiText(json));
+  if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
+  return { status: 200, body: { ok: true, data, model: AI_MODEL } };
+}
+
+async function aiTextTask(body: any) {
+  if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
+  const task = body?.task;
+  let prompt = "";
+  let maxTokens = 700;
+
+  if (task === "translate") {
+    const text = String(body?.text || "").slice(0, 4000);
+    const target = String(body?.target || "English");
+    if (!text.trim()) return { status: 200, body: { ok: false, error: "Nothing to translate" } };
+    prompt = `Translate the following text into ${target}. Respond with ONLY a JSON object: {"translation": "...", "sourceLang": "detected source language name"}.\n\nText:\n"""${text}"""`;
+  } else if (task === "explain") {
+    const topic = String(body?.topic || "").slice(0, 500);
+    prompt = `Explain "${topic}" for a curious general reader. Respond with ONLY a JSON object: {"explanation": "3-5 short paragraphs, plain language", "keyPoints": ["...", "..."]}.`;
+    maxTokens = 900;
+  } else if (task === "plan") {
+    const profile = JSON.stringify(body?.profile || {});
+    const recent = JSON.stringify(body?.recent || {});
+    maxTokens = 1100;
+    prompt = `You are a friendly, evidence-based health & fitness coach. Given the user's profile and recent logged data, produce a concise personal plan. Profile: ${profile}. Recent data: ${recent}.
+Respond with ONLY a JSON object matching exactly:
+{
+  "headline": "short motivating one-liner",
+  "summary": "2-3 sentences on where they stand and the focus",
+  "targets": {"calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "steps": 0},
+  "today": "what to do today, 1-2 sentences",
+  "workouts": [{"day": "Mon", "focus": "e.g. Upper body", "detail": "short description"}],
+  "nutrition": ["short actionable tip", "..."]
+}
+Base calorie/macro targets on the profile (goal, activity). Provide a 7-day workout array. Keep everything practical and safe; this is general guidance, not medical advice.`;
+  } else {
+    return { status: 400, body: { ok: false, error: "unknown task" } };
+  }
+
+  const json = await anthropic({
+    model: AI_MODEL,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
+  });
+  const data = parseModelJson(aiText(json));
+  if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
+  return { status: 200, body: { ok: true, data, model: AI_MODEL } };
+}
+
 // ── Push notifications (privacy-preserving: market open/close + daily recap) ─
 //
 // Storage is Vercel KV (Upstash Redis REST). VAPID keys come from env. If any
@@ -843,6 +999,20 @@ export async function handleApi(
       return { status: 200, body: await getSportsStandings(sport, league) };
     }
 
+    if (route === "ai-status") {
+      return { status: 200, body: { configured: aiConfigured(), model: aiConfigured() ? AI_MODEL : null } };
+    }
+
+    if (route === "ai-vision") {
+      const b = ctx.body || {};
+      if (!b.image) return { status: 400, body: { ok: false, error: "image required" } };
+      return await aiVision(b.task || "identify", String(b.image), b.mediaType || "image/jpeg");
+    }
+
+    if (route === "ai-text") {
+      return await aiTextTask(ctx.body || {});
+    }
+
     return { status: 404, body: { error: `unknown route: ${route}` } };
   } catch (err) {
     return { status: 502, body: { error: String(err instanceof Error ? err.message : err) } };
@@ -878,7 +1048,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   // Push/tick endpoints must never be cached.
-  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick");
+  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-");
   res.setHeader("Cache-Control", noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300");
   res.end(JSON.stringify(out));
 }

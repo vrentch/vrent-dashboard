@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { LayoutGrid, Newspaper, CandlestickChart, Trophy, CalendarDays, Settings } from "lucide-react";
+import { LayoutGrid, Newspaper, CandlestickChart, Trophy, HeartPulse, ScanLine } from "lucide-react";
 import HomeScreen from "./features/home/HomeScreen";
 import NewsScreen from "./features/news/NewsScreen";
 import MarketsScreen from "./features/markets/MarketsScreen";
 import SportsScreen from "./features/sports/SportsScreen";
+import HealthScreen from "./features/health/HealthScreen";
+import ScanScreen from "./features/scan/ScanScreen";
 import CalendarScreen from "./features/calendar/CalendarScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import LockScreen from "./features/lock/LockScreen";
@@ -11,15 +13,18 @@ import { usePrefs } from "./lib/store";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
-type Tab = "home" | "news" | "markets" | "sports" | "calendar" | "settings";
+export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings";
 
+// Six primary destinations in the bottom bar. Calendar and Settings are
+// reachable from the Home screen (calendar widget + header gear) to keep the
+// bar uncluttered.
 const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { key: "home", label: "Home", icon: LayoutGrid },
   { key: "news", label: "News", icon: Newspaper },
   { key: "markets", label: "Markets", icon: CandlestickChart },
   { key: "sports", label: "Sports", icon: Trophy },
-  { key: "calendar", label: "Calendar", icon: CalendarDays },
-  { key: "settings", label: "Settings", icon: Settings },
+  { key: "health", label: "Health", icon: HeartPulse },
+  { key: "scan", label: "Scan", icon: ScanLine },
 ];
 
 export default function App() {
@@ -41,6 +46,8 @@ export default function App() {
         {tab === "news" && <NewsScreen />}
         {tab === "markets" && <MarketsScreen />}
         {tab === "sports" && <SportsScreen />}
+        {tab === "health" && <HealthScreen />}
+        {tab === "scan" && <ScanScreen />}
         {tab === "calendar" && <CalendarScreen />}
         {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
       </main>

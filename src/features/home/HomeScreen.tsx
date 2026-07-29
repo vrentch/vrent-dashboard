@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight, RefreshCw, Settings } from "lucide-react";
 import { fetchQuotes, fetchSignals, fetchNews, type Quote, type Signal, type NewsItem } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { greeting } from "../../lib/marketStatus";
@@ -13,7 +13,7 @@ import ArticleReader from "../news/ArticleReader";
 import BriefingSheet from "./BriefingSheet";
 import { ChevronRight as Chev, CalendarDays, Plus } from "lucide-react";
 
-type Tab = "home" | "news" | "markets" | "sports" | "calendar" | "settings";
+type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings";
 
 export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const prefs = usePrefs();
@@ -89,13 +89,22 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
             <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{greeting()}</h1>
             <p className="text-xs text-slate-400 dark:text-slate-500">{today}</p>
           </div>
-          <button
-            onClick={load}
-            className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
-            aria-label="Refresh"
-          >
-            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onNavigate("settings")}
+              className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
+              aria-label="Settings"
+            >
+              <Settings size={18} />
+            </button>
+            <button
+              onClick={load}
+              className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
+              aria-label="Refresh"
+            >
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
       </header>
 

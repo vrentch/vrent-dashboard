@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchAiStatus } from "../../lib/api";
+import { Sparkles } from "lucide-react";
 import {
   Newspaper,
   CandlestickChart,
@@ -122,6 +124,8 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
         <NotificationsSettings />
 
+        <AiFeatures />
+
         <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Your news feed</h2>
           <div className="space-y-2.5">
@@ -241,6 +245,49 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
       <PasscodeSetup open={lockSetup} onClose={() => setLockSetup(false)} />
     </div>
+  );
+}
+
+function AiFeatures() {
+  const [state, setState] = useState<{ configured: boolean; model: string | null } | null>(null);
+  useEffect(() => {
+    fetchAiStatus().then(setState).catch(() => setState({ configured: false, model: null }));
+  }, []);
+  const on = state?.configured;
+
+  return (
+    <section className="rounded-2xl glass p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2.5">
+          <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
+            <Sparkles size={17} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI features</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Scanner & food calorie counting</p>
+          </div>
+        </div>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${on == null ? "bg-slate-100 dark:bg-slate-800 text-slate-400" : on ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
+          {on == null ? "…" : on ? "On" : "Off"}
+        </span>
+      </div>
+      {on ? (
+        <p className="text-[13px] text-slate-500 dark:text-slate-400">
+          Ready{state?.model ? ` · ${state.model}` : ""}. Snap food in Health or scan anything in the Scan tab.
+        </p>
+      ) : (
+        <div className="text-[13px] text-slate-500 dark:text-slate-400 space-y-1.5">
+          <p>To turn on the Scanner and food calorie counting, add an Anthropic API key to your Vercel project:</p>
+          <ol className="list-decimal list-inside space-y-0.5 text-slate-500 dark:text-slate-400">
+            <li>Get a key at console.anthropic.com (add a little billing credit).</li>
+            <li>Vercel → your project → Settings → Environment Variables.</li>
+            <li>Add <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">ANTHROPIC_API_KEY</code> = your key.</li>
+            <li>Redeploy. (Optional: <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">AI_MODEL</code> to pick a model.)</li>
+          </ol>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">Costs pennies per scan. The key stays on the server — never in the app.</p>
+        </div>
+      )}
+    </section>
   );
 }
 

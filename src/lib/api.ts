@@ -183,3 +183,69 @@ export function fetchStandings(sport: string, league: string): Promise<Standings
   const p = new URLSearchParams({ sport, league });
   return getJson<StandingsResponse>(`/api/sports-standings?${p.toString()}`);
 }
+
+// ── AI (vision + text) ───────────────────────────────────────────────────────
+
+export interface AiResult<T = any> {
+  ok: boolean;
+  data?: T;
+  model?: string;
+  error?: string;
+  configured?: boolean;
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  return data as T;
+}
+
+export function fetchAiStatus(): Promise<{ configured: boolean; model: string | null }> {
+  return getJson(`/api/ai-status`);
+}
+
+export interface Identified {
+  title: string;
+  category: string;
+  summary: string;
+  details: { label: string; value: string }[];
+  detectedText: string;
+  searchQuery: string;
+}
+
+export interface FoodEstimate {
+  items: { name: string; portion: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }[];
+  total: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+  confidence: string;
+  note: string;
+}
+
+/** Send a base64 JPEG (no data-URL prefix) for identification or food analysis. */
+export function analyzeImage<T = Identified>(task: "identify" | "food", image: string, mediaType = "image/jpeg"): Promise<AiResult<T>> {
+  return postJson<AiResult<T>>(`/api/ai-vision`, { task, image, mediaType });
+}
+
+export function aiTranslate(text: string, target: string): Promise<AiResult<{ translation: string; sourceLang: string }>> {
+  return postJson(`/api/ai-text`, { task: "translate", text, target });
+}
+
+export function aiExplain(topic: string): Promise<AiResult<{ explanation: string; keyPoints: string[] }>> {
+  return postJson(`/api/ai-text`, { task: "explain", topic });
+}
+
+export interface HealthPlan {
+  headline: string;
+  summary: string;
+  targets: { calories: number; protein_g: number; carbs_g: number; fat_g: number; steps: number };
+  today: string;
+  workouts: { day: string; focus: string; detail: string }[];
+  nutrition: string[];
+}
+
+export function aiPlan(profile: unknown, recent: unknown): Promise<AiResult<HealthPlan>> {
+  return postJson(`/api/ai-text`, { task: "plan", profile, recent });
+}
