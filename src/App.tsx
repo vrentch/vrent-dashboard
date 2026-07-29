@@ -1,30 +1,33 @@
 import { useState } from "react";
-import { Newspaper, CandlestickChart, Settings } from "lucide-react";
+import { LayoutGrid, Newspaper, CandlestickChart, Settings } from "lucide-react";
+import HomeScreen from "./features/home/HomeScreen";
 import NewsScreen from "./features/news/NewsScreen";
 import MarketsScreen from "./features/markets/MarketsScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 
-type Tab = "news" | "markets" | "settings";
+type Tab = "home" | "news" | "markets" | "settings";
 
-const TABS: { key: Tab; label: string; icon: typeof Newspaper }[] = [
+const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
+  { key: "home", label: "Home", icon: LayoutGrid },
   { key: "news", label: "News", icon: Newspaper },
   { key: "markets", label: "Markets", icon: CandlestickChart },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("news");
+  const [tab, setTab] = useState<Tab>("home");
 
   return (
     <div className="min-h-full flex flex-col">
       <main className="flex-1 pb-20">
+        {tab === "home" && <HomeScreen onNavigate={setTab} />}
         {tab === "news" && <NewsScreen />}
         {tab === "markets" && <MarketsScreen />}
         {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white/85 backdrop-blur-xl safe-bottom">
-        <div className="max-w-lg mx-auto grid grid-cols-3">
+        <div className="max-w-lg mx-auto grid grid-cols-4">
           {TABS.map(({ key, label, icon: Icon }) => {
             const active = tab === key;
             return (

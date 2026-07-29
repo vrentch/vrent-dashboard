@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import Sheet from "../../components/Sheet";
 import PriceChart from "../../components/PriceChart";
-import { fetchHistory, fetchSignals, type History, type Quote, type Signal } from "../../lib/api";
+import { fetchHistory, fetchSignals, fetchNews, type History, type Quote, type Signal, type NewsItem } from "../../lib/api";
 import { computeAnalytics } from "../../lib/analytics";
-import { fmtPrice, fmtPct, fmtNum } from "../../lib/format";
+import { fmtPrice, fmtPct, fmtNum, cleanSymbol, timeAgo } from "../../lib/format";
 import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
 import SignalPill from "../../components/SignalPill";
-import { TrendingUp, TrendingDown, Minus, Star, Sparkles } from "lucide-react";
+import ArticleReader from "../news/ArticleReader";
+import { TrendingUp, TrendingDown, Minus, Star, Sparkles, Newspaper } from "lucide-react";
+
+function newsQueryFor(q: Quote): string {
+  const name = (q.name || "").replace(/\(.*?\)/g, "").replace(/\b(Inc|Corp|Corporation|Ltd|AG|SA|PLC|Co|Group|Holding|Holdings|NV|SE)\b\.?/gi, "").trim();
+  return name.length >= 3 ? name : cleanSymbol(q.symbol);
+}
 
 const RANGES = ["1D", "5D", "1M", "6M", "1Y", "5Y"];
 
@@ -17,8 +23,23 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
   const [error, setError] = useState<string | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [signalLoading, setSignalLoading] = useState(false);
+  const [related, setRelated] = useState<NewsItem[]>([]);
+  const [readingNews, setReadingNews] = useState<NewsItem | null>(null);
   const prefs = usePrefs();
   const inList = quote ? prefs.watchlist.includes(quote.symbol) : false;
+
+  useEffect(() => {
+    if (!quote) return;
+    let cancelled = false;
+    setRelated([]);
+    const countries = prefs.countries.length ? prefs.countries.slice(0, 2) : ["US"];
+    fetchNews({ countries, topics: ["top"], query: newsQueryFor(quote) })
+      .then((r) => !cancelled && setRelated(r.items.slice(0, 4)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [quote, prefs.countries]);
 
   useEffect(() => {
     if (!quote) return;
@@ -180,6 +201,28 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           </div>
         </div>
 
+        {related.length > 0 && (
+          <div>
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 mb-2.5">
+              <Newspaper size={15} className="text-brand-600" /> Related news
+            </h3>
+            <div className="space-y-2">
+              {related.map((it) => (
+                <button
+                  key={it.id}
+                  onClick={() => setReadingNews(it)}
+                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200/70 active:scale-[0.99]"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-slate-800 line-clamp-2">{it.title}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{it.source} · {timeAgo(it.publishedAt)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <a
           href={`https://www.cnbc.com/quotes/${encodeURIComponent(quote.symbol)}`}
           target="_blank"
@@ -189,6 +232,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           View full profile on CNBC →
         </a>
       </div>
+      <ArticleReader item={readingNews} onClose={() => setReadingNews(null)} />
     </Sheet>
   );
 }
