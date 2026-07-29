@@ -17,6 +17,15 @@
 {%- liquid
   assign page_type = request.page_type
   assign currency_code = cart.currency.iso_code | default: shop.currency
+
+  # --- LocalBusiness details: EDIT THESE. Leave vr_street blank to omit the block ---
+  assign vr_street = ''
+  assign vr_city = 'Zürich'
+  assign vr_postal = ''
+  assign vr_region = 'ZH'
+  assign vr_country = 'CH'
+  assign vr_phone = ''
+  assign vr_price_range = 'CHF'
 -%}
 
 {%- comment -%} Organization (site-wide) {%- endcomment -%}
@@ -29,6 +38,30 @@
   "logo": {{ settings.favicon | image_url: width: 512 | prepend: 'https:' | json }}{% endif %}
 }
 </script>
+
+{%- comment -%} LocalBusiness (site-wide) — emits only once vr_street is filled in above {%- endcomment -%}
+{%- if vr_street != blank -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: '/' | json }}{% if settings.favicon != blank %},
+  "image": {{ settings.favicon | image_url: width: 512 | prepend: 'https:' | json }}{% endif %}{% if vr_phone != blank %},
+  "telephone": {{ vr_phone | json }}{% endif %},
+  "priceRange": {{ vr_price_range | json }},
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": {{ vr_street | json }},
+    "addressLocality": {{ vr_city | json }},
+    "postalCode": {{ vr_postal | json }},
+    "addressRegion": {{ vr_region | json }},
+    "addressCountry": {{ vr_country | json }}
+  },
+  "areaServed": { "@type": "Country", "name": "Switzerland" }
+}
+</script>
+{%- endif -%}
 
 {%- comment -%} WebSite + sitelinks search box (site-wide) {%- endcomment -%}
 <script type="application/ld+json">
