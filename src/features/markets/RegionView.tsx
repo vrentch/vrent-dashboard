@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Sheet from "../../components/Sheet";
 import StockRow from "./StockRow";
-import { fetchQuotes, type Quote } from "../../lib/api";
+import { fetchQuotes, fetchSignals, type Quote, type Signal } from "../../lib/api";
 import { fmtPct, cleanSymbol } from "../../lib/format";
 import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
 import type { IndexDef } from "../../data/markets";
@@ -24,6 +24,8 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
   const [activeIdx, setActiveIdx] = useState(0);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(false);
+  const [signals, setSignals] = useState<Record<string, Signal>>({});
+  const [signalsLoading, setSignalsLoading] = useState(false);
 
   // Reset to the first index whenever the sheet (re)opens.
   useEffect(() => {
@@ -36,14 +38,28 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
   useEffect(() => {
     if (!open || !activeSymbols.length) {
       setQuotes([]);
+      setSignals({});
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setSignals({});
+    setSignalsLoading(true);
     fetchQuotes(activeSymbols)
       .then((r) => !cancelled && setQuotes(r.quotes))
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
+    // Signals need per-symbol history, so they load a beat later — the rows
+    // show a shimmer until each arrives.
+    fetchSignals(activeSymbols)
+      .then((r) => {
+        if (cancelled) return;
+        const map: Record<string, Signal> = {};
+        r.signals.forEach((s) => (map[s.symbol.toUpperCase()] = s));
+        setSignals(map);
+      })
+      .catch(() => {})
+      .finally(() => !cancelled && setSignalsLoading(false));
     return () => {
       cancelled = true;
     };
@@ -129,6 +145,8 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
                 <StockRow
                   key={q.symbol}
                   quote={q}
+                  signal={signals[q.symbol.toUpperCase()]}
+                  signalLoading={signalsLoading}
                   onClick={() => onSelect(q)}
                   inList={prefs.watchlist.includes(q.symbol)}
                   onToggleList={() => toggleList(q.symbol)}

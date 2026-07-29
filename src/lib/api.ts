@@ -104,3 +104,25 @@ export function fetchHistory(symbol: string, range: string): Promise<History> {
   const p = new URLSearchParams({ symbol, range });
   return getJson<History>(`/api/history?${p.toString()}`);
 }
+
+export type SignalTone = "pos" | "neg" | "neutral";
+export interface SignalReason {
+  text: string;
+  tone: SignalTone;
+}
+export interface Signal {
+  symbol: string;
+  score: number; // -100..100
+  label: string; // Strong Sell … Strong Buy
+  tone: SignalTone;
+  rsi: number | null;
+  sma20: number | null;
+  sma50: number | null;
+  momentumPct: number;
+  reasons: SignalReason[];
+}
+
+export function fetchSignals(symbols: string[]): Promise<{ signals: Signal[] }> {
+  const p = new URLSearchParams({ symbols: symbols.join(",") });
+  return getJson(`/api/signals?${p.toString()}`);
+}

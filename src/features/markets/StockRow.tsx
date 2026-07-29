@@ -1,17 +1,22 @@
-import type { Quote } from "../../lib/api";
+import type { Quote, Signal } from "../../lib/api";
 import { fmtPrice, fmtPct, cleanSymbol } from "../../lib/format";
 import Sparkline from "../../components/Sparkline";
+import SignalPill from "../../components/SignalPill";
 import { Star } from "lucide-react";
 
 export default function StockRow({
   quote,
   spark,
+  signal,
+  signalLoading,
   onClick,
   inList,
   onToggleList,
 }: {
   quote: Quote;
   spark?: number[];
+  signal?: Signal;
+  signalLoading?: boolean;
   onClick: () => void;
   inList?: boolean;
   onToggleList?: () => void;
@@ -21,7 +26,14 @@ export default function StockRow({
     <div className="w-full flex items-center gap-2.5 p-3 rounded-2xl bg-white border border-slate-200/70 card-shadow">
       <button onClick={onClick} className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-70">
         <div className="min-w-0 flex-1">
-          <span className="font-semibold text-slate-900 text-[15px]">{cleanSymbol(quote.symbol)}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-900 text-[15px]">{cleanSymbol(quote.symbol)}</span>
+            {signal ? (
+              <SignalPill label={signal.label} tone={signal.tone} />
+            ) : signalLoading ? (
+              <span className="w-12 h-3.5 rounded-full skeleton" />
+            ) : null}
+          </div>
           <p className="text-xs text-slate-400 truncate">{quote.name}</p>
         </div>
 

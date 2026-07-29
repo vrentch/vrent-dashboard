@@ -346,6 +346,101 @@ async function getHistory(symbol: string, uiRange: string) {
   return { symbol: symbol.toUpperCase(), range: uiRange, currency, timestamps, closes };
 }
 
+// ── Smart Signal (educational technical analysis — NOT financial advice) ─────
+//
+// A transparent, rule-based rating computed from price history: trend vs 20/50
+// day moving averages, a moving-average cross, momentum, and RSI. It is
+// deterministic and explainable — deliberately not a black box or a promise.
+
+function sma(a: number[], n: number): number | null {
+  if (a.length < n) return null;
+  let s = 0;
+  for (let i = a.length - n; i < a.length; i++) s += a[i];
+  return s / n;
+}
+
+function rsi(closes: number[], period = 14): number | null {
+  if (closes.length < period + 1) return null;
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  const avgG = gains / period, avgL = losses / period;
+  if (avgL === 0) return 100;
+  return 100 - 100 / (1 + avgG / avgL);
+}
+
+interface Reason { text: string; tone: "pos" | "neg" | "neutral" }
+
+function computeSignal(closes: number[]) {
+  if (closes.length < 20) return null;
+  const last = closes[closes.length - 1];
+  const s20 = sma(closes, 20);
+  const s50 = sma(closes, 50) ?? sma(closes, Math.min(50, closes.length));
+  const r = rsi(closes, 14);
+  const momN = Math.min(20, closes.length - 1);
+  const base = closes[closes.length - 1 - momN];
+  const mom = base ? ((last - base) / base) * 100 : 0;
+
+  let score = 0;
+  const reasons: Reason[] = [];
+
+  if (s20 != null) {
+    if (last > s20) { score += 25; reasons.push({ text: "Trading above its 20-day average", tone: "pos" }); }
+    else { score -= 25; reasons.push({ text: "Trading below its 20-day average", tone: "neg" }); }
+  }
+  if (s50 != null) {
+    if (last > s50) { score += 25; reasons.push({ text: "Trading above its 50-day average", tone: "pos" }); }
+    else { score -= 25; reasons.push({ text: "Trading below its 50-day average", tone: "neg" }); }
+  }
+  if (s20 != null && s50 != null) {
+    if (s20 > s50) { score += 15; reasons.push({ text: "Short-term trend above long-term", tone: "pos" }); }
+    else { score -= 15; reasons.push({ text: "Short-term trend below long-term", tone: "neg" }); }
+  }
+  if (mom > 3) { score += 20; reasons.push({ text: `Positive momentum (+${mom.toFixed(1)}% over ~1 month)`, tone: "pos" }); }
+  else if (mom < -3) { score -= 20; reasons.push({ text: `Negative momentum (${mom.toFixed(1)}% over ~1 month)`, tone: "neg" }); }
+  else reasons.push({ text: "Momentum is roughly flat", tone: "neutral" });
+  if (r != null) {
+    if (r > 70) { score -= 15; reasons.push({ text: `Overbought — RSI ${r.toFixed(0)}`, tone: "neg" }); }
+    else if (r < 30) { score += 15; reasons.push({ text: `Oversold — RSI ${r.toFixed(0)}`, tone: "pos" }); }
+    else reasons.push({ text: `RSI neutral (${r.toFixed(0)})`, tone: "neutral" });
+  }
+
+  score = Math.max(-100, Math.min(100, score));
+  const label = score >= 45 ? "Strong Buy" : score >= 15 ? "Buy" : score > -15 ? "Hold" : score > -45 ? "Sell" : "Strong Sell";
+  const tone: "pos" | "neg" | "neutral" = score >= 15 ? "pos" : score <= -15 ? "neg" : "neutral";
+  return { score, label, tone, rsi: r, sma20: s20, sma50: s50, momentumPct: mom, reasons };
+}
+
+// Bounded-concurrency map so a big watchlist doesn't fire 40 fetches at once.
+async function mapPool<T, R>(items: T[], n: number, fn: (item: T, i: number) => Promise<R>): Promise<(R | null)[]> {
+  const res: (R | null)[] = new Array(items.length).fill(null);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      try {
+        res[i] = await fn(items[i], i);
+      } catch {
+        res[i] = null;
+      }
+    }
+  });
+  await Promise.all(workers);
+  return res;
+}
+
+async function getSignals(symbols: string[]) {
+  const clean = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, 45);
+  const out = await mapPool(clean, 8, async (sym) => {
+    const h = await getHistory(sym, "6M");
+    const sig = computeSignal(h.closes);
+    return sig ? { symbol: sym, ...sig } : null;
+  });
+  return { signals: out.filter(Boolean) };
+}
+
 // ── Router (shared by dev middleware and the serverless handler) ─────────────
 
 export async function handleApi(pathname: string, search: URLSearchParams): Promise<{ status: number; body: unknown }> {
@@ -374,6 +469,12 @@ export async function handleApi(pathname: string, search: URLSearchParams): Prom
       const range = search.get("range") || "1M";
       if (!symbol) return { status: 400, body: { error: "symbol required" } };
       return { status: 200, body: await getHistory(symbol, range) };
+    }
+
+    if (route === "signals") {
+      const symbols = (search.get("symbols") || "").split(",").filter(Boolean);
+      if (!symbols.length) return { status: 400, body: { error: "symbols required" } };
+      return { status: 200, body: await getSignals(symbols) };
     }
 
     return { status: 404, body: { error: `unknown route: ${route}` } };

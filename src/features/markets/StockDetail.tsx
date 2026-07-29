@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import Sheet from "../../components/Sheet";
 import PriceChart from "../../components/PriceChart";
-import { fetchHistory, type History, type Quote } from "../../lib/api";
+import { fetchHistory, fetchSignals, type History, type Quote, type Signal } from "../../lib/api";
 import { computeAnalytics } from "../../lib/analytics";
 import { fmtPrice, fmtPct, fmtNum } from "../../lib/format";
 import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
-import { TrendingUp, TrendingDown, Minus, Star } from "lucide-react";
+import SignalPill from "../../components/SignalPill";
+import { TrendingUp, TrendingDown, Minus, Star, Sparkles } from "lucide-react";
 
 const RANGES = ["1D", "5D", "1M", "6M", "1Y", "5Y"];
 
@@ -14,8 +15,24 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
   const [history, setHistory] = useState<History | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signal, setSignal] = useState<Signal | null>(null);
+  const [signalLoading, setSignalLoading] = useState(false);
   const prefs = usePrefs();
   const inList = quote ? prefs.watchlist.includes(quote.symbol) : false;
+
+  useEffect(() => {
+    if (!quote) return;
+    let cancelled = false;
+    setSignal(null);
+    setSignalLoading(true);
+    fetchSignals([quote.symbol])
+      .then((r) => !cancelled && setSignal(r.signals[0] ?? null))
+      .catch(() => {})
+      .finally(() => !cancelled && setSignalLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [quote]);
 
   useEffect(() => {
     if (!quote) return;
@@ -71,6 +88,64 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           </button>
         </div>
 
+        {/* Smart Signal */}
+        <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+              <Sparkles size={15} className="text-brand-600" /> Smart Signal
+            </h3>
+            {signal ? (
+              <SignalPill label={signal.label} tone={signal.tone} size="md" />
+            ) : signalLoading ? (
+              <span className="w-20 h-6 rounded-full skeleton" />
+            ) : null}
+          </div>
+
+          {signalLoading && !signal && <div className="h-24 rounded-xl skeleton" />}
+
+          {signal && (
+            <>
+              <div className="relative h-2.5 rounded-full mb-1" style={{ background: "linear-gradient(90deg,#f43f5e,#e2e8f0 50%,#10b981)" }}>
+                <div
+                  className="absolute -top-[5px] w-5 h-5 rounded-full bg-white border-[3px] border-slate-900 shadow"
+                  style={{ left: `calc(${(signal.score + 100) / 2}% - 10px)` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-medium text-slate-400 mb-3">
+                <span>Strong Sell</span>
+                <span>Hold</span>
+                <span>Strong Buy</span>
+              </div>
+
+              <ul className="space-y-1.5 mb-3">
+                {signal.reasons.map((r, i) => (
+                  <li key={i} className="flex items-center gap-2 text-[13px] text-slate-600">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        r.tone === "pos" ? "bg-emerald-500" : r.tone === "neg" ? "bg-rose-500" : "bg-slate-400"
+                      }`}
+                    />
+                    {r.text}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex flex-wrap gap-1.5">
+                {signal.rsi != null && <Chip>RSI {signal.rsi.toFixed(0)}</Chip>}
+                <Chip>Momentum {fmtPct(signal.momentumPct)}</Chip>
+                {signal.sma50 != null && (
+                  <Chip>{(quote.price ?? 0) >= signal.sma50 ? "Above" : "Below"} 50-day avg</Chip>
+                )}
+              </div>
+
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+                Educational rating computed from price trend, momentum &amp; RSI — <b>not financial advice</b>.
+                Do your own research before trading.
+              </p>
+            </>
+          )}
+        </div>
+
         <div>
           {loading && <div style={{ height: 180 }} className="skeleton rounded-xl" />}
           {!loading && error && (
@@ -115,6 +190,14 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         </a>
       </div>
     </Sheet>
+  );
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-600">
+      {children}
+    </span>
   );
 }
 
