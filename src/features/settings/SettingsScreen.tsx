@@ -13,7 +13,15 @@ import {
   Moon,
   Monitor,
   Lock,
+  Link2,
+  Copy,
+  Share2,
 } from "lucide-react";
+
+// The app's canonical, always-current public link. Shown and shared verbatim
+// so the right URL goes out no matter which domain the app was opened from.
+const SHARE_URL = "https://ac-news-tau.vercel.app";
+const SHARE_HOST = SHARE_URL.replace(/^https?:\/\//, "");
 import { usePrefs, resetPrefs, setPrefs, type Theme } from "../../lib/store";
 import { hasPasscode, clearPasscode } from "../../lib/lock";
 import PasscodeSetup from "../lock/PasscodeSetup";
@@ -35,15 +43,20 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
   const [lockSetup, setLockSetup] = useState(false);
   const lockOn = hasPasscode();
 
-  async function share() {
-    const url = window.location.origin;
+  async function copyLink() {
     try {
-      if (navigator.share) await navigator.share({ title: "AC News", url });
-      else {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1800);
-      }
+      await navigator.clipboard.writeText(SHARE_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  async function share() {
+    try {
+      if (navigator.share) await navigator.share({ title: "AC News", text: "Live world news & markets", url: SHARE_URL });
+      else await copyLink();
     } catch {
       /* user dismissed the share sheet */
     }
@@ -157,13 +170,35 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           </button>
         </section>
 
-        <button
-          onClick={share}
-          className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-brand-600 text-white text-sm font-semibold active:scale-[0.98]"
-        >
-          {copied ? <Check size={16} /> : <Users size={16} />}
-          {copied ? "Link copied!" : "Share AC News with a friend"}
-        </button>
+        <section className="rounded-2xl glass p-4">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
+              <Share2 size={17} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Share AC News</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">This is your app's link — send it to anyone</p>
+            </div>
+          </div>
+
+          <button
+            onClick={copyLink}
+            className="w-full flex items-center gap-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2.5 text-left active:scale-[0.99] transition"
+          >
+            <Link2 size={15} className="text-slate-400 dark:text-slate-500 shrink-0" />
+            <span className="flex-1 min-w-0 truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{SHARE_HOST}</span>
+            <span className={`inline-flex items-center gap-1 text-xs font-semibold shrink-0 ${copied ? "text-emerald-600 dark:text-emerald-400" : "text-brand-600 dark:text-brand-400"}`}>
+              {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+            </span>
+          </button>
+
+          <button
+            onClick={share}
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-brand-600 text-white text-sm font-semibold active:scale-[0.98]"
+          >
+            <Users size={16} /> Share with a friend
+          </button>
+        </section>
 
         <section className="rounded-2xl glass p-4 space-y-3">
           <InfoRow icon={Users} title="Sharing keeps everyone separate">
@@ -201,7 +236,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           {didReset ? "Reset to defaults" : "Reset all preferences"}
         </button>
 
-        <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">AC News · World news &amp; markets · v0.3</p>
+        <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">AC News · News, markets &amp; sports · v0.4</p>
       </div>
 
       <PasscodeSetup open={lockSetup} onClose={() => setLockSetup(false)} />
