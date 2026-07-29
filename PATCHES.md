@@ -43,6 +43,33 @@ preview, then publish. Each patch is a find → replace in the file's code edito
 
 ---
 
+## 0.2 — Fix the "Unavailable" buy button 🟥 `[admin]` (+ optional `[custom]`)
+**Root cause (verified in code):** the button word comes from **Shopify's own**
+variant state, not the date-picker. The template shows the *"Unavailable"* span
+whenever the product's **currently-selected (default) variant is not available**
+(`sections/template--product.liquid` L783; the initial paint shows it when
+`current_variant.available` is false). The date-gate only *greys* the button via
+the `.vrd-blocked` class — it never writes "Unavailable".
+
+**So fix it in admin first (no code):**
+1. Products → **Meta Quest 3** (and each rental product) → check each variant's
+   **inventory**. If variants show 0 / "unavailable":
+   - either set stock quantities, **or**
+   - under each variant, tick **"Continue selling when out of stock"** (correct for
+     rentals — availability is really governed by the delivery calendar, not stock).
+2. Make sure the **default/first variant is an available** rental period, so the
+   page loads reading **"Add to cart"** rather than "Unavailable".
+
+**Optional polish (only if you also want the greyed pre-date state to say something
+friendlier):** that's the `.vrd-blocked` state. Tell me if you want it and I'll add
+a small, tested JS label swap — it's safe but touches the Vue-mounted button, so I'd
+rather verify it live (via Theme Access) than have you paste it blind.
+
+> Do **0.2 admin check + 0.3 together** — 0.3 stops the "In stock" badge lying while
+> a variant is genuinely unavailable; 0.2 makes the variant actually available.
+
+---
+
 ## 0.3 — Stop the fake "In stock" badge on sold-out products 🟥 `[custom]`
 **File:** `sections/template--product.liquid` (~line 64). **Find:**
 ```js
@@ -146,7 +173,6 @@ Repeat for the `media | image_url` (L17), `article.image | image_url` (L27), and
 ---
 
 ## Still to do (need a careful pass or your input — see AUDIT.md)
-- **0.2** relabel the "Unavailable" buy button → "Select a delivery date" (Vue-driven; exact patch on implementation)
 - **1.6 / 1.7** duplicate/empty H1 cleanup
 - **1.8** FAQ + Service schema snippets (LocalBusiness already added)
 - **1.10–1.14** conversion changes (deposit line, member pricing, B2B proof)
