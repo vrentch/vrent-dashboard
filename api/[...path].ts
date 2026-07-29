@@ -443,6 +443,156 @@ async function getSignals(symbols: string[]) {
   return { signals: out.filter(Boolean) };
 }
 
+// ── Sports (ESPN public site API — keyless, reachable from data centres) ─────
+//
+// Football (soccer), tennis and basketball scores/fixtures and league tables
+// come from ESPN's public `site.api.espn.com` JSON, the same feed their apps
+// use. No key, and — unlike Yahoo Finance — it answers cloud IPs. The client
+// owns the league catalogue and sends `sport` + `league` slugs.
+
+const ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports";
+const ESPN_CORE = "https://site.api.espn.com/apis/v2/sports";
+const ESPN_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+
+async function espn(url: string): Promise<any> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": ESPN_UA, Accept: "application/json" },
+    signal: AbortSignal.timeout(9000),
+  });
+  if (!res.ok) throw new Error(`espn ${res.status}`);
+  return res.json();
+}
+
+type Side = { name: string; abbrev: string; logo: string | null; score: string; winner: boolean };
+
+function competitorSide(c: any): Side {
+  const t = c?.team || c?.athlete || {};
+  const logo = t.logo || (Array.isArray(t.logos) && t.logos[0]?.href) || t.flag?.href || null;
+  let score = c?.score != null ? String(c.score) : "";
+  // Tennis carries per-set values in `linescores` rather than a single score.
+  if (!score && Array.isArray(c?.linescores) && c.linescores.length) {
+    score = c.linescores
+      .map((ls: any) => (ls?.value != null ? String(Math.trunc(ls.value)) : ls?.displayValue ?? ""))
+      .filter(Boolean)
+      .join(" ");
+  }
+  return {
+    name: t.displayName || t.shortDisplayName || t.name || "—",
+    abbrev: t.abbreviation || t.shortDisplayName || "",
+    logo,
+    score,
+    winner: !!c?.winner,
+  };
+}
+
+function normalizeGame(e: any, comp: any) {
+  const status = comp?.status || e?.status || {};
+  const type = status.type || {};
+  const comps: any[] = comp?.competitors || [];
+  const home = comps.find((c) => c.homeAway === "home") || comps[0];
+  const away = comps.find((c) => c.homeAway === "away") || comps[1];
+  return {
+    id: String(comp?.id || e?.id || ""),
+    date: comp?.date || e?.date || null,
+    state: (type.state || "pre") as "pre" | "in" | "post",
+    detail: type.shortDetail || type.detail || type.description || "",
+    clock: status.displayClock && status.displayClock !== "0'" ? status.displayClock : "",
+    home: home ? competitorSide(home) : null,
+    away: away ? competitorSide(away) : null,
+    note: comp?.notes?.[0]?.headline || "",
+  };
+}
+
+async function getSportsScores(sport: string, league: string) {
+  const data = await espn(`${ESPN_SITE}/${sport}/${league}/scoreboard`);
+  const leagueMeta = data?.leagues?.[0] || {};
+  const events: any[] = data?.events || [];
+
+  // Tennis events are tournaments that contain many matches (in `groupings`);
+  // everything else is one game per event.
+  const games: any[] = [];
+  if (sport === "tennis") {
+    for (const e of events) {
+      const tournament = e.name || e.shortName || "";
+      const groupings: any[] = e.groupings || [];
+      for (const g of groupings) {
+        const roundName = g?.grouping?.displayName || g?.grouping?.shortName || "";
+        for (const comp of g.competitions || []) {
+          const game = normalizeGame(e, comp);
+          games.push({ ...game, tournament, round: roundName });
+        }
+      }
+    }
+    // Prefer live, then finished, then upcoming; keep it digestible.
+    const order = { in: 0, post: 1, pre: 2 } as Record<string, number>;
+    games.sort((a, b) => (order[a.state] ?? 3) - (order[b.state] ?? 3));
+    return { league: leagueMeta.name || league, season: leagueMeta.season?.displayName || "", games: games.slice(0, 60) };
+  }
+
+  for (const e of events) {
+    const comp = e.competitions?.[0];
+    if (comp) games.push(normalizeGame(e, comp));
+  }
+  return { league: leagueMeta.name || league, season: leagueMeta.season?.displayName || "", games };
+}
+
+function statVal(stats: any[], ...names: string[]): string {
+  for (const n of names) {
+    const s = (stats || []).find((x) => x.name === n || x.type === n || x.abbreviation === n);
+    if (s) return s.displayValue ?? String(s.value ?? "");
+  }
+  return "";
+}
+
+function normalizeTable(node: any): { name: string; entries: any[] } {
+  const entries: any[] = (node?.standings?.entries || node?.entries || []).map((en: any) => {
+    const t = en.team || {};
+    const stats = en.stats || [];
+    return {
+      rank: statVal(stats, "rank") || "",
+      name: t.displayName || t.shortDisplayName || t.name || "—",
+      abbrev: t.abbreviation || "",
+      logo: t.logos?.[0]?.href || t.logo || null,
+      played: statVal(stats, "gamesPlayed"),
+      win: statVal(stats, "wins"),
+      draw: statVal(stats, "ties"),
+      loss: statVal(stats, "losses"),
+      gd: statVal(stats, "pointDifferential"),
+      pts: statVal(stats, "points"),
+      pct: statVal(stats, "winPercent", "leagueWinPercent"),
+      form: statVal(stats, "total", "overall"),
+    };
+  });
+  return { name: node?.name || node?.displayName || "", entries };
+}
+
+async function getSportsStandings(sport: string, league: string) {
+  const data = await espn(`${ESPN_CORE}/${sport}/${league}/standings`);
+  const groups: { name: string; entries: any[] }[] = [];
+
+  // Layouts vary: a single table, conference/division `children`, or a
+  // `standings` array. Flatten whichever we get into named groups.
+  const children: any[] = data?.children || [];
+  if (children.length) {
+    for (const ch of children) {
+      const g = normalizeTable(ch);
+      if (g.entries.length) groups.push({ ...g, name: g.name || ch.name || "" });
+    }
+  } else if (Array.isArray(data?.standings)) {
+    for (const s of data.standings) {
+      const g = normalizeTable(s);
+      if (g.entries.length) groups.push({ ...g, name: s.name || s.displayName || "" });
+    }
+  } else {
+    const g = normalizeTable(data);
+    if (g.entries.length) groups.push(g);
+  }
+
+  const hasDraws = sport === "soccer";
+  return { league: data?.name || league, hasDraws, groups };
+}
+
 // ── Push notifications (privacy-preserving: market open/close + daily recap) ─
 //
 // Storage is Vercel KV (Upstash Redis REST). VAPID keys come from env. If any
@@ -677,6 +827,20 @@ export async function handleApi(
       const symbols = (search.get("symbols") || "").split(",").filter(Boolean);
       if (!symbols.length) return { status: 400, body: { error: "symbols required" } };
       return { status: 200, body: await getSignals(symbols) };
+    }
+
+    if (route === "sports-scores") {
+      const sport = search.get("sport") || "";
+      const league = search.get("league") || "";
+      if (!sport || !league) return { status: 400, body: { error: "sport and league required" } };
+      return { status: 200, body: await getSportsScores(sport, league) };
+    }
+
+    if (route === "sports-standings") {
+      const sport = search.get("sport") || "";
+      const league = search.get("league") || "";
+      if (!sport || !league) return { status: 400, body: { error: "sport and league required" } };
+      return { status: 200, body: await getSportsStandings(sport, league) };
     }
 
     return { status: 404, body: { error: `unknown route: ${route}` } };

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { LayoutGrid, Newspaper, CandlestickChart, CalendarDays, Settings } from "lucide-react";
+import { LayoutGrid, Newspaper, CandlestickChart, Trophy, CalendarDays, Settings } from "lucide-react";
 import HomeScreen from "./features/home/HomeScreen";
 import NewsScreen from "./features/news/NewsScreen";
 import MarketsScreen from "./features/markets/MarketsScreen";
+import SportsScreen from "./features/sports/SportsScreen";
 import CalendarScreen from "./features/calendar/CalendarScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import LockScreen from "./features/lock/LockScreen";
@@ -10,12 +11,13 @@ import { usePrefs } from "./lib/store";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
-type Tab = "home" | "news" | "markets" | "calendar" | "settings";
+type Tab = "home" | "news" | "markets" | "sports" | "calendar" | "settings";
 
 const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { key: "home", label: "Home", icon: LayoutGrid },
   { key: "news", label: "News", icon: Newspaper },
   { key: "markets", label: "Markets", icon: CandlestickChart },
+  { key: "sports", label: "Sports", icon: Trophy },
   { key: "calendar", label: "Calendar", icon: CalendarDays },
   { key: "settings", label: "Settings", icon: Settings },
 ];
@@ -38,12 +40,13 @@ export default function App() {
         {tab === "home" && <HomeScreen onNavigate={setTab} />}
         {tab === "news" && <NewsScreen />}
         {tab === "markets" && <MarketsScreen />}
+        {tab === "sports" && <SportsScreen />}
         {tab === "calendar" && <CalendarScreen />}
         {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 glass-nav border-t border-white/40 dark:border-white/10 safe-bottom">
-        <div className="max-w-lg mx-auto grid grid-cols-5">
+        <div className="max-w-lg mx-auto grid grid-cols-6">
           {TABS.map(({ key, label, icon: Icon }) => {
             const active = tab === key;
             return (

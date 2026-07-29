@@ -13,7 +13,7 @@ import ArticleReader from "../news/ArticleReader";
 import BriefingSheet from "./BriefingSheet";
 import { ChevronRight as Chev, CalendarDays, Plus } from "lucide-react";
 
-type Tab = "home" | "news" | "markets" | "calendar" | "settings";
+type Tab = "home" | "news" | "markets" | "sports" | "calendar" | "settings";
 
 export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const prefs = usePrefs();

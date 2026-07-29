@@ -126,3 +126,60 @@ export function fetchSignals(symbols: string[]): Promise<{ signals: Signal[] }> 
   const p = new URLSearchParams({ symbols: symbols.join(",") });
   return getJson(`/api/signals?${p.toString()}`);
 }
+
+// ── Sports ───────────────────────────────────────────────────────────────────
+
+export interface GameSide {
+  name: string;
+  abbrev: string;
+  logo: string | null;
+  score: string;
+  winner: boolean;
+}
+export interface Game {
+  id: string;
+  date: string | null;
+  state: "pre" | "in" | "post";
+  detail: string;
+  clock: string;
+  home: GameSide | null;
+  away: GameSide | null;
+  note?: string;
+  tournament?: string;
+  round?: string;
+}
+export interface ScoresResponse {
+  league: string;
+  season: string;
+  games: Game[];
+}
+
+export interface TableEntry {
+  rank: string;
+  name: string;
+  abbrev: string;
+  logo: string | null;
+  played: string;
+  win: string;
+  draw: string;
+  loss: string;
+  gd: string;
+  pts: string;
+  pct: string;
+  form: string;
+}
+export interface StandingsResponse {
+  league: string;
+  hasDraws: boolean;
+  groups: { name: string; entries: TableEntry[] }[];
+}
+
+export function fetchScores(sport: string, league: string): Promise<ScoresResponse> {
+  const p = new URLSearchParams({ sport, league });
+  return getJson<ScoresResponse>(`/api/sports-scores?${p.toString()}`);
+}
+
+export function fetchStandings(sport: string, league: string): Promise<StandingsResponse> {
+  const p = new URLSearchParams({ sport, league });
+  return getJson<StandingsResponse>(`/api/sports-standings?${p.toString()}`);
+}
