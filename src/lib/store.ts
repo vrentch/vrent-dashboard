@@ -11,6 +11,8 @@ export interface Watchlist {
   symbols: string[];
 }
 
+export type Theme = "light" | "dark" | "system";
+
 export interface Prefs {
   countries: string[];
   topics: string[];
@@ -21,6 +23,7 @@ export interface Prefs {
   // Mirror of the active watchlist's symbols — kept in sync so existing reads
   // of `prefs.watchlist` keep working across the app.
   watchlist: string[];
+  theme: Theme;
 }
 
 const KEY = "vrent.prefs.v1";
@@ -43,6 +46,7 @@ function baseDefaults(): Prefs {
     watchlists: [list],
     activeWatchlistId: list.id,
     watchlist: [...list.symbols],
+    theme: "system",
   };
 }
 
@@ -76,6 +80,7 @@ function load(): Prefs {
       watchlists,
       activeWatchlistId: typeof parsed.activeWatchlistId === "string" ? parsed.activeWatchlistId : watchlists[0].id,
       watchlist: [],
+      theme: parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system" ? parsed.theme : "system",
     });
   } catch {
     return d;

@@ -79,20 +79,20 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
     <Sheet open={!!quote} onClose={onClose} title={quote.symbol}>
       <div className="space-y-5">
         <div>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <span>{quote.flag}</span>
             <span className="truncate">{quote.name}</span>
           </div>
           <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-3xl font-bold text-slate-900 tracking-tight">
+            <span className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {fmtPrice(quote.price, quote.currency)}
             </span>
-            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${dayUp ? "text-emerald-600" : "text-rose-600"}`}>
+            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${dayUp ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
               {dayUp ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
               {fmtPct(quote.changePercent)} today
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             {quote.exchange} {quote.marketState && `· ${quote.marketState}`}
           </p>
 
@@ -100,8 +100,8 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
             onClick={() => setPrefs({ watchlist: toggleInList(prefs.watchlist, quote.symbol) })}
             className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition active:scale-95 border ${
               inList
-                ? "bg-amber-50 text-amber-700 border-amber-200"
-                : "bg-white text-slate-700 border-slate-200"
+                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30"
+                : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
             }`}
           >
             <Star size={15} fill={inList ? "currentColor" : "none"} />
@@ -110,10 +110,10 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         </div>
 
         {/* Smart Signal */}
-        <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
+        <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-              <Sparkles size={15} className="text-brand-600" /> Smart Signal
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <Sparkles size={15} className="text-brand-600 dark:text-brand-400" /> Smart Signal
             </h3>
             {signal ? (
               <SignalPill label={signal.label} tone={signal.tone} size="md" />
@@ -128,11 +128,11 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
             <>
               <div className="relative h-2.5 rounded-full mb-1" style={{ background: "linear-gradient(90deg,#f43f5e,#e2e8f0 50%,#10b981)" }}>
                 <div
-                  className="absolute -top-[5px] w-5 h-5 rounded-full bg-white border-[3px] border-slate-900 shadow"
+                  className="absolute -top-[5px] w-5 h-5 rounded-full bg-white dark:bg-slate-900 border-[3px] border-slate-900 dark:border-slate-700 shadow"
                   style={{ left: `calc(${(signal.score + 100) / 2}% - 10px)` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] font-medium text-slate-400 mb-3">
+              <div className="flex justify-between text-[10px] font-medium text-slate-400 dark:text-slate-500 mb-3">
                 <span>Strong Sell</span>
                 <span>Hold</span>
                 <span>Strong Buy</span>
@@ -140,10 +140,10 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
 
               <ul className="space-y-1.5 mb-3">
                 {signal.reasons.map((r, i) => (
-                  <li key={i} className="flex items-center gap-2 text-[13px] text-slate-600">
+                  <li key={i} className="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-300">
                     <span
                       className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        r.tone === "pos" ? "bg-emerald-500" : r.tone === "neg" ? "bg-rose-500" : "bg-slate-400"
+                        r.tone === "pos" ? "bg-emerald-500" : r.tone === "neg" ? "bg-rose-500" : "bg-slate-400 dark:bg-slate-500"
                       }`}
                     />
                     {r.text}
@@ -159,7 +159,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
                 )}
               </div>
 
-              <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
                 Educational rating computed from price trend, momentum &amp; RSI — <b>not financial advice</b>.
                 Do your own research before trading.
               </p>
@@ -170,18 +170,18 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         <div>
           {loading && <div style={{ height: 180 }} className="skeleton rounded-xl" />}
           {!loading && error && (
-            <div style={{ height: 180 }} className="grid place-items-center text-sm text-rose-600">{error}</div>
+            <div style={{ height: 180 }} className="grid place-items-center text-sm text-rose-600 dark:text-rose-400">{error}</div>
           )}
           {!loading && !error && <PriceChart values={history?.closes || []} up={rangeUp} />}
         </div>
 
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
           {RANGES.map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
-                range === r ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 active:bg-slate-200"
+                range === r ? "bg-slate-900 dark:bg-slate-700 text-white shadow-sm" : "text-slate-500 dark:text-slate-400 active:bg-slate-200"
               }`}
             >
               {r}
@@ -190,7 +190,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 mb-2.5">Analytics · {range}</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2.5">Analytics · {range}</h3>
           <div className="grid grid-cols-2 gap-2.5">
             <Stat label="Range change" value={fmtPct(a.changePct)} tone={a.trend === "up" ? "pos" : a.trend === "down" ? "neg" : "flat"} />
             <Stat label="Volatility" value={a.volatilityPct != null ? `${fmtNum(a.volatilityPct)}%` : "—"} />
@@ -203,19 +203,19 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
 
         {related.length > 0 && (
           <div>
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 mb-2.5">
-              <Newspaper size={15} className="text-brand-600" /> Related news
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2.5">
+              <Newspaper size={15} className="text-brand-600 dark:text-brand-400" /> Related news
             </h3>
             <div className="space-y-2">
               {related.map((it) => (
                 <button
                   key={it.id}
                   onClick={() => setReadingNews(it)}
-                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200/70 active:scale-[0.99]"
+                  className="w-full text-left flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 active:scale-[0.99]"
                 >
                   <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-slate-800 line-clamp-2">{it.title}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{it.source} · {timeAgo(it.publishedAt)}</p>
+                    <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 line-clamp-2">{it.title}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{it.source} · {timeAgo(it.publishedAt)}</p>
                   </div>
                 </button>
               ))}
@@ -227,7 +227,7 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           href={`https://www.cnbc.com/quotes/${encodeURIComponent(quote.symbol)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-center text-xs text-slate-400 hover:text-brand-600"
+          className="block text-center text-xs text-slate-400 dark:text-slate-500 hover:text-brand-600"
         >
           View full profile on CNBC →
         </a>
@@ -239,18 +239,18 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-600">
+    <span className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
       {children}
     </span>
   );
 }
 
 function Stat({ label, value, tone = "flat" }: { label: string; value: string; tone?: "pos" | "neg" | "flat" }) {
-  const color = tone === "pos" ? "text-emerald-600" : tone === "neg" ? "text-rose-600" : "text-slate-900";
+  const color = tone === "pos" ? "text-emerald-600 dark:text-emerald-400" : tone === "neg" ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-slate-100";
   const Icon = tone === "pos" ? TrendingUp : tone === "neg" ? TrendingDown : Minus;
   return (
-    <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
+    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
       <p className={`mt-1 text-base font-bold flex items-center gap-1 ${color}`}>
         {tone !== "flat" && <Icon size={14} />}
         {value}

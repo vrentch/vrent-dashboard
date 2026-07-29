@@ -41,7 +41,7 @@ export default function HeadlineImage({
 
   if (item.imageUrl && !broken) {
     return (
-      <div className={`overflow-hidden bg-slate-100 ${className}`}>
+      <div className={`overflow-hidden bg-slate-100 dark:bg-slate-800 ${className}`}>
         <img
           src={item.imageUrl}
           alt=""

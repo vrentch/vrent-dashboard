@@ -40,15 +40,15 @@ export default function MarketsScreen() {
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 backdrop-blur-xl border-b border-slate-200/70 safe-top">
+      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
-            <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Markets</h1>
-            <p className="text-xs text-slate-400">Tap a market to see its movers</p>
+            <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Markets</h1>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Tap a market to see its movers</p>
           </div>
           <button
             onClick={() => loadIndexes(true)}
-            className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
+            className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
             aria-label="Refresh"
           >
             <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
@@ -66,26 +66,26 @@ export default function MarketsScreen() {
               <button
                 key={r.key}
                 onClick={() => setOpenRegion(r)}
-                className="text-left rounded-2xl bg-white border border-slate-200/70 card-shadow p-4 active:scale-[0.98] transition"
+                className="text-left rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4 active:scale-[0.98] transition"
               >
                 <div className="flex items-start justify-between">
                   <span className="text-2xl leading-none">{r.flag}</span>
-                  <ChevronRight size={16} className="text-slate-300 mt-1" />
+                  <ChevronRight size={16} className="text-slate-300 dark:text-slate-600 mt-1" />
                 </div>
-                <h2 className="mt-2 text-[15px] font-bold text-slate-900">{r.name}</h2>
-                <p className="text-[11px] text-slate-400">{idx.label}</p>
+                <h2 className="mt-2 text-[15px] font-bold text-slate-900 dark:text-slate-100">{r.name}</h2>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">{idx.label}</p>
                 <div className="mt-2">
                   {!loaded && !q ? (
                     <div className="h-5 w-20 rounded skeleton" />
                   ) : (
-                    <p className="text-base font-bold text-slate-900 tabular-nums">
+                    <p className="text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                       {q ? fmtPrice(q.price, q.currency) : "—"}
                     </p>
                   )}
                   {q?.changePercent != null && (
                     <span
                       className={`inline-block mt-0.5 text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md ${
-                        up ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+                        up ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15" : "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/15"
                       }`}
                     >
                       {fmtPct(q.changePercent)}

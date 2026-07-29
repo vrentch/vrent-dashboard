@@ -69,15 +69,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 backdrop-blur-xl border-b border-slate-200/70 safe-top">
+      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
-            <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">{greeting()}</h1>
-            <p className="text-xs text-slate-400">{today}</p>
+            <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{greeting()}</h1>
+            <p className="text-xs text-slate-400 dark:text-slate-500">{today}</p>
           </div>
           <button
             onClick={load}
-            className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
+            className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
             aria-label="Refresh"
           >
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
@@ -88,15 +88,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
         {/* Market status */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Markets</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Markets</h2>
           <MarketStatusBar />
         </section>
 
         {/* Watchlist movers */}
         <section>
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-[15px] font-bold text-slate-900">Your watchlist</h2>
-            <button onClick={() => onNavigate("markets")} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600">
+            <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">Your watchlist</h2>
+            <button onClick={() => onNavigate("markets")} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
               Markets <ChevronRight size={14} />
             </button>
           </div>
@@ -109,7 +109,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
               ))}
             </div>
           ) : (
-            <button onClick={() => onNavigate("markets")} className="w-full py-6 rounded-2xl bg-white border border-slate-200/70 text-sm text-slate-500">
+            <button onClick={() => onNavigate("markets")} className="w-full py-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 text-sm text-slate-500 dark:text-slate-400">
               Add stocks in Markets → My list
             </button>
           )}
@@ -118,8 +118,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
         {/* Top news */}
         <section>
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-[15px] font-bold text-slate-900">Top stories</h2>
-            <button onClick={() => onNavigate("news")} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600">
+            <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">Top stories</h2>
+            <button onClick={() => onNavigate("news")} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
               All news <ChevronRight size={14} />
             </button>
           </div>

@@ -26,7 +26,7 @@ export default function PriceChart({ values, height = 180, up }: Props) {
     return { line, area, last: pts[pts.length - 1] };
   }, [values, height]);
 
-  if (!geom) return <div style={{ height }} className="grid place-items-center text-sm text-slate-500">No chart data</div>;
+  if (!geom) return <div style={{ height }} className="grid place-items-center text-sm text-slate-500 dark:text-slate-400">No chart data</div>;
 
   const color = up ? "#059669" : "#e11d48";
 

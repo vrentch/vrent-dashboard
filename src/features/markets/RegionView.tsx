@@ -84,7 +84,7 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
         watchlist && onEdit ? (
           <button
             onClick={onEdit}
-            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold active:scale-[0.98]"
+            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold active:scale-[0.98]"
           >
             <Pencil size={15} /> Add symbols
           </button>
@@ -99,7 +99,7 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
               key={w.id}
               onClick={() => setActiveWatchlist(w.id)}
               className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition border ${
-                w.id === prefs.activeWatchlistId ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
+                w.id === prefs.activeWatchlistId ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-700" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
               }`}
             >
               {w.name}
@@ -116,7 +116,7 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
               key={ix.key}
               onClick={() => setActiveIdx(i)}
               className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition border ${
-                i === activeIdx ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
+                i === activeIdx ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-700" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
               }`}
             >
               {ix.label}
@@ -135,9 +135,9 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
 
       {!loading && !quotes.length && (
         <div className="text-center py-14">
-          <p className="text-sm text-slate-500">{watchlist ? "Your list is empty." : "No data right now."}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{watchlist ? "Your list is empty." : "No data right now."}</p>
           {watchlist && onEdit && (
-            <button onClick={onEdit} className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold">
+            <button onClick={onEdit} className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold">
               <Plus size={15} /> Add symbols
             </button>
           )}
@@ -154,7 +154,7 @@ export default function RegionView({ open, onClose, title, flag, indices, symbol
           )}
 
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
               {sorted.length} stocks · best to worst
             </h3>
             <div className="space-y-2.5">
@@ -189,21 +189,21 @@ function MoverPanel({
   onSelect: (q: Quote) => void;
 }) {
   const Icon = tone === "pos" ? TrendingUp : TrendingDown;
-  const color = tone === "pos" ? "text-emerald-600" : "text-rose-600";
+  const color = tone === "pos" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
   return (
-    <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3">
+    <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 p-3">
       <div className={`flex items-center gap-1.5 mb-2 text-xs font-semibold ${color}`}>
         <Icon size={14} /> {title}
       </div>
       <div className="space-y-1.5">
-        {items.length === 0 && <p className="text-xs text-slate-400">—</p>}
+        {items.length === 0 && <p className="text-xs text-slate-400 dark:text-slate-500">—</p>}
         {items.map((q) => (
           <button
             key={q.symbol}
             onClick={() => onSelect(q)}
             className="w-full flex items-center justify-between gap-2 text-left active:opacity-70"
           >
-            <span className="text-sm font-semibold text-slate-800 truncate">{cleanSymbol(q.symbol)}</span>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{cleanSymbol(q.symbol)}</span>
             <span className={`text-xs font-semibold tabular-nums ${color}`}>{fmtPct(q.changePercent)}</span>
           </button>
         ))}

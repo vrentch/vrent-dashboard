@@ -53,18 +53,18 @@ export default function SearchSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Search news">
       <div className="space-y-4">
-        <div className="flex items-center gap-2 px-3 rounded-xl bg-slate-100 border border-slate-200 focus-within:border-brand-500 focus-within:bg-white transition">
-          <Search size={17} className="text-slate-400" />
+        <div className="flex items-center gap-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus-within:border-brand-500 focus-within:bg-white transition">
+          <Search size={17} className="text-slate-400 dark:text-slate-500" />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && run(q)}
             placeholder="Search any topic, company, person…"
-            className="flex-1 bg-transparent py-2.5 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none"
+            className="flex-1 bg-transparent py-2.5 text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none"
           />
           {q && (
-            <button onClick={() => setQ("")} className="text-slate-400 active:scale-90" aria-label="Clear">
+            <button onClick={() => setQ("")} className="text-slate-400 dark:text-slate-500 active:scale-90" aria-label="Clear">
               <X size={16} />
             </button>
           )}
@@ -74,7 +74,7 @@ export default function SearchSheet({
           <div className="space-y-4">
             {prefs.recentSearches.length > 0 && (
               <div>
-                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
                   <Clock size={12} /> Recent
                 </h3>
                 <div className="flex flex-wrap gap-2">
@@ -82,7 +82,7 @@ export default function SearchSheet({
                     <button
                       key={s}
                       onClick={() => run(s)}
-                      className="px-3 py-1.5 rounded-full bg-white border border-slate-200 text-sm font-medium text-slate-700 active:scale-95"
+                      className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 active:scale-95"
                     >
                       {s}
                     </button>
@@ -91,13 +91,13 @@ export default function SearchSheet({
               </div>
             )}
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Try</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Try</h3>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
                     onClick={() => run(s)}
-                    className="px-3 py-1.5 rounded-full bg-brand-50 border border-brand-200 text-sm font-medium text-brand-700 active:scale-95"
+                    className="px-3 py-1.5 rounded-full bg-brand-50 dark:bg-brand-500/15 border border-brand-200 dark:border-brand-500/30 text-sm font-medium text-brand-700 dark:text-brand-300 active:scale-95"
                   >
                     {s}
                   </button>
@@ -118,10 +118,10 @@ export default function SearchSheet({
         {searched && !loading && (
           <div className="space-y-3">
             {results.length === 0 ? (
-              <p className="text-center text-sm text-slate-500 py-10">No results for “{q}”. Try another term.</p>
+              <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-10">No results for “{q}”. Try another term.</p>
             ) : (
               <>
-                <p className="text-xs text-slate-400">{results.length} results for “{q}”</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">{results.length} results for “{q}”</p>
                 {results.map((it, i) => (
                   <NewsCard key={it.id} item={it} index={i} onOpen={onOpen} />
                 ))}

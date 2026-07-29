@@ -23,18 +23,18 @@ export default function StockRow({
 }) {
   const up = (quote.changePercent ?? 0) >= 0;
   return (
-    <div className="w-full flex items-center gap-2.5 p-3 rounded-2xl bg-white border border-slate-200/70 card-shadow">
+    <div className="w-full flex items-center gap-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow">
       <button onClick={onClick} className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-70">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-900 text-[15px]">{cleanSymbol(quote.symbol)}</span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100 text-[15px]">{cleanSymbol(quote.symbol)}</span>
             {signal ? (
               <SignalPill label={signal.label} tone={signal.tone} />
             ) : signalLoading ? (
               <span className="w-12 h-3.5 rounded-full skeleton" />
             ) : null}
           </div>
-          <p className="text-xs text-slate-400 truncate">{quote.name}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{quote.name}</p>
         </div>
 
         {spark && spark.length > 1 && (
@@ -44,10 +44,10 @@ export default function StockRow({
         )}
 
         <div className="text-right shrink-0 min-w-[84px]">
-          <p className="font-semibold text-slate-900 text-[15px] tabular-nums">{fmtPrice(quote.price, quote.currency)}</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100 text-[15px] tabular-nums">{fmtPrice(quote.price, quote.currency)}</p>
           <p
             className={`inline-block text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md ${
-              up ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+              up ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15" : "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/15"
             }`}
           >
             {fmtPct(quote.changePercent)}
@@ -59,7 +59,7 @@ export default function StockRow({
         <button
           onClick={onToggleList}
           className={`grid place-items-center w-9 h-9 shrink-0 rounded-full active:scale-90 transition ${
-            inList ? "text-amber-500" : "text-slate-300"
+            inList ? "text-amber-500" : "text-slate-300 dark:text-slate-600"
           }`}
           aria-label={inList ? "Remove from my list" : "Add to my list"}
         >

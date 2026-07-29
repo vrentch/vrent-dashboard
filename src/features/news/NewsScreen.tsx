@@ -79,19 +79,19 @@ export default function NewsScreen() {
     }
     const t = topicByKey(value);
     return {
-      icon: <TopicIcon name={t?.icon ?? "Tag"} size={17} className="text-brand-600" />,
+      icon: <TopicIcon name={t?.icon ?? "Tag"} size={17} className="text-brand-600 dark:text-brand-400" />,
       name: t?.label ?? value,
     };
   };
 
   return (
     <div>
-      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 backdrop-blur-xl border-b border-slate-200/70 safe-top">
+      <header className="sticky top-0 z-30 bg-[#f6f7f9]/85 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-700/60 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-2.5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">News</h1>
-              <p className="text-xs text-slate-400">
+              <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">News</h1>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
                 {prefs.countries.length || "all"} countries · {prefs.topics.length || "all"} topics
                 {prefs.newsQuery ? ` · "${prefs.newsQuery}"` : ""}
               </p>
@@ -99,21 +99,21 @@ export default function NewsScreen() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSearchOpen(true)}
-                className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
+                className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
                 aria-label="Search"
               >
                 <Search size={18} />
               </button>
               <button
                 onClick={() => load(true)}
-                className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
+                className="grid place-items-center w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:scale-95"
                 aria-label="Refresh"
               >
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
               <button
                 onClick={() => setFiltersOpen(true)}
-                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-slate-900 text-white text-sm font-semibold active:scale-95"
+                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold active:scale-95"
               >
                 <SlidersHorizontal size={16} /> Adjust
               </button>
@@ -121,13 +121,13 @@ export default function NewsScreen() {
           </div>
 
           {!focus && (
-            <div className="mt-3 inline-flex p-0.5 rounded-full bg-slate-200/70 text-sm">
+            <div className="mt-3 inline-flex p-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700/60 text-sm">
               {(["country", "topic"] as GroupBy[]).map((g) => (
                 <button
                   key={g}
                   onClick={() => setGroupBy(g)}
                   className={`px-4 py-1.5 rounded-full font-medium transition ${
-                    groupBy === g ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                    groupBy === g ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm" : "text-slate-500 dark:text-slate-400"
                   }`}
                 >
                   {g === "country" ? "By country" : "By topic"}
@@ -139,7 +139,7 @@ export default function NewsScreen() {
           {focus && (
             <button
               onClick={() => setFocus(null)}
-              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600"
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-400"
             >
               <ChevronLeft size={16} /> Back to overview
             </button>
@@ -173,12 +173,12 @@ export default function NewsScreen() {
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2">
                     {icon}
-                    <h2 className="text-[15px] font-bold text-slate-900">{name}</h2>
-                    <span className="text-xs text-slate-400 font-medium">{g.items.length}</span>
+                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{name}</h2>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{g.items.length}</span>
                   </div>
                   <button
                     onClick={() => setFocus({ type: groupBy, value: g.value })}
-                    className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600 active:scale-95"
+                    className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600 dark:text-brand-400 active:scale-95"
                   >
                     See all <ChevronRight size={14} />
                   </button>
@@ -215,8 +215,8 @@ function SectionTitle({ icon, name, count }: { icon: React.ReactNode; name: stri
   return (
     <div className="flex items-center gap-2 mb-1">
       {icon}
-      <h2 className="text-[15px] font-bold text-slate-900">{name}</h2>
-      <span className="text-xs text-slate-400 font-medium">{count} stories</span>
+      <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{name}</h2>
+      <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{count} stories</span>
     </div>
   );
 }
@@ -224,9 +224,9 @@ function SectionTitle({ icon, name, count }: { icon: React.ReactNode; name: stri
 function EmptyState({ message, onAction, actionLabel }: { message: string; onAction: () => void; actionLabel: string }) {
   return (
     <div className="text-center py-16 px-6">
-      <AlertCircle className="mx-auto text-slate-300 mb-3" size={32} />
-      <p className="text-slate-500 text-sm">{message}</p>
-      <button onClick={onAction} className="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold">
+      <AlertCircle className="mx-auto text-slate-300 dark:text-slate-600 mb-3" size={32} />
+      <p className="text-slate-500 dark:text-slate-400 text-sm">{message}</p>
+      <button onClick={onAction} className="mt-4 px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold">
         {actionLabel}
       </button>
     </div>
@@ -241,7 +241,7 @@ function SkeletonSections() {
           <div className="h-5 w-40 rounded skeleton mb-3" />
           <div className="flex gap-3 overflow-hidden">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="w-[250px] shrink-0 rounded-2xl bg-white border border-slate-200/70 overflow-hidden">
+              <div key={i} className="w-[250px] shrink-0 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 overflow-hidden">
                 <div className="h-32 skeleton" />
                 <div className="p-3 space-y-2">
                   <div className="h-4 w-3/4 rounded skeleton" />
