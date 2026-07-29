@@ -1,0 +1,121 @@
+{% comment %}
+  VRENT.ch — VR & AR News embed section
+  ---------------------------------------------------------------------------
+  Drop this file into your Shopify theme at: sections/vr-news.liquid
+  Then add the "VR & AR News" section to any page (or create a page that uses
+  a template with only this section) from the theme editor.
+
+  It embeds the standalone news app (deployed separately, e.g. on Vercel) via
+  a responsive, auto-resizing iframe so the feed stays live and self-updating
+  without any Liquid/Shopify maintenance. Set the app URL in the section
+  settings ("News app URL").
+{% endcomment %}
+
+<div
+  class="vr-news-section"
+  style="max-width: {{ section.settings.max_width }}px; margin: 0 auto; padding: {{ section.settings.padding_top }}px 16px {{ section.settings.padding_bottom }}px;"
+>
+  {% if section.settings.heading != blank %}
+    <h2 style="text-align:center;margin:0 0 8px;font-size:1.8rem;">{{ section.settings.heading }}</h2>
+  {% endif %}
+  {% if section.settings.subheading != blank %}
+    <p style="text-align:center;margin:0 0 24px;color:#5b6472;">{{ section.settings.subheading }}</p>
+  {% endif %}
+
+  {% if section.settings.app_url != blank %}
+    <iframe
+      id="vr-news-frame-{{ section.id }}"
+      src="{{ section.settings.app_url }}{% if section.settings.app_url contains '?' %}&{% else %}?{% endif %}embed=1"
+      title="VR & AR News"
+      loading="lazy"
+      style="width:100%;border:0;min-height:{{ section.settings.min_height }}px;overflow:hidden;background:transparent;"
+    ></iframe>
+    <script>
+      // Auto-resize the iframe to its content height (the embedded app posts
+      // its document height; falls back gracefully to the min-height).
+      (function () {
+        var frame = document.getElementById('vr-news-frame-{{ section.id }}');
+        if (!frame) return;
+        window.addEventListener('message', function (e) {
+          if (!e.data || e.data.type !== 'vr-news-height') return;
+          if (typeof e.data.height === 'number') {
+            frame.style.height = e.data.height + 'px';
+          }
+        });
+      })();
+    </script>
+  {% else %}
+    <p style="text-align:center;color:#b91c1c;">
+      Set the “News app URL” in this section’s settings to display the feed.
+    </p>
+  {% endif %}
+</div>
+
+{% schema %}
+{
+  "name": "VR & AR News",
+  "tag": "section",
+  "class": "vr-news",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "VR & AR News"
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "The latest in virtual, augmented & mixed reality."
+    },
+    {
+      "type": "url",
+      "id": "app_url",
+      "label": "News app URL",
+      "info": "The deployed news app URL, e.g. https://vr-news.vrent.ch"
+    },
+    {
+      "type": "range",
+      "id": "max_width",
+      "min": 800,
+      "max": 1400,
+      "step": 20,
+      "unit": "px",
+      "label": "Max width",
+      "default": 1120
+    },
+    {
+      "type": "range",
+      "id": "min_height",
+      "min": 400,
+      "max": 2000,
+      "step": 20,
+      "unit": "px",
+      "label": "Minimum height",
+      "default": 800
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Padding top",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Padding bottom",
+      "default": 40
+    }
+  ],
+  "presets": [{ "name": "VR & AR News" }]
+}
+{% endschema %}
