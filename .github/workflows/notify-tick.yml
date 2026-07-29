@@ -1,0 +1,17 @@
+name: Notification scheduler
+
+# Pings the app's /api/tick endpoint so market open/close and daily-recap
+# push notifications get delivered. GitHub's scheduler runs roughly every
+# 5 minutes (it can be delayed under load — that's fine, the endpoint has a
+# time window and de-dupes).
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping tick endpoint
+        run: curl -sS --max-time 60 "https://ac-news-tau.vercel.app/api/tick" || true

@@ -12,6 +12,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { XMLParser } from "fast-xml-parser";
+import * as webpush from "web-push";
 
 // ── RSS parsing ─────────────────────────────────────────────────────────────
 
@@ -442,11 +443,211 @@ async function getSignals(symbols: string[]) {
   return { signals: out.filter(Boolean) };
 }
 
+// ── Push notifications (privacy-preserving: market open/close + daily recap) ─
+//
+// Storage is Vercel KV (Upstash Redis REST). VAPID keys come from env. If any
+// of that is missing, the feature reports "not configured" and nothing breaks.
+
+const VAPID_PUBLIC = "BNxnJi4BuHQzkMrh9pFVr3sJq70P15NklzGvjIJCO3EdA-Kxx3Siwr9aHTzZ3iPBQ8eJOdI4cmyxdT6FkYzuOPU";
+const KV_URL = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
+
+function pushConfigured(): boolean {
+  return !!(KV_URL && KV_TOKEN && VAPID_PRIVATE);
+}
+
+let vapidReady = false;
+function ensureVapid() {
+  if (vapidReady || !VAPID_PRIVATE) return;
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:info@vrent.ch", VAPID_PUBLIC, VAPID_PRIVATE);
+  vapidReady = true;
+}
+
+// Minimal Upstash Redis REST client.
+async function kv(command: (string | number)[]): Promise<any> {
+  const res = await fetch(KV_URL!, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(command),
+    signal: AbortSignal.timeout(8000),
+  });
+  const j = await res.json();
+  return j.result;
+}
+
+function subId(endpoint: string): string {
+  // Stable short id from the endpoint (no crypto needed for uniqueness here).
+  let h = 0;
+  for (let i = 0; i < endpoint.length; i++) h = (h * 31 + endpoint.charCodeAt(i)) >>> 0;
+  return h.toString(36) + endpoint.length.toString(36);
+}
+
+interface SubRecord {
+  subscription: any;
+  settings: { marketOpen: boolean; marketClose: boolean; dailyRecap: boolean; recapTime: string };
+  tz: string;
+}
+
+async function subscribeHandler(body: any) {
+  if (!pushConfigured()) return { status: 200, body: { ok: false, configured: false, error: "not configured" } };
+  const { subscription, settings, tz } = body || {};
+  if (!subscription?.endpoint) return { status: 400, body: { ok: false, error: "subscription required" } };
+  const id = subId(subscription.endpoint);
+  const rec: SubRecord = { subscription, settings, tz: tz || "UTC" };
+  await kv(["SET", `sub:${id}`, JSON.stringify(rec)]);
+  await kv(["SADD", "subs", id]);
+  return { status: 200, body: { ok: true, configured: true } };
+}
+
+async function unsubscribeHandler(body: any) {
+  if (!pushConfigured()) return { status: 200, body: { ok: false } };
+  const endpoint = body?.endpoint;
+  if (!endpoint) return { status: 400, body: { ok: false } };
+  const id = subId(endpoint);
+  await kv(["DEL", `sub:${id}`]);
+  await kv(["SREM", "subs", id]);
+  return { status: 200, body: { ok: true } };
+}
+
+async function sendTo(rec: SubRecord, payload: { title: string; body: string; url?: string; tag?: string }, id: string) {
+  ensureVapid();
+  try {
+    await webpush.sendNotification(rec.subscription, JSON.stringify(payload));
+    return true;
+  } catch (err: any) {
+    // Subscription expired/invalid — clean it up.
+    if (err?.statusCode === 404 || err?.statusCode === 410) {
+      await kv(["DEL", `sub:${id}`]);
+      await kv(["SREM", "subs", id]);
+    }
+    return false;
+  }
+}
+
+async function testHandler(body: any) {
+  if (!pushConfigured()) return { status: 200, body: { ok: false, error: "not configured" } };
+  const sub = body?.subscription;
+  if (!sub?.endpoint) return { status: 400, body: { ok: false } };
+  const ok = await sendTo(
+    { subscription: sub, settings: { marketOpen: true, marketClose: true, dailyRecap: true, recapTime: "" }, tz: "UTC" },
+    { title: "AC News", body: "🔔 Notifications are working — you're all set!", url: "/" },
+    subId(sub.endpoint)
+  );
+  return { status: 200, body: { ok } };
+}
+
+// Exchange hours for open/close pushes.
+const PUSH_MARKETS = [
+  { key: "us", name: "US markets", tz: "America/New_York", open: 9 * 60 + 30, close: 16 * 60 },
+  { key: "ch", name: "Swiss market (SIX)", tz: "Europe/Zurich", open: 9 * 60, close: 17 * 60 + 30 },
+  { key: "eu", name: "European markets", tz: "Europe/Berlin", open: 9 * 60, close: 17 * 60 + 30 },
+  { key: "uk", name: "UK market (LSE)", tz: "Europe/London", open: 8 * 60, close: 16 * 60 + 30 },
+];
+const WINDOW = 12; // minutes — matches an every-~5-min scheduler with jitter
+
+function tzParts(tz: string, now: Date) {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit", year: "numeric", month: "2-digit", day: "2-digit", hour12: false }).formatToParts(now);
+  const get = (t: string) => p.find((x) => x.type === t)?.value ?? "";
+  let hour = parseInt(get("hour"), 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(get("minute"), 10);
+  const wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
+  const day = `${get("year")}${get("month")}${get("day")}`;
+  return { minutes: hour * 60 + minute, weekday: wd, day };
+}
+
+async function once(id: string, day: string, kind: string): Promise<boolean> {
+  // Returns true if this is the first time today (and marks it sent).
+  const key = `sent:${id}:${day}:${kind}`;
+  const set = await kv(["SET", key, "1", "NX", "EX", 90000]);
+  return set === "OK";
+}
+
+async function recapText(): Promise<string> {
+  try {
+    const { quotes } = await getQuotes(["^GSPC", "^IXIC", "^DJI"]);
+    const bits = quotes
+      .filter((q) => q.changePercent != null)
+      .map((q) => `${q.symbol.replace("^GSPC", "S&P").replace("^IXIC", "Nasdaq").replace("^DJI", "Dow")} ${q.changePercent! >= 0 ? "+" : ""}${q.changePercent!.toFixed(1)}%`);
+    return bits.length ? `Today: ${bits.join(", ")}. Open AC News for your watchlist.` : "Open AC News for today's market recap.";
+  } catch {
+    return "Open AC News for today's market recap.";
+  }
+}
+
+async function tickHandler() {
+  if (!pushConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  const now = new Date();
+  const ids: string[] = (await kv(["SMEMBERS", "subs"])) || [];
+  let sent = 0;
+
+  // Precompute market events that are firing right now.
+  const firing: { kind: string; name: string; type: "open" | "close" }[] = [];
+  for (const m of PUSH_MARKETS) {
+    const t = tzParts(m.tz, now);
+    if (t.weekday < 1 || t.weekday > 5) continue;
+    if (t.minutes >= m.open && t.minutes < m.open + WINDOW) firing.push({ kind: `${m.key}-open-${t.day}`, name: m.name, type: "open" });
+    if (t.minutes >= m.close && t.minutes < m.close + WINDOW) firing.push({ kind: `${m.key}-close-${t.day}`, name: m.name, type: "close" });
+  }
+
+  let recap: string | null = null;
+
+  for (const id of ids) {
+    const raw = await kv(["GET", `sub:${id}`]);
+    if (!raw) {
+      await kv(["SREM", "subs", id]);
+      continue;
+    }
+    let rec: SubRecord;
+    try {
+      rec = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    const s = rec.settings || ({} as SubRecord["settings"]);
+
+    for (const f of firing) {
+      if (f.type === "open" && !s.marketOpen) continue;
+      if (f.type === "close" && !s.marketClose) continue;
+      if (await once(id, "", f.kind)) {
+        const ok = await sendTo(rec, { title: "AC News", body: f.type === "open" ? `🟢 ${f.name} are open` : `🔴 ${f.name} have closed`, url: "/markets" }, id);
+        if (ok) sent++;
+      }
+    }
+
+    if (s.dailyRecap && s.recapTime) {
+      const t = tzParts(rec.tz || "UTC", now);
+      const [rh, rm] = s.recapTime.split(":").map(Number);
+      const target = (rh || 0) * 60 + (rm || 0);
+      if (t.minutes >= target && t.minutes < target + WINDOW) {
+        if (await once(id, t.day, "recap")) {
+          if (recap == null) recap = await recapText();
+          const ok = await sendTo(rec, { title: "📊 Market recap", body: recap, url: "/" }, id);
+          if (ok) sent++;
+        }
+      }
+    }
+  }
+
+  return { status: 200, body: { ok: true, subs: ids.length, sent } };
+}
+
 // ── Router (shared by dev middleware and the serverless handler) ─────────────
 
-export async function handleApi(pathname: string, search: URLSearchParams): Promise<{ status: number; body: unknown }> {
+export async function handleApi(
+  pathname: string,
+  search: URLSearchParams,
+  ctx: { method?: string; body?: any } = {}
+): Promise<{ status: number; body: unknown }> {
   try {
     const route = pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
+
+    if (route === "push/status") return { status: 200, body: { configured: pushConfigured() } };
+    if (route === "push/subscribe") return await subscribeHandler(ctx.body);
+    if (route === "push/unsubscribe") return await unsubscribeHandler(ctx.body);
+    if (route === "push/test") return await testHandler(ctx.body);
+    if (route === "tick") return await tickHandler();
 
     if (route === "news") {
       let specs: FeedSpec[] = [];
@@ -484,11 +685,36 @@ export async function handleApi(pathname: string, search: URLSearchParams): Prom
   }
 }
 
+function readBody(req: IncomingMessage): Promise<any> {
+  return new Promise((resolve) => {
+    // Some runtimes pre-parse the body.
+    if ((req as any).body !== undefined) {
+      const b = (req as any).body;
+      resolve(typeof b === "string" ? safeJson(b) : b);
+      return;
+    }
+    let data = "";
+    req.on("data", (c) => (data += c));
+    req.on("end", () => resolve(safeJson(data)));
+    req.on("error", () => resolve(undefined));
+  });
+}
+function safeJson(s: string): any {
+  try {
+    return s ? JSON.parse(s) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://localhost");
-  const { status, body } = await handleApi(url.pathname, url.searchParams);
+  const body = req.method === "POST" ? await readBody(req) : undefined;
+  const { status, body: out } = await handleApi(url.pathname, url.searchParams, { method: req.method, body });
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-  res.end(JSON.stringify(body));
+  // Push/tick endpoints must never be cached.
+  const noCache = url.pathname.includes("/push/") || url.pathname.endsWith("/tick");
+  res.setHeader("Cache-Control", noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300");
+  res.end(JSON.stringify(out));
 }

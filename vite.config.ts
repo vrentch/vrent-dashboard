@@ -16,7 +16,13 @@ export default defineConfig({
       },
     },
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,svg}"],
+      },
       includeAssets: ["favicon.svg", "icon.svg"],
       manifest: {
         name: "AC News",
@@ -30,16 +36,6 @@ export default defineConfig({
         icons: [
           { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
           { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
-        ],
-      },
-      workbox: {
-        // Never cache API responses — always fetch fresh live data.
-        navigateFallbackDenylist: [/^\/api/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/[^/]*\/api\//,
-            handler: "NetworkOnly",
-          },
         ],
       },
     }),

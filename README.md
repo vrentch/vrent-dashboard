@@ -76,6 +76,26 @@ src/features/markets   Markets section
 src/features/settings  Settings / about
 ```
 
+## Notifications (optional, one-time setup)
+
+Phone push (market open/close + a daily recap) needs a tiny free backend. In
+the deployed project:
+
+1. **Vercel → Storage → Create Database → KV** (Upstash), connect it to the
+   project. This adds `KV_REST_API_URL` / `KV_REST_API_TOKEN` automatically.
+2. **Vercel → Settings → Environment Variables**: add `VAPID_PRIVATE` (the
+   private key that pairs with the public key in `src/lib/push.ts`) and
+   optionally `VAPID_SUBJECT` = `mailto:you@example.com`.
+3. Ensure **GitHub Actions** are enabled — `.github/workflows/notify-tick.yml`
+   pings `/api/tick` every ~5 min to deliver alerts (free).
+4. **Redeploy**, then in the installed app: **Settings → Notifications →
+   Enable**.
+
+Only market open/close and the daily recap are sent — no calendar or watchlist
+data leaves the device. Generate a fresh VAPID pair anytime with
+`node -e "console.log(require('web-push').generateVAPIDKeys())"` (update the
+public key in `src/lib/push.ts` and `VAPID_PUBLIC` in `api/[...path].ts`).
+
 ## Notes
 
 - Market data is delayed and provided for information only — not financial

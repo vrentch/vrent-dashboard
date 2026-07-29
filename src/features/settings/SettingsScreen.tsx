@@ -17,6 +17,7 @@ import {
 import { usePrefs, resetPrefs, setPrefs, type Theme } from "../../lib/store";
 import { hasPasscode, clearPasscode } from "../../lib/lock";
 import PasscodeSetup from "../lock/PasscodeSetup";
+import NotificationsSettings from "./NotificationsSettings";
 import { countryByCode, topicByKey } from "../../../shared/catalog";
 
 const THEMES: { key: Theme; label: string; icon: typeof Sun }[] = [
@@ -105,6 +106,8 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
             )}
           </div>
         </section>
+
+        <NotificationsSettings />
 
         <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Your news feed</h2>
