@@ -12,8 +12,11 @@ import {
   Sun,
   Moon,
   Monitor,
+  Lock,
 } from "lucide-react";
 import { usePrefs, resetPrefs, setPrefs, type Theme } from "../../lib/store";
+import { hasPasscode, clearPasscode } from "../../lib/lock";
+import PasscodeSetup from "../lock/PasscodeSetup";
 import { countryByCode, topicByKey } from "../../../shared/catalog";
 
 const THEMES: { key: Theme; label: string; icon: typeof Sun }[] = [
@@ -28,6 +31,8 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
   const prefs = usePrefs();
   const [didReset, setDidReset] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [lockSetup, setLockSetup] = useState(false);
+  const lockOn = hasPasscode();
 
   async function share() {
     const url = window.location.origin;
@@ -70,6 +75,34 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
+                <Lock size={17} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">App lock</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">{lockOn ? "Passcode required to open" : "Off"}</p>
+              </div>
+            </div>
+            {lockOn ? (
+              <div className="flex gap-2">
+                <button onClick={() => setLockSetup(true)} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 active:scale-95">
+                  Change
+                </button>
+                <button onClick={() => clearPasscode()} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 active:scale-95">
+                  Turn off
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setLockSetup(true)} className="px-3.5 py-1.5 rounded-lg text-sm font-semibold bg-slate-900 dark:bg-slate-700 text-white active:scale-95">
+                Set up
+              </button>
+            )}
           </div>
         </section>
 
@@ -165,8 +198,10 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           {didReset ? "Reset to defaults" : "Reset all preferences"}
         </button>
 
-        <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">AC News · World news &amp; markets · v0.2</p>
+        <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">AC News · World news &amp; markets · v0.3</p>
       </div>
+
+      <PasscodeSetup open={lockSetup} onClose={() => setLockSetup(false)} />
     </div>
   );
 }

@@ -79,6 +79,12 @@ body {
   animation: fade-in-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes wiggle {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -400px 0;
