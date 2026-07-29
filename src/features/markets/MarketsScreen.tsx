@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Star, ChevronRight } from "lucide-react";
+import { RefreshCw, ChevronRight } from "lucide-react";
 import { fetchQuotes, type Quote } from "../../lib/api";
 import { usePrefs, activeWatchlist } from "../../lib/store";
 import { fmtPct, displayPrice } from "../../lib/format";
@@ -7,6 +7,7 @@ import { REGIONS, primaryIndex, NO_SIGNAL_REGIONS, type MarketRegion } from "../
 import RegionView from "./RegionView";
 import StockDetail from "./StockDetail";
 import WatchlistEditor from "./WatchlistEditor";
+import WatchlistCard from "./WatchlistCard";
 
 export default function MarketsScreen() {
   const prefs = usePrefs();
@@ -56,8 +57,20 @@ export default function MarketsScreen() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+        {/* Personal watchlist — teaser preview */}
+        <WatchlistCard
+          onOpenList={() => setOpenWatchlist(true)}
+          onEdit={() => {
+            setOpenWatchlist(true);
+            setEditorOpen(true);
+          }}
+          onSelect={setSelected}
+        />
+
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Markets</h2>
+          <div className="grid grid-cols-2 gap-3">
           {REGIONS.map((r) => {
             const idx = primaryIndex(r);
             const q = indexQuotes[idx.symbol.toUpperCase()];
@@ -95,28 +108,8 @@ export default function MarketsScreen() {
               </button>
             );
           })}
-
-          {/* Custom list tile */}
-          <button
-            onClick={() => setOpenWatchlist(true)}
-            className="text-left rounded-2xl bg-brand-600 card-shadow p-4 active:scale-[0.98] transition col-span-2"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Star size={20} className="text-white" fill="currentColor" />
-                <h2 className="text-[15px] font-bold text-white">My lists</h2>
-              </div>
-              <ChevronRight size={18} className="text-white/70" />
-            </div>
-            <p className="mt-1 text-xs text-white/80">
-              {prefs.watchlists.length > 1
-                ? `${prefs.watchlists.length} lists · ${activeWatchlist(prefs).name} active`
-                : prefs.watchlist.length
-                ? `${prefs.watchlist.length} symbols you picked · tap to view & edit`
-                : "Build your own watchlist — tap to add symbols"}
-            </p>
-          </button>
-        </div>
+          </div>
+        </section>
       </div>
 
       {/* Region window */}
