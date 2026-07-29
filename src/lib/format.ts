@@ -42,6 +42,16 @@ export function fmtPct(v: number | null): string {
   return `${sign}${v.toFixed(2)}%`;
 }
 
+/** Tidy a provider ticker for display: NESN-CH → NESN, BTC-USD → BTC. */
+export function cleanSymbol(sym: string): string {
+  return sym
+    .replace(/-CH$/, "")
+    .replace(/-USD$/, "")
+    .replace(/=X$/, "")
+    .replace(/=F$/, "")
+    .replace(/^\^/, "");
+}
+
 export function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");

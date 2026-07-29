@@ -56,8 +56,10 @@ function decodeEntities(s: string): string {
 }
 
 function stripHtml(html: string): string {
-  return decodeEntities(html.replace(/<[^>]*>/g, " "))
-    .replace(/&amp;/g, "&")
+  // Decode entities FIRST, so entity-encoded markup (e.g. &lt;a href&gt;) turns
+  // into real tags and gets stripped — otherwise it surfaces as literal text.
+  const decoded = decodeEntities(html);
+  return decodeEntities(decoded.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -209,8 +211,10 @@ const CNBC_UA =
 const SYMBOL_MAP: Record<string, string> = {
   "^GSPC": ".SPX", "^IXIC": ".IXIC", "^DJI": ".DJI", "^RUT": ".RUT",
   "^GDAXI": ".GDAXI", "^FTSE": ".FTSE", "^FCHI": ".FCHI", "^N225": ".N225",
-  "^HSI": ".HSI", "^SSMI": ".SSMI",
+  "^HSI": ".HSI", "^SSMI": ".SSMI", "^STOXX50E": ".STOXX50E",
   "BTC-USD": "BTC.CM=", "ETH-USD": "ETH.CM=", "SOL-USD": "SOL.CM=", "XRP-USD": "XRP.CM=",
+  "DOGE-USD": "DOGE.CM=", "ADA-USD": "ADA.CM=", "AVAX-USD": "AVAX.CM=",
+  "LINK-USD": "LINK.CM=", "DOT-USD": "DOT.CM=", "LTC-USD": "LTC.CM=",
   "EURUSD=X": "EUR=", "GBPUSD=X": "GBP=", "USDJPY=X": "JPY=", "USDCHF=X": "CHF=",
   "GC=F": "@GC.1", "SI=F": "@SI.1", "CL=F": "@CL.1", "NG=F": "@NG.1",
 };

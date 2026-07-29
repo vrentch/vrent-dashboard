@@ -1,0 +1,141 @@
+import { useEffect, useMemo, useState } from "react";
+import Sheet from "../../components/Sheet";
+import StockRow from "./StockRow";
+import { fetchQuotes, type Quote } from "../../lib/api";
+import { fmtPct, cleanSymbol } from "../../lib/format";
+import { TrendingUp, TrendingDown, Pencil, Plus } from "lucide-react";
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  flag: string;
+  symbols: string[];
+  onSelect: (q: Quote) => void;
+  watchlist?: boolean;
+  onEdit?: () => void;
+}
+
+export default function RegionView({ open, onClose, title, flag, symbols, onSelect, watchlist, onEdit }: Props) {
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const key = symbols.join(",");
+  useEffect(() => {
+    if (!open || !symbols.length) {
+      setQuotes([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetchQuotes(symbols)
+      .then((r) => !cancelled && setQuotes(r.quotes))
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, key]);
+
+  const sorted = useMemo(
+    () => [...quotes].filter((q) => q.changePercent != null).sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0)),
+    [quotes]
+  );
+  const gainers = sorted.filter((q) => (q.changePercent ?? 0) > 0).slice(0, 3);
+  const losers = [...sorted].reverse().filter((q) => (q.changePercent ?? 0) < 0).slice(0, 3);
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={`${flag} ${title}`}
+      footer={
+        watchlist && onEdit ? (
+          <button
+            onClick={onEdit}
+            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold active:scale-[0.98]"
+          >
+            <Pencil size={15} /> Edit my list
+          </button>
+        ) : undefined
+      }
+    >
+      {loading && (
+        <div className="space-y-2.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-[64px] rounded-2xl skeleton" />
+          ))}
+        </div>
+      )}
+
+      {!loading && !quotes.length && (
+        <div className="text-center py-14">
+          <p className="text-sm text-slate-500">{watchlist ? "Your list is empty." : "No data right now."}</p>
+          {watchlist && onEdit && (
+            <button onClick={onEdit} className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold">
+              <Plus size={15} /> Add symbols
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && quotes.length > 0 && (
+        <div className="space-y-5">
+          {(gainers.length > 0 || losers.length > 0) && (
+            <div className="grid grid-cols-2 gap-3">
+              <MoverPanel title="Top gainers" tone="pos" items={gainers} onSelect={onSelect} />
+              <MoverPanel title="Top losers" tone="neg" items={losers} onSelect={onSelect} />
+            </div>
+          )}
+
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+              All {sorted.length} · biggest movers
+            </h3>
+            <div className="space-y-2.5">
+              {sorted.map((q) => (
+                <StockRow key={q.symbol} quote={q} onClick={() => onSelect(q)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+function MoverPanel({
+  title,
+  tone,
+  items,
+  onSelect,
+}: {
+  title: string;
+  tone: "pos" | "neg";
+  items: Quote[];
+  onSelect: (q: Quote) => void;
+}) {
+  const Icon = tone === "pos" ? TrendingUp : TrendingDown;
+  const color = tone === "pos" ? "text-emerald-600" : "text-rose-600";
+  return (
+    <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3">
+      <div className={`flex items-center gap-1.5 mb-2 text-xs font-semibold ${color}`}>
+        <Icon size={14} /> {title}
+      </div>
+      <div className="space-y-1.5">
+        {items.length === 0 && <p className="text-xs text-slate-400">—</p>}
+        {items.map((q) => (
+          <button
+            key={q.symbol}
+            onClick={() => onSelect(q)}
+            className="w-full flex items-center justify-between gap-2 text-left active:opacity-70"
+          >
+            <span className="text-sm font-semibold text-slate-800 truncate">{cleanSymbol(q.symbol)}</span>
+            <span className={`text-xs font-semibold tabular-nums ${color}`}>{fmtPct(q.changePercent)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

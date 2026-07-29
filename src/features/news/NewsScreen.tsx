@@ -6,6 +6,7 @@ import { topicByKey, countryByCode } from "../../../shared/catalog";
 import TopicIcon from "../../components/TopicIcon";
 import NewsCard from "./NewsCard";
 import NewsFilters from "./NewsFilters";
+import ArticleReader from "./ArticleReader";
 
 type GroupBy = "country" | "topic";
 type Focus = { type: GroupBy; value: string } | null;
@@ -19,6 +20,7 @@ export default function NewsScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("country");
   const [focus, setFocus] = useState<Focus>(null);
+  const [reading, setReading] = useState<NewsItem | null>(null);
 
   const key = `${prefs.countries.join(",")}|${prefs.topics.join(",")}|${prefs.newsQuery}`;
 
@@ -148,7 +150,7 @@ export default function NewsScreen() {
           <div className="space-y-3">
             <SectionTitle {...groupLabel(focus.type, focus.value)} count={focusItems.length} />
             {focusItems.map((it, i) => (
-              <NewsCard key={it.id} item={it} index={i} showCountry={focus.type !== "country"} />
+              <NewsCard key={it.id} item={it} index={i} showCountry={focus.type !== "country"} onOpen={setReading} />
             ))}
           </div>
         )}
@@ -180,6 +182,7 @@ export default function NewsScreen() {
                       index={i}
                       variant="compact"
                       showCountry={groupBy !== "country"}
+                      onOpen={setReading}
                     />
                   ))}
                 </div>
@@ -193,6 +196,7 @@ export default function NewsScreen() {
       </div>
 
       <NewsFilters open={filtersOpen} onClose={() => setFiltersOpen(false)} />
+      <ArticleReader item={reading} onClose={() => setReading(null)} />
     </div>
   );
 }

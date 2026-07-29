@@ -68,6 +68,21 @@ export const TOPICS: Topic[] = [
   { key: "energy", label: "Energy & Climate", icon: "Leaf", query: "energy climate environment" },
   { key: "realestate", label: "Real Estate", icon: "Building2", query: "real estate housing property market" },
   { key: "crypto", label: "Crypto", icon: "Bitcoin", query: "cryptocurrency bitcoin ethereum" },
+  { key: "politics", label: "Politics", icon: "Vote", query: "politics government election policy" },
+  { key: "economy", label: "Economy", icon: "DollarSign", query: "economy inflation GDP interest rates jobs" },
+  { key: "ai", label: "AI", icon: "BrainCircuit", query: "artificial intelligence AI machine learning" },
+  { key: "startups", label: "Startups", icon: "Rocket", query: "startup venture capital funding IPO" },
+  { key: "gaming", label: "Gaming", icon: "Gamepad2", query: "video games gaming esports" },
+  { key: "film", label: "Film & TV", icon: "Film", query: "movies film television streaming series" },
+  { key: "music", label: "Music", icon: "Music", query: "music artists albums concerts" },
+  { key: "travel", label: "Travel", icon: "Plane", query: "travel tourism airlines destinations" },
+  { key: "food", label: "Food", icon: "UtensilsCrossed", query: "food cuisine restaurants recipes" },
+  { key: "automotive", label: "Automotive", icon: "Car", query: "cars automotive electric vehicles" },
+  { key: "space", label: "Space", icon: "Orbit", query: "space NASA rockets astronomy" },
+  { key: "education", label: "Education", icon: "GraduationCap", query: "education schools universities" },
+  { key: "culture", label: "Arts & Culture", icon: "Palette", query: "arts culture museums books theatre" },
+  { key: "fashion", label: "Fashion", icon: "Shirt", query: "fashion style designers runway" },
+  { key: "weather", label: "Weather", icon: "CloudSun", query: "weather storm forecast severe" },
 ];
 
 export const DEFAULT_COUNTRIES = ["US", "CH", "GB"];

@@ -1,5 +1,5 @@
 import type { Quote } from "../../lib/api";
-import { fmtPrice, fmtPct } from "../../lib/format";
+import { fmtPrice, fmtPct, cleanSymbol } from "../../lib/format";
 import Sparkline from "../../components/Sparkline";
 
 export default function StockRow({
@@ -18,17 +18,15 @@ export default function StockRow({
       className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-200/70 card-shadow active:scale-[0.99] transition text-left"
     >
       <div className="min-w-0 flex-1">
-        <span className="font-semibold text-slate-900 text-[15px]">{quote.symbol}</span>
+        <span className="font-semibold text-slate-900 text-[15px]">{cleanSymbol(quote.symbol)}</span>
         <p className="text-xs text-slate-400 truncate">{quote.name}</p>
       </div>
 
-      <div className="w-16 h-8 shrink-0">
-        {spark && spark.length > 1 ? (
+      {spark && spark.length > 1 && (
+        <div className="w-16 h-8 shrink-0">
           <Sparkline values={spark} width={64} height={32} fill />
-        ) : (
-          <div className="w-full h-full rounded skeleton opacity-60" />
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="text-right shrink-0 min-w-[86px]">
         <p className="font-semibold text-slate-900 text-[15px] tabular-nums">
