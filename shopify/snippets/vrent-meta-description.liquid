@@ -1,0 +1,41 @@
+{%- comment -%}
+  vrent-meta-description.liquid — VRENT.ch
+  ---------------------------------------------------------------------------
+  Original snippet by VRENT. Guarantees every page has a <meta name="description">.
+
+  The stock theme only outputs a description when one is set manually:
+
+      {% if page_description %}
+        <meta name="description" content="{{ page_description | escape }}">
+      {% endif %}
+
+  ...so any product/collection/page without a hand-written SEO description
+  ships with NO description tag — a wasted ranking + click-through signal.
+
+  INSTALL: in layout/theme.liquid, replace that whole `{% if page_description %}`
+  block with this single line:
+
+      {% render 'vrent-meta-description' %}
+{%- endcomment -%}
+
+{%- liquid
+  assign meta_desc = page_description
+  if meta_desc == blank
+    case request.page_type
+      when 'product'
+        assign meta_desc = product.description | strip_html | truncate: 155
+      when 'collection'
+        assign meta_desc = collection.description | strip_html | truncate: 155
+      when 'article'
+        assign meta_desc = article.excerpt_or_content | strip_html | truncate: 155
+      when 'blog'
+        assign meta_desc = blog.title | append: ' — ' | append: shop.name
+      else
+        assign meta_desc = shop.description
+    endcase
+  endif
+  assign meta_desc = meta_desc | strip
+-%}
+{%- if meta_desc != blank -%}
+  <meta name="description" content="{{ meta_desc | escape }}">
+{%- endif -%}

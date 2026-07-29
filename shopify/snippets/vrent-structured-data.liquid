@@ -1,0 +1,106 @@
+{%- comment -%}
+  vrent-structured-data.liquid — VRENT.ch
+  ---------------------------------------------------------------------------
+  Original snippet by VRENT (safe to keep in a public repo — contains no
+  third-party theme code). Adds JSON-LD structured data so Google can show
+  rich results: product price / availability / star ratings, breadcrumbs,
+  the sitelinks search box, and Article markup for blog/news posts.
+
+  INSTALL: add this one line inside <head> in layout/theme.liquid, right
+  after `{% render 'social-meta-tags' %}`:
+
+      {% render 'vrent-structured-data' %}
+
+  The theme currently ships NO structured data, so this is purely additive.
+{%- endcomment -%}
+
+{%- liquid
+  assign page_type = request.page_type
+  assign currency_code = cart.currency.iso_code | default: shop.currency
+-%}
+
+{%- comment -%} Organization (site-wide) {%- endcomment -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: '/' | json }}{% if settings.favicon != blank %},
+  "logo": {{ settings.favicon | image_url: width: 512 | prepend: 'https:' | json }}{% endif %}
+}
+</script>
+
+{%- comment -%} WebSite + sitelinks search box (site-wide) {%- endcomment -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": {{ shop.name | json }},
+  "url": {{ shop.url | append: '/' | json }},
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "{{ shop.url }}/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+
+{%- if page_type == 'product' and product != blank -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ product.title | json }},
+  "url": {{ canonical_url | json }},
+  "description": {{ product.description | strip_html | truncate: 500 | json }}{% if product.featured_media %},
+  "image": {{ product.featured_media.preview_image | image_url: width: 1200 | prepend: 'https:' | json }}{% endif %}{% if product.vendor != blank %},
+  "brand": { "@type": "Brand", "name": {{ product.vendor | json }} }{% endif %},
+  "sku": {{ product.selected_or_first_available_variant.sku | json }}{%- assign rating = product.metafields.reviews.rating.value -%}{% if rating != blank and product.metafields.reviews.rating_count.value > 0 %},
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": {{ rating.rating | json }},
+    "reviewCount": {{ product.metafields.reviews.rating_count.value | json }},
+    "bestRating": {{ rating.scale_max | default: 5 | json }}
+  }{% endif %},
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": {{ currency_code | json }},
+    "price": "{{ product.price | divided_by: 100.0 }}",
+    "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
+    "url": {{ canonical_url | json }}
+  }
+}
+</script>
+{%- endif -%}
+
+{%- if page_type == 'article' and article != blank -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": {{ article.title | json }},
+  "url": {{ canonical_url | json }}{% if article.image %},
+  "image": {{ article.image | image_url: width: 1200 | prepend: 'https:' | json }}{% endif %},
+  "datePublished": {{ article.published_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+  "dateModified": {{ article.updated_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+  "author": { "@type": "Person", "name": {{ article.author | json }} },
+  "publisher": { "@type": "Organization", "name": {{ shop.name | json }} }
+}
+</script>
+{%- endif -%}
+
+{%- if page_type == 'product' or page_type == 'collection' -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": {{ shop.url | append: '/' | json }} }{% if page_type == 'collection' and collection != blank %},
+    { "@type": "ListItem", "position": 2, "name": {{ collection.title | json }}, "item": {{ canonical_url | json }} }{% elsif page_type == 'product' and product != blank %}{% if collection != blank %},
+    { "@type": "ListItem", "position": 2, "name": {{ collection.title | json }}, "item": {{ collection.url | prepend: shop.url | json }} },
+    { "@type": "ListItem", "position": 3, "name": {{ product.title | json }}, "item": {{ canonical_url | json }} }{% else %},
+    { "@type": "ListItem", "position": 2, "name": {{ product.title | json }}, "item": {{ canonical_url | json }} }{% endif %}{% endif %}
+  ]
+}
+</script>
+{%- endif -%}
