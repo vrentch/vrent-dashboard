@@ -3,6 +3,7 @@ import type { NewsItem } from "../../lib/api";
 import { timeAgo, hostOf } from "../../lib/format";
 import { countryByCode, topicByKey } from "../../../shared/catalog";
 import TopicIcon from "../../components/TopicIcon";
+import HeadlineImage from "./HeadlineImage";
 import { ExternalLink, Share2 } from "lucide-react";
 
 export default function ArticleReader({ item, onClose }: { item: NewsItem | null; onClose: () => void }) {
@@ -24,16 +25,7 @@ export default function ArticleReader({ item, onClose }: { item: NewsItem | null
   return (
     <Sheet open={!!item} onClose={onClose} title={item.source || host || "Article"}>
       <article className="space-y-4">
-        {item.imageUrl && (
-          <div className="w-full rounded-2xl overflow-hidden bg-slate-100 -mt-1">
-            <img
-              src={item.imageUrl}
-              alt=""
-              className="w-full max-h-64 object-cover"
-              onError={(e) => ((e.currentTarget.parentElement as HTMLElement).style.display = "none")}
-            />
-          </div>
-        )}
+        <HeadlineImage item={item} size="lg" className="w-full h-52 rounded-2xl -mt-1" />
 
         <div className="flex gap-1.5 flex-wrap">
           {country && (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SlidersHorizontal, RefreshCw, AlertCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import { SlidersHorizontal, RefreshCw, AlertCircle, ChevronRight, ChevronLeft, Search } from "lucide-react";
 import { fetchNews, type NewsItem } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { topicByKey, countryByCode } from "../../../shared/catalog";
@@ -7,6 +7,7 @@ import TopicIcon from "../../components/TopicIcon";
 import NewsCard from "./NewsCard";
 import NewsFilters from "./NewsFilters";
 import ArticleReader from "./ArticleReader";
+import SearchSheet from "./SearchSheet";
 
 type GroupBy = "country" | "topic";
 type Focus = { type: GroupBy; value: string } | null;
@@ -21,6 +22,7 @@ export default function NewsScreen() {
   const [groupBy, setGroupBy] = useState<GroupBy>("country");
   const [focus, setFocus] = useState<Focus>(null);
   const [reading, setReading] = useState<NewsItem | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const key = `${prefs.countries.join(",")}|${prefs.topics.join(",")}|${prefs.newsQuery}`;
 
@@ -95,6 +97,13 @@ export default function NewsScreen() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
+                aria-label="Search"
+              >
+                <Search size={18} />
+              </button>
               <button
                 onClick={() => load(true)}
                 className="grid place-items-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 active:scale-95"
@@ -196,6 +205,7 @@ export default function NewsScreen() {
       </div>
 
       <NewsFilters open={filtersOpen} onClose={() => setFiltersOpen(false)} />
+      <SearchSheet open={searchOpen} onClose={() => setSearchOpen(false)} onOpen={setReading} />
       <ArticleReader item={reading} onClose={() => setReading(null)} />
     </div>
   );

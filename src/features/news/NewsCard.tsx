@@ -2,6 +2,7 @@ import type { NewsItem } from "../../lib/api";
 import { timeAgo, hostOf } from "../../lib/format";
 import { countryByCode, topicByKey } from "../../../shared/catalog";
 import TopicIcon from "../../components/TopicIcon";
+import HeadlineImage from "./HeadlineImage";
 
 interface Props {
   item: NewsItem;
@@ -40,17 +41,7 @@ export default function NewsCard({ item, index, variant = "full", showCountry = 
         className="snap-item shrink-0 w-[250px] text-left bg-white rounded-2xl border border-slate-200/70 card-shadow overflow-hidden active:scale-[0.98] transition animate-in"
         style={delay}
       >
-        {item.imageUrl && (
-          <div className="h-32 w-full overflow-hidden bg-slate-100">
-            <img
-              src={item.imageUrl}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover"
-              onError={(e) => ((e.currentTarget.parentElement as HTMLElement).style.display = "none")}
-            />
-          </div>
-        )}
+        <HeadlineImage item={item} size="md" className="h-32 w-full" />
         <div className="p-3">
           <div className="mb-1.5">{tags}</div>
           <h3 className="text-[14px] font-semibold leading-snug text-slate-900 line-clamp-3">{item.title}</h3>
@@ -83,17 +74,7 @@ export default function NewsCard({ item, index, variant = "full", showCountry = 
             <span>{timeAgo(item.publishedAt)}</span>
           </div>
         </div>
-        {item.imageUrl && (
-          <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-slate-100">
-            <img
-              src={item.imageUrl}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
-              onError={(e) => ((e.currentTarget.parentElement as HTMLElement).style.display = "none")}
-            />
-          </div>
-        )}
+        <HeadlineImage item={item} size="sm" className="w-24 h-24 shrink-0 rounded-xl" />
       </div>
     </button>
   );

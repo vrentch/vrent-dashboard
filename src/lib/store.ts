@@ -10,6 +10,7 @@ export interface Prefs {
   topics: string[];
   newsQuery: string;
   watchlist: string[];
+  recentSearches: string[];
 }
 
 const KEY = "vrent.prefs.v1";
@@ -19,6 +20,7 @@ const defaults: Prefs = {
   topics: [...DEFAULT_TOPICS],
   newsQuery: "",
   watchlist: [...DEFAULT_WATCHLIST],
+  recentSearches: [],
 };
 
 function load(): Prefs {
@@ -31,6 +33,7 @@ function load(): Prefs {
       topics: Array.isArray(parsed.topics) ? parsed.topics : defaults.topics,
       newsQuery: typeof parsed.newsQuery === "string" ? parsed.newsQuery : "",
       watchlist: Array.isArray(parsed.watchlist) ? parsed.watchlist : defaults.watchlist,
+      recentSearches: Array.isArray(parsed.recentSearches) ? parsed.recentSearches : [],
     };
   } catch {
     return { ...defaults };
@@ -75,4 +78,11 @@ export function usePrefs(): Prefs {
 
 export function toggleInList(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
+
+export function addRecentSearch(term: string) {
+  const t = term.trim();
+  if (!t) return;
+  const next = [t, ...state.recentSearches.filter((s) => s.toLowerCase() !== t.toLowerCase())].slice(0, 8);
+  setPrefs({ recentSearches: next });
 }
