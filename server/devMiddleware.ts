@@ -1,9 +1,10 @@
 import type { Connect } from "vite";
-import { handleApi } from "./router";
+import { handleApi } from "../api/[...path].ts";
 
 /**
  * Vite dev-server middleware that serves the same /api/* routes as the
- * production serverless function, so `npm run dev` has real live data.
+ * production serverless function (they share the exact same handleApi), so
+ * `npm run dev` has real live data.
  */
 export function apiDevMiddleware(): Connect.NextHandleFunction {
   return async (req, res, next) => {

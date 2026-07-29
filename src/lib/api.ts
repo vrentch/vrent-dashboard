@@ -1,6 +1,8 @@
 // Client-side API layer. Talks to /api/* which is served by the Vite dev
 // middleware locally and by the serverless function in production.
 
+import { COUNTRIES, TOPICS } from "../../shared/catalog";
+
 export interface NewsItem {
   id: string;
   title: string;
@@ -53,9 +55,40 @@ export function fetchNews(opts: {
   topics: string[];
   query?: string;
 }): Promise<NewsResponse> {
+  // The client owns the catalog, so it resolves each country×topic into a
+  // fully-formed feed descriptor. The serverless function stays catalog-free.
+  const countries = opts.countries.length
+    ? COUNTRIES.filter((c) => opts.countries.includes(c.code))
+    : [COUNTRIES[0]];
+  const topics = opts.topics.length
+    ? TOPICS.filter((t) => opts.topics.includes(t.key))
+    : [TOPICS[0]];
+
+  const spec = [] as Array<{
+    country: string;
+    topic: string;
+    hl: string;
+    gl: string;
+    ceid: string;
+    section?: string;
+    query?: string;
+  }>;
+  for (const c of countries) {
+    for (const t of topics) {
+      spec.push({
+        country: c.code,
+        topic: t.key,
+        hl: `${c.lang}-${c.code}`,
+        gl: c.code,
+        ceid: `${c.code}:${c.lang}`,
+        section: t.section,
+        query: t.query,
+      });
+    }
+  }
+
   const p = new URLSearchParams();
-  p.set("countries", opts.countries.join(","));
-  p.set("topics", opts.topics.join(","));
+  p.set("spec", JSON.stringify(spec));
   if (opts.query) p.set("q", opts.query);
   return getJson<NewsResponse>(`/api/news?${p.toString()}`);
 }
