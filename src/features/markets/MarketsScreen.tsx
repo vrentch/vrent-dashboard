@@ -3,7 +3,7 @@ import { RefreshCw, Star, ChevronRight } from "lucide-react";
 import { fetchQuotes, type Quote } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { fmtPrice, fmtPct } from "../../lib/format";
-import { REGIONS, type MarketRegion } from "../../data/markets";
+import { REGIONS, primaryIndex, type MarketRegion } from "../../data/markets";
 import RegionView from "./RegionView";
 import StockDetail from "./StockDetail";
 import WatchlistEditor from "./WatchlistEditor";
@@ -21,7 +21,7 @@ export default function MarketsScreen() {
   const loadIndexes = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const symbols = REGIONS.map((r) => r.index.symbol);
+      const symbols = REGIONS.map((r) => primaryIndex(r).symbol);
       const res = await fetchQuotes(symbols);
       const map: Record<string, Quote> = {};
       res.quotes.forEach((q) => (map[q.symbol.toUpperCase()] = q));
@@ -59,7 +59,8 @@ export default function MarketsScreen() {
       <div className="max-w-lg mx-auto px-4 py-4">
         <div className="grid grid-cols-2 gap-3">
           {REGIONS.map((r) => {
-            const q = indexQuotes[r.index.symbol.toUpperCase()];
+            const idx = primaryIndex(r);
+            const q = indexQuotes[idx.symbol.toUpperCase()];
             const up = (q?.changePercent ?? 0) >= 0;
             return (
               <button
@@ -72,7 +73,7 @@ export default function MarketsScreen() {
                   <ChevronRight size={16} className="text-slate-300 mt-1" />
                 </div>
                 <h2 className="mt-2 text-[15px] font-bold text-slate-900">{r.name}</h2>
-                <p className="text-[11px] text-slate-400">{r.index.label}</p>
+                <p className="text-[11px] text-slate-400">{idx.label}</p>
                 <div className="mt-2">
                   {!loaded && !q ? (
                     <div className="h-5 w-20 rounded skeleton" />
@@ -122,7 +123,7 @@ export default function MarketsScreen() {
         onClose={() => setOpenRegion(null)}
         title={openRegion?.name ?? ""}
         flag={openRegion?.flag ?? ""}
-        symbols={openRegion?.symbols ?? []}
+        indices={openRegion?.indices}
         onSelect={setSelected}
       />
 

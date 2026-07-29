@@ -3,6 +3,8 @@ import Sheet from "../../components/Sheet";
 import StockRow from "./StockRow";
 import { fetchQuotes, type Quote } from "../../lib/api";
 import { fmtPct, cleanSymbol } from "../../lib/format";
+import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
+import type { IndexDef } from "../../data/markets";
 import { TrendingUp, TrendingDown, Pencil, Plus } from "lucide-react";
 
 interface Props {
@@ -10,25 +12,35 @@ interface Props {
   onClose: () => void;
   title: string;
   flag: string;
-  symbols: string[];
+  indices?: IndexDef[]; // region mode
+  symbols?: string[]; // watchlist mode
   onSelect: (q: Quote) => void;
   watchlist?: boolean;
   onEdit?: () => void;
 }
 
-export default function RegionView({ open, onClose, title, flag, symbols, onSelect, watchlist, onEdit }: Props) {
+export default function RegionView({ open, onClose, title, flag, indices, symbols, onSelect, watchlist, onEdit }: Props) {
+  const prefs = usePrefs();
+  const [activeIdx, setActiveIdx] = useState(0);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const key = symbols.join(",");
+  // Reset to the first index whenever the sheet (re)opens.
   useEffect(() => {
-    if (!open || !symbols.length) {
+    if (open) setActiveIdx(0);
+  }, [open, title]);
+
+  const activeSymbols = indices ? indices[activeIdx]?.constituents ?? [] : symbols ?? [];
+  const key = activeSymbols.join(",");
+
+  useEffect(() => {
+    if (!open || !activeSymbols.length) {
       setQuotes([]);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetchQuotes(symbols)
+    fetchQuotes(activeSymbols)
       .then((r) => !cancelled && setQuotes(r.quotes))
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
@@ -45,6 +57,8 @@ export default function RegionView({ open, onClose, title, flag, symbols, onSele
   const gainers = sorted.filter((q) => (q.changePercent ?? 0) > 0).slice(0, 3);
   const losers = [...sorted].reverse().filter((q) => (q.changePercent ?? 0) < 0).slice(0, 3);
 
+  const toggleList = (sym: string) => setPrefs({ watchlist: toggleInList(prefs.watchlist, sym) });
+
   return (
     <Sheet
       open={open}
@@ -56,11 +70,28 @@ export default function RegionView({ open, onClose, title, flag, symbols, onSele
             onClick={onEdit}
             className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold active:scale-[0.98]"
           >
-            <Pencil size={15} /> Edit my list
+            <Pencil size={15} /> Add symbols
           </button>
         ) : undefined
       }
     >
+      {/* Index selector */}
+      {indices && indices.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 mb-4">
+          {indices.map((ix, i) => (
+            <button
+              key={ix.key}
+              onClick={() => setActiveIdx(i)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition border ${
+                i === activeIdx ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
+              }`}
+            >
+              {ix.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading && (
         <div className="space-y-2.5">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -91,11 +122,17 @@ export default function RegionView({ open, onClose, title, flag, symbols, onSele
 
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-              All {sorted.length} · biggest movers
+              {sorted.length} stocks · best to worst
             </h3>
             <div className="space-y-2.5">
               {sorted.map((q) => (
-                <StockRow key={q.symbol} quote={q} onClick={() => onSelect(q)} />
+                <StockRow
+                  key={q.symbol}
+                  quote={q}
+                  onClick={() => onSelect(q)}
+                  inList={prefs.watchlist.includes(q.symbol)}
+                  onToggleList={() => toggleList(q.symbol)}
+                />
               ))}
             </div>
           </div>

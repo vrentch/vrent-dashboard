@@ -4,7 +4,8 @@ import PriceChart from "../../components/PriceChart";
 import { fetchHistory, type History, type Quote } from "../../lib/api";
 import { computeAnalytics } from "../../lib/analytics";
 import { fmtPrice, fmtPct, fmtNum } from "../../lib/format";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { usePrefs, setPrefs, toggleInList } from "../../lib/store";
+import { TrendingUp, TrendingDown, Minus, Star } from "lucide-react";
 
 const RANGES = ["1D", "5D", "1M", "6M", "1Y", "5Y"];
 
@@ -13,6 +14,8 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
   const [history, setHistory] = useState<History | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const prefs = usePrefs();
+  const inList = quote ? prefs.watchlist.includes(quote.symbol) : false;
 
   useEffect(() => {
     if (!quote) return;
@@ -54,6 +57,18 @@ export default function StockDetail({ quote, onClose }: { quote: Quote | null; o
           <p className="text-xs text-slate-400 mt-0.5">
             {quote.exchange} {quote.marketState && `· ${quote.marketState}`}
           </p>
+
+          <button
+            onClick={() => setPrefs({ watchlist: toggleInList(prefs.watchlist, quote.symbol) })}
+            className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition active:scale-95 border ${
+              inList
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-white text-slate-700 border-slate-200"
+            }`}
+          >
+            <Star size={15} fill={inList ? "currentColor" : "none"} />
+            {inList ? "In my list" : "Add to my list"}
+          </button>
         </div>
 
         <div>

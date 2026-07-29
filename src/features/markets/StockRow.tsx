@@ -1,45 +1,59 @@
 import type { Quote } from "../../lib/api";
 import { fmtPrice, fmtPct, cleanSymbol } from "../../lib/format";
 import Sparkline from "../../components/Sparkline";
+import { Star } from "lucide-react";
 
 export default function StockRow({
   quote,
   spark,
   onClick,
+  inList,
+  onToggleList,
 }: {
   quote: Quote;
   spark?: number[];
   onClick: () => void;
+  inList?: boolean;
+  onToggleList?: () => void;
 }) {
   const up = (quote.changePercent ?? 0) >= 0;
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-200/70 card-shadow active:scale-[0.99] transition text-left"
-    >
-      <div className="min-w-0 flex-1">
-        <span className="font-semibold text-slate-900 text-[15px]">{cleanSymbol(quote.symbol)}</span>
-        <p className="text-xs text-slate-400 truncate">{quote.name}</p>
-      </div>
-
-      {spark && spark.length > 1 && (
-        <div className="w-16 h-8 shrink-0">
-          <Sparkline values={spark} width={64} height={32} fill />
+    <div className="w-full flex items-center gap-2.5 p-3 rounded-2xl bg-white border border-slate-200/70 card-shadow">
+      <button onClick={onClick} className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-70">
+        <div className="min-w-0 flex-1">
+          <span className="font-semibold text-slate-900 text-[15px]">{cleanSymbol(quote.symbol)}</span>
+          <p className="text-xs text-slate-400 truncate">{quote.name}</p>
         </div>
-      )}
 
-      <div className="text-right shrink-0 min-w-[86px]">
-        <p className="font-semibold text-slate-900 text-[15px] tabular-nums">
-          {fmtPrice(quote.price, quote.currency)}
-        </p>
-        <p
-          className={`inline-block text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md ${
-            up ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+        {spark && spark.length > 1 && (
+          <div className="w-14 h-8 shrink-0">
+            <Sparkline values={spark} width={56} height={32} fill />
+          </div>
+        )}
+
+        <div className="text-right shrink-0 min-w-[84px]">
+          <p className="font-semibold text-slate-900 text-[15px] tabular-nums">{fmtPrice(quote.price, quote.currency)}</p>
+          <p
+            className={`inline-block text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md ${
+              up ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+            }`}
+          >
+            {fmtPct(quote.changePercent)}
+          </p>
+        </div>
+      </button>
+
+      {onToggleList && (
+        <button
+          onClick={onToggleList}
+          className={`grid place-items-center w-9 h-9 shrink-0 rounded-full active:scale-90 transition ${
+            inList ? "text-amber-500" : "text-slate-300"
           }`}
+          aria-label={inList ? "Remove from my list" : "Add to my list"}
         >
-          {fmtPct(quote.changePercent)}
-        </p>
-      </div>
-    </button>
+          <Star size={19} fill={inList ? "currentColor" : "none"} />
+        </button>
+      )}
+    </div>
   );
 }

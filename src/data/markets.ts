@@ -1,63 +1,99 @@
-// Curated market regions for the Markets overview. Each region maps to a
-// headline index plus a basket of constituent symbols (verified against CNBC).
-// Switzerland uses native SIX symbols (CHF); Europe uses US-listed ADRs (USD);
-// the US uses plain tickers. Crypto uses the app's Yahoo-style aliases that the
-// server maps to CNBC coin symbols.
+// Curated market regions → selectable indices → constituent symbols (all
+// verified against CNBC). Switzerland uses native SIX symbols (CHF); Europe/UK
+// use US-listed ADRs (USD); the US uses plain tickers; crypto uses the app's
+// Yahoo-style aliases that the server maps to CNBC coin symbols.
+
+export interface IndexDef {
+  key: string;
+  symbol: string; // headline index quote (Yahoo-style alias)
+  label: string;
+  constituents: string[];
+}
 
 export interface MarketRegion {
   key: string;
   name: string;
   flag: string;
-  index: { symbol: string; label: string };
-  symbols: string[];
+  indices: IndexDef[];
 }
+
+const US_SP500 = [
+  "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK.B", "JPM", "V",
+  "UNH", "XOM", "MA", "JNJ", "PG", "HD", "COST", "ABBV", "MRK", "CVX",
+  "PEP", "KO", "WMT", "BAC", "AVGO", "ADBE", "CRM", "NFLX", "AMD", "DIS",
+];
+const US_NASDAQ = [
+  "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "ADBE", "CRM",
+  "NFLX", "AMD", "CSCO", "TMUS", "TXN", "QCOM", "AMAT", "INTU", "ISRG", "BKNG",
+  "MU", "LRCX", "ADI", "GILD", "MDLZ", "PANW", "SNPS", "CDNS", "ABNB", "MRVL",
+  "FTNT", "ADP", "CMCSA", "PEP", "COST",
+];
+const US_DOW = [
+  "AAPL", "MSFT", "JPM", "V", "UNH", "HD", "PG", "JNJ", "KO", "MCD",
+  "CVX", "MRK", "WMT", "DIS", "CAT", "GS", "AXP", "BA", "IBM", "NKE",
+  "HON", "AMGN", "CRM", "TRV", "VZ", "CSCO", "MMM", "DOW", "SHW", "NVDA",
+];
+
+const EU_STOXX = [
+  "ASML", "SAP", "TTE", "SIEGY", "ALIZY", "LVMUY", "SAN", "BBVA", "STLA", "E",
+  "BASFY", "MBGYY", "VWAGY", "ING", "BUD", "SNY", "DB", "DTEGY", "ADDYY", "BAYRY",
+  "MURGY", "IFNNY",
+];
+const EU_DAX = [
+  "SAP", "SIEGY", "ALIZY", "BASFY", "MBGYY", "VWAGY", "DB", "DTEGY", "ADDYY",
+  "BAYRY", "MURGY", "IFNNY",
+];
+const EU_FTSE = [
+  "AZN", "SHEL", "BP", "RIO", "BTI", "UL", "DEO", "HSBC", "GSK", "BCS",
+  "VOD", "NGG", "RELX", "PUK", "LYG",
+];
+
+const CH_SMI = [
+  "NESN-CH", "NOVN-CH", "RO-CH", "UBSG-CH", "ZURN-CH", "ABBN-CH", "CFR-CH",
+  "SIKA-CH", "GIVN-CH", "LONN-CH", "SLHN-CH", "SREN-CH", "HOLN-CH", "GEBN-CH",
+  "PGHN-CH", "ALC-CH", "SCMN-CH", "KNIN-CH", "SGSN-CH", "UHR-CH", "LOGI",
+];
+
+const CRYPTO = [
+  "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD",
+  "ADA-USD", "AVAX-USD", "LINK-USD", "DOT-USD", "LTC-USD",
+];
 
 export const REGIONS: MarketRegion[] = [
   {
     key: "us",
     name: "United States",
     flag: "🇺🇸",
-    index: { symbol: "^GSPC", label: "S&P 500" },
-    symbols: [
-      "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK.B", "JPM", "V",
-      "UNH", "XOM", "MA", "JNJ", "PG", "HD", "COST", "ABBV", "MRK", "CVX",
-      "PEP", "KO", "WMT", "BAC", "AVGO", "ADBE", "CRM", "NFLX", "AMD", "DIS",
+    indices: [
+      { key: "sp500", symbol: "^GSPC", label: "S&P 500", constituents: US_SP500 },
+      { key: "nasdaq", symbol: "^IXIC", label: "Nasdaq", constituents: US_NASDAQ },
+      { key: "dow", symbol: "^DJI", label: "Dow Jones", constituents: US_DOW },
     ],
   },
   {
     key: "europe",
     name: "Europe",
     flag: "🇪🇺",
-    index: { symbol: "^STOXX50E", label: "Euro Stoxx 50" },
-    symbols: [
-      "ASML", "SAP", "NVO", "AZN", "SHEL", "TTE", "UL", "SNY", "BUD", "DEO",
-      "SAN", "BBVA", "ING", "BP", "RIO", "BTI", "SIEGY", "STLA", "E", "DB",
-      "PHG", "MBGYY", "VWAGY", "BASFY", "ALIZY", "LVMUY",
+    indices: [
+      { key: "stoxx", symbol: "^STOXX50E", label: "Euro Stoxx 50", constituents: EU_STOXX },
+      { key: "dax", symbol: "^GDAXI", label: "DAX (Germany)", constituents: EU_DAX },
+      { key: "ftse", symbol: "^FTSE", label: "FTSE 100 (UK)", constituents: EU_FTSE },
     ],
   },
   {
     key: "switzerland",
     name: "Switzerland",
     flag: "🇨🇭",
-    index: { symbol: "^SSMI", label: "SMI" },
-    symbols: [
-      "NESN-CH", "NOVN-CH", "RO-CH", "UBSG-CH", "ZURN-CH", "ABBN-CH", "CFR-CH",
-      "SIKA-CH", "GIVN-CH", "LONN-CH", "SLHN-CH", "SREN-CH", "HOLN-CH", "GEBN-CH",
-      "PGHN-CH", "ALC-CH", "SCMN-CH", "KNIN-CH", "SGSN-CH", "UHR-CH", "LOGI",
-    ],
+    indices: [{ key: "smi", symbol: "^SSMI", label: "SMI", constituents: CH_SMI }],
   },
   {
     key: "crypto",
     name: "Crypto",
     flag: "🪙",
-    index: { symbol: "BTC-USD", label: "Bitcoin" },
-    symbols: [
-      "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD",
-      "ADA-USD", "AVAX-USD", "LINK-USD", "DOT-USD", "LTC-USD",
-    ],
+    indices: [{ key: "coins", symbol: "BTC-USD", label: "Top coins", constituents: CRYPTO }],
   },
 ];
 
-export function regionByKey(key: string): MarketRegion | undefined {
-  return REGIONS.find((r) => r.key === key);
+export function primaryIndex(r: MarketRegion): IndexDef {
+  return r.indices[0];
 }
