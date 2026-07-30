@@ -8,7 +8,10 @@ export interface PreparedImage {
   mediaType: "image/jpeg";
 }
 
-export async function prepareImage(file: File, maxDim = 1024, quality = 0.8): Promise<PreparedImage> {
+// Default to a larger long-edge (1536px) and higher quality so the vision model
+// can read fine detail — critical for accurate meal recognition. Modern Claude
+// vision models accept up to 2576px, so this is well within range.
+export async function prepareImage(file: File, maxDim = 1536, quality = 0.82): Promise<PreparedImage> {
   const bitmap = await loadBitmap(file);
   const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));

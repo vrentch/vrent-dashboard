@@ -820,6 +820,10 @@ async function getSportsStandings(sport: string, league: string) {
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const AI_KEY = process.env.ANTHROPIC_API_KEY;
 const AI_MODEL = process.env.AI_MODEL || "claude-haiku-4-5";
+// Vision (food photos, scanner) uses a stronger model by default — meal
+// recognition is far more accurate on Sonnet than on Haiku. Override with
+// AI_VISION_MODEL; falls back to AI_MODEL automatically if it's unavailable.
+const AI_VISION_MODEL = process.env.AI_VISION_MODEL || "claude-sonnet-5";
 // Optional shared access code that gates the paid AI features. When set, every
 // AI request must include the matching code or it is rejected BEFORE any
 // Anthropic call is made — so a stranger with the URL can never spend credit.
@@ -945,35 +949,44 @@ const IDENTIFY_PROMPT = `You are a visual identification assistant. Look at the 
 }
 Provide up to 5 useful details. Be accurate; if unsure, say so in the summary.`;
 
-const FOOD_PROMPT = `You are a nutrition estimator. Look at the food photo and estimate its nutrition. Respond with ONLY a JSON object, no prose, matching exactly:
+const FOOD_PROMPT = `You are an expert nutritionist estimating a meal's nutrition from a photo. Work carefully and systematically:
+1. Identify EVERY distinct food and drink in the image — including sides, sauces, dressings, cooking oil, cheese, and garnishes that add real calories. Don't miss items partly hidden or in the background.
+2. Estimate each item's portion using visual cues: plate/bowl size, cutlery, hands, packaging, or standard serving sizes. Judge cooking method (fried/roasted adds oil; grilled/steamed adds little).
+3. Give realistic calorie and macro values for the portion actually shown — not generic averages. A large restaurant portion is not a "standard" serving.
+Respond with ONLY a JSON object, no prose, matching exactly:
 {
-  "items": [{"name": "food item", "portion": "estimated portion", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
+  "items": [{"name": "specific food name", "portion": "estimated portion e.g. '1 cup' or '200g'", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
   "total": {"calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0},
   "confidence": "low | medium | high",
-  "note": "one short caveat or tip"
+  "note": "one short caveat or assumption you made"
 }
-Estimate realistic values for a normal serving as shown. Round to whole numbers. If the image is not food, return empty items, zeroed total, and explain in note.`;
+Round to whole numbers. "total" MUST equal the sum of the items. If the image is not food, return empty items, a zeroed total, confidence "low", and explain in the note.`;
 
 async function aiVision(task: string, image: string, mediaType: string, code?: unknown) {
   if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
   if (!codeMatches(code)) return NEED_CODE;
   const prompt = task === "food" ? FOOD_PROMPT : IDENTIFY_PROMPT;
-  const json = await anthropic({
-    model: AI_MODEL,
-    max_tokens: 900,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
-          { type: "text", text: prompt },
-        ],
-      },
-    ],
-  });
+  const maxTokens = task === "food" ? 1400 : 1000;
+  const content = [
+    { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
+    { type: "text", text: prompt },
+  ];
+
+  // Prefer the stronger vision model; disable thinking so it can't eat the
+  // token budget on this structured-extraction call. Fall back to the base
+  // model if the vision model isn't available on this key/region.
+  let json: any;
+  let usedModel = AI_VISION_MODEL;
+  try {
+    json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
+  } catch {
+    usedModel = AI_MODEL;
+    json = await anthropic({ model: AI_MODEL, max_tokens: maxTokens, messages: [{ role: "user", content }] });
+  }
+
   const data = parseModelJson(aiText(json));
   if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
-  return { status: 200, body: { ok: true, data: normalizeVision(task, data), model: AI_MODEL } };
+  return { status: 200, body: { ok: true, data: normalizeVision(task, data), model: usedModel } };
 }
 
 function normalizePlan(d: any) {
