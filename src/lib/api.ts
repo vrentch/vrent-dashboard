@@ -224,6 +224,23 @@ export function pullHealth(key: string): Promise<{ configured: boolean; days: Sy
   return getJson(`/api/health-pull?key=${encodeURIComponent(key)}`);
 }
 
+// Daily briefing --------------------------------------------------------------
+export interface BriefingNewsItem { title: string; source: string; link: string; section: string; why: string; }
+export interface BriefingMarket { symbol: string; name: string; price: number | null; changePercent: number | null; }
+export interface BriefingHealth { headline: string; advice: string; focus: string[]; }
+export interface BriefingResult {
+  ok: boolean;
+  configured?: boolean;
+  needCode?: boolean;
+  slot?: string;
+  news?: { items: BriefingNewsItem[]; note?: string };
+  market?: BriefingMarket[] | null;
+  health?: BriefingHealth | null;
+}
+export function fetchBriefing(slot: string, health: unknown): Promise<BriefingResult> {
+  return postJson(`/api/briefing`, { slot, health, code: getAiCode() });
+}
+
 // Shared AI access code (stored once per device). Attached to every AI request.
 const AI_CODE_KEY = "vrent.aicode.v1";
 export function getAiCode(): string {

@@ -10,10 +10,9 @@ import StockRow from "../markets/StockRow";
 import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
-import BriefingSheet from "./BriefingSheet";
 import { ChevronRight as Chev, CalendarDays, Plus } from "lucide-react";
 
-type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings";
+type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing";
 
 export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const prefs = usePrefs();
@@ -72,7 +71,6 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const events = useEvents();
-  const [briefingOpen, setBriefingOpen] = useState(false);
   const todayEvents = useMemo(() => eventsOn(events, todayKey()), [events]);
   const upcomingEvents = useMemo(() => upcoming(events, todayKey()).slice(0, 3), [events]);
   const avgChange = useMemo(() => {
@@ -111,7 +109,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
         {/* Daily briefing — tap to expand into the full one-pager */}
         <button
-          onClick={() => setBriefingOpen(true)}
+          onClick={() => onNavigate("briefing")}
           className="w-full text-left relative overflow-hidden rounded-3xl p-5 text-white active:scale-[0.99] transition"
           style={{ background: "linear-gradient(135deg, #27272a 0%, #18181b 55%, #09090b 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
         >
@@ -119,7 +117,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
           <div className="relative">
             <div className="flex items-center justify-between mb-2.5">
               <h2 className="text-sm font-semibold text-white/85">Today's briefing</h2>
-              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-white/90">Full brief <Chev size={14} /></span>
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-white/90">Open <Chev size={14} /></span>
             </div>
             <ul className="space-y-1.5 text-[15px] font-medium">
               <li className="flex items-center gap-2">
@@ -145,7 +143,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
                 </li>
               )}
             </ul>
-            <p className="mt-3 text-xs text-white/70">Tap for a detailed overview of your day →</p>
+            <p className="mt-3 text-xs text-white/70">Tap for your full AI briefing — top news, markets & health →</p>
           </div>
         </button>
 
@@ -238,18 +236,6 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
 
       <StockDetail quote={selected} onClose={() => setSelected(null)} />
       <ArticleReader item={reading} onClose={() => setReading(null)} />
-      <BriefingSheet
-        open={briefingOpen}
-        onClose={() => setBriefingOpen(false)}
-        movers={movers}
-        avgChange={avgChange}
-        news={news}
-        events={todayEvents}
-        onOpenArticle={(n) => {
-          setBriefingOpen(false);
-          setReading(n);
-        }}
-      />
     </div>
   );
 }

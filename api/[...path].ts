@@ -1197,6 +1197,119 @@ async function healthPull(key: string) {
   return { status: 200, body: { configured: true, days } };
 }
 
+// ── Daily briefings ──────────────────────────────────────────────────────────
+// News is accumulated through the day (piggybacking on the news the app already
+// fetches — no cron needed), then an AI editor ranks the day's most important
+// stories at briefing time. The briefing also folds in a market snapshot and a
+// short AI health recommendation from the user's own data.
+function utcDay(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function collectDayNews(items: any[]): Promise<void> {
+  if (!kvConfigured() || !Array.isArray(items) || items.length === 0) return;
+  const key = `news:day:${utcDay()}`;
+  try {
+    const raw = await kv(["GET", key]);
+    let arr: any[] = [];
+    try { if (raw) arr = JSON.parse(raw); } catch { arr = []; }
+    const seen = new Set(arr.map((a) => a.id));
+    let added = 0;
+    for (const it of items) {
+      if (!it?.id || seen.has(it.id)) continue;
+      seen.add(it.id);
+      arr.push({ id: it.id, title: it.title, source: it.source, section: it.topicKey || "", country: it.countryCode || "", link: it.link, at: it.publishedAt || null });
+      added++;
+    }
+    if (!added) return;
+    if (arr.length > 400) arr = arr.slice(arr.length - 400);
+    await kv(["SET", key, JSON.stringify(arr), "EX", 172800]);
+  } catch {
+    /* collection is best-effort */
+  }
+}
+
+async function rankDayNews(date: string) {
+  if (!kvConfigured()) return { items: [], note: "Storage not set up." };
+  const raw = await kv(["GET", `news:day:${date}`]);
+  let arr: any[] = [];
+  try { if (raw) arr = JSON.parse(raw); } catch { arr = []; }
+  if (!arr.length) return { items: [], note: "No news gathered yet today — open the News tab and it'll fill up." };
+  const recent = arr.slice(-140);
+  const list = recent.map((a, i) => `${i}. [${a.section || a.country || "general"}] ${a.title} — ${a.source}`).join("\n");
+  const prompt = `You are a news editor assembling a reader's daily briefing. From the day's headlines below, pick the TOP 10 most important and newsworthy, spread across different sections (don't over-pick one topic). Respond with ONLY a JSON object:
+{"items":[{"i": <headline number>, "section":"short section label", "why":"one short sentence on why it matters"}]}
+Headlines:
+${list}`;
+  try {
+    const json = await anthropic({ model: AI_MODEL, max_tokens: 900, messages: [{ role: "user", content: [{ type: "text", text: prompt }] }] });
+    const parsed = parseModelJson(aiText(json));
+    const picks = Array.isArray(parsed?.items) ? parsed.items : [];
+    const items = picks
+      .map((p: any) => {
+        const src = recent[Number(p?.i)];
+        if (!src) return null;
+        return { title: str(src.title), source: str(src.source), link: str(src.link), section: str(p?.section) || str(src.section), why: str(p?.why) };
+      })
+      .filter(Boolean)
+      .slice(0, 10);
+    return { items };
+  } catch {
+    // Fall back to the most recent headlines unranked.
+    return { items: recent.slice(-10).reverse().map((a) => ({ title: str(a.title), source: str(a.source), link: str(a.link), section: str(a.section), why: "" })), note: "Showing latest (ranking unavailable)." };
+  }
+}
+
+async function healthAdvice(slot: string, summary: any) {
+  const prompt = `You are a supportive, practical health coach. It's the user's ${slot} check-in. Using their data today and recent trend, write a short, specific, encouraging note. Data: ${JSON.stringify(summary).slice(0, 1600)}.
+Respond with ONLY JSON: {"headline":"<4-8 word upbeat headline>","advice":"<2-3 sentences, concrete and personal>","focus":["<short actionable tip>","<short actionable tip>"]}.`;
+  try {
+    const json = await anthropic({ model: AI_MODEL, max_tokens: 450, messages: [{ role: "user", content: [{ type: "text", text: prompt }] }] });
+    const d = parseModelJson(aiText(json));
+    if (!d) return null;
+    return { headline: str(d.headline), advice: str(d.advice), focus: arr<any>(d.focus).map(str).filter(Boolean).slice(0, 3) };
+  } catch {
+    return null;
+  }
+}
+
+async function briefingHandler(body: any) {
+  if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  if (!codeMatches(body?.code)) return NEED_CODE;
+  const slot = ["morning", "lunch", "evening"].includes(body?.slot) ? body.slot : "morning";
+  const date = utcDay();
+
+  // Top news, cached per day+slot (shared, so repeated opens don't re-bill AI).
+  let news: any = null;
+  const cacheKey = `briefing:news:${date}:${slot}`;
+  if (kvConfigured()) {
+    try { const c = await kv(["GET", cacheKey]); if (c) news = JSON.parse(c); } catch { news = null; }
+  }
+  if (!news) {
+    news = await rankDayNews(date);
+    if (kvConfigured() && news?.items?.length) {
+      try { await kv(["SET", cacheKey, JSON.stringify(news), "EX", 10800]); } catch { /* ignore */ }
+    }
+  }
+
+  // Market snapshot.
+  let market: any = null;
+  try {
+    const { quotes } = await getQuotes(["^GSPC", "^IXIC", "^DJI", "^GDAXI", "^SSMI"]);
+    market = quotes.map((q: any) => ({ symbol: q.symbol, name: q.name, price: q.price, changePercent: q.changePercent }));
+  } catch {
+    market = null;
+  }
+
+  // Personal health advice from the summary the client sends.
+  let health: any = null;
+  if (body?.health && typeof body.health === "object") {
+    health = await healthAdvice(slot, body.health);
+  }
+
+  return { status: 200, body: { ok: true, slot, date, news, market, health, model: AI_MODEL } };
+}
+
 // Exchange hours for open/close pushes.
 const PUSH_MARKETS = [
   { key: "us", name: "US markets", tz: "America/New_York", open: 9 * 60 + 30, close: 16 * 60 },
@@ -1327,6 +1440,9 @@ export async function handleApi(
         specs = [];
       }
       const data = await getNews(Array.isArray(specs) ? specs : [], search.get("q") || undefined);
+      // Accumulate the day's headlines for the briefing (best-effort, no-op if
+      // storage isn't configured).
+      try { await collectDayNews((data as any).items); } catch { /* ignore */ }
       return { status: 200, body: data };
     }
 
@@ -1407,6 +1523,10 @@ export async function handleApi(
       return await healthPull(search.get("key") || ctx.body?.key || "");
     }
 
+    if (route === "briefing") {
+      return await briefingHandler(ctx.body || {});
+    }
+
     return { status: 404, body: { error: `unknown route: ${route}` } };
   } catch (err) {
     return { status: 502, body: { error: String(err instanceof Error ? err.message : err) } };
@@ -1455,7 +1575,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // sources momentarily down) must also not be cached, or the CDN would pin the
   // empty screen for its whole TTL — force a fresh retry on the next request.
   const emptyNews = url.pathname.endsWith("/news") && (out as any)?.count === 0;
-  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || url.pathname.includes("/health-") || emptyNews;
+  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || url.pathname.includes("/health-") || url.pathname.endsWith("/briefing") || emptyNews;
   res.setHeader("Cache-Control", cache || (noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300"));
   res.end(JSON.stringify(out));
 }

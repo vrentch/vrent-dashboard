@@ -7,6 +7,7 @@ import SportsScreen from "./features/sports/SportsScreen";
 import HealthScreen from "./features/health/HealthScreen";
 import ScanScreen from "./features/scan/ScanScreen";
 import CalendarScreen from "./features/calendar/CalendarScreen";
+import BriefingScreen from "./features/briefing/BriefingScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import LockScreen from "./features/lock/LockScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -16,7 +17,7 @@ import { fetchHealthStatus, pullHealth } from "./lib/api";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
-export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings";
+export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing";
 
 // Six primary destinations in the bottom bar. Calendar and Settings are
 // reachable from the Home screen (calendar widget + header gear) to keep the
@@ -96,6 +97,7 @@ export default function App() {
           {tab === "health" && <HealthScreen />}
           {tab === "scan" && <ScanScreen />}
           {tab === "calendar" && <CalendarScreen />}
+          {tab === "briefing" && <BriefingScreen onBack={() => setTab("home")} />}
           {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
         </ErrorBoundary>
       </main>
