@@ -216,34 +216,57 @@ function dedupe(items: NewsItem[]): NewsItem[] {
   return out;
 }
 
+// Last-good results per feed, remembered in the warm serverless instance. When
+// a live fetch fails, we serve this instead of an empty screen — keeping the
+// user's own country/language, just a little older. 2-hour freshness window.
+const specCache = new Map<string, { at: number; items: NewsItem[] }>();
+const SPEC_TTL = 2 * 60 * 60 * 1000;
+
+async function fetchSpec(s: FeedSpec, query?: string): Promise<NewsItem[]> {
+  const key = JSON.stringify([s.country, s.topic, s.section || "", s.query || "", query || ""]);
+  const tag = (items: FeedItem[]): NewsItem[] => items.map((it) => ({ ...it, countryCode: s.country, topicKey: s.topic }));
+
+  // 1) Primary: Google News (localized, best quality) with retry.
+  try {
+    const items = tag(await fetchFeed(gnUrl(s, query), `${s.country} · ${s.topic}`));
+    if (items.length) {
+      specCache.set(key, { at: Date.now(), items });
+      return items;
+    }
+  } catch {
+    /* fall through */
+  }
+
+  // 2) Serve last-good cached content for this exact feed if still fresh —
+  //    keeps the user's language/country during a brief Google outage.
+  const cached = specCache.get(key);
+  if (cached && Date.now() - cached.at < SPEC_TTL) return cached.items;
+
+  // 3) Last resort (never loaded before AND Google is down): BBC feeds.
+  for (const url of fallbackFeeds(s)) {
+    try {
+      const items = tag(await fetchFeed(url, `${s.country} · ${s.topic}`));
+      if (items.length) {
+        specCache.set(key, { at: Date.now(), items });
+        return items;
+      }
+    } catch {
+      /* try next fallback */
+    }
+  }
+  return [];
+}
+
 async function getNews(specs: FeedSpec[], query?: string) {
   const list = specs.length ? specs : [];
   const tagged: NewsItem[] = [];
   const errors: string[] = [];
 
-  await Promise.all(
-    list.map(async (s) => {
-      const tag = (items: FeedItem[]) => {
-        for (const it of items) tagged.push({ ...it, countryCode: s.country, topicKey: s.topic });
-      };
-      try {
-        tag(await fetchFeed(gnUrl(s, query), `${s.country} · ${s.topic}`));
-      } catch {
-        // Google News unreachable for this datacenter IP right now — fall back
-        // to BBC feeds so news still shows.
-        const before = tagged.length;
-        for (const url of fallbackFeeds(s)) {
-          try {
-            const items = await fetchFeed(url, `${s.country} · ${s.topic}`);
-            if (items.length) { tag(items); break; }
-          } catch {
-            /* try next fallback */
-          }
-        }
-        if (tagged.length === before) errors.push(`${s.country}/${s.topic}: news source unavailable`);
-      }
-    })
-  );
+  const results = await Promise.all(list.map((s) => fetchSpec(s, query)));
+  results.forEach((items, i) => {
+    if (items.length) tagged.push(...items);
+    else errors.push(`${list[i].country}/${list[i].topic}: news source unavailable`);
+  });
 
   const merged = dedupe(tagged);
   merged.sort((a, b) => (b.publishedAt ? Date.parse(b.publishedAt) : 0) - (a.publishedAt ? Date.parse(a.publishedAt) : 0));
@@ -1121,8 +1144,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const { status, body: out } = await handleApi(url.pathname, url.searchParams, { method: req.method, body });
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
-  // Push/tick endpoints must never be cached.
-  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-");
+  // Push/tick/AI endpoints must never be cached. An empty news response (all
+  // sources momentarily down) must also not be cached, or the CDN would pin the
+  // empty screen for its whole TTL — force a fresh retry on the next request.
+  const emptyNews = url.pathname.endsWith("/news") && (out as any)?.count === 0;
+  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || emptyNews;
   res.setHeader("Cache-Control", noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300");
   res.end(JSON.stringify(out));
 }
