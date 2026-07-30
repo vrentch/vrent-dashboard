@@ -1,7 +1,7 @@
 import Sheet from "../../components/Sheet";
 import { Footprints, Scale, Moon, Droplets, Flame } from "lucide-react";
 
-const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://acapp-ch.vercel.app";
+const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://ac-news-tau.vercel.app";
 
 export default function AppleHealthSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const example = `${ORIGIN}/?steps=[Steps]&weight=[Weight]&sleep=[Sleep]&water=[Water]&kcal=[Active Energy]`;
