@@ -1381,13 +1381,6 @@ export async function handleApi(
       return { status: 200, body: { configured: kvConfigured() } };
     }
 
-    if (route === "kv-debug") {
-      // Diagnostic: report the NAMES (not values) of any storage-related env
-      // vars, so we can see what the Vercel storage integration created.
-      const names = Object.keys(process.env).filter((n) => /KV|UPSTASH|REDIS/i.test(n)).sort();
-      return { status: 200, body: { names, urlSeen: !!KV_URL, tokenSeen: !!KV_TOKEN } };
-    }
-
     if (route === "health-push") {
       // Accept the key + metrics from either the query string (Shortcut GET) or
       // a JSON POST body.
