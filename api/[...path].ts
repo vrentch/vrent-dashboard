@@ -1035,8 +1035,10 @@ Base calorie/macro targets on the profile (goal, activity). Provide a 7-day work
 // of that is missing, the feature reports "not configured" and nothing breaks.
 
 const VAPID_PUBLIC = "BNxnJi4BuHQzkMrh9pFVr3sJq70P15NklzGvjIJCO3EdA-Kxx3Siwr9aHTzZ3iPBQ8eJOdI4cmyxdT6FkYzuOPU";
-const KV_URL = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+// Accept either the Vercel KV names or the native Upstash names, so whichever
+// the storage integration injects works without extra config.
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
 
 function pushConfigured(): boolean {
