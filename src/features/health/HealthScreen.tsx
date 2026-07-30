@@ -12,6 +12,7 @@ import ProfileSheet from "./ProfileSheet";
 import LogSheet from "./LogSheet";
 import FoodConfirmSheet from "./FoodConfirmSheet";
 import MealEditSheet from "./MealEditSheet";
+import QuickAddFoods from "./QuickAddFoods";
 import PlanSheet from "./PlanSheet";
 import AppleHealthSheet from "./AppleHealthSheet";
 
@@ -171,6 +172,9 @@ export default function HealthScreen() {
             <p className="text-[11px] text-slate-400 dark:text-slate-500">Steps · workout · water · sleep</p>
           </button>
         </div>
+
+        {/* One-tap common foods & drinks */}
+        <QuickAddFoods />
 
         {/* Apple Health */}
         <button onClick={() => setAppleOpen(true)} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">

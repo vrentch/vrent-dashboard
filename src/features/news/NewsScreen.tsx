@@ -9,6 +9,7 @@ import NewsFilters from "./NewsFilters";
 import ArticleReader from "./ArticleReader";
 import SearchSheet from "./SearchSheet";
 import StoriesViewer from "./StoriesViewer";
+import { isSeen } from "../../lib/seen";
 
 type GroupBy = "country" | "topic";
 type Focus = { type: GroupBy; value: string } | null;
@@ -73,6 +74,23 @@ export default function NewsScreen() {
     if (!focus) return [];
     return items.filter((it) => (focus.type === "country" ? it.countryCode : it.topicKey) === focus.value);
   }, [items, focus]);
+
+  // Shorts source: de-duplicate (the same story can appear under several
+  // countries/topics) and prefer stories not yet seen. If everything's been
+  // seen, fall back to the full de-duped list so the button is never empty.
+  // The News tab itself keeps every story, seen or not.
+  const storyItems = useMemo(() => {
+    const base = focus ? focusItems : items;
+    const seenKeys = new Set<string>();
+    const deduped = base.filter((it) => {
+      const k = it.id || it.link || it.title;
+      if (seenKeys.has(k)) return false;
+      seenKeys.add(k);
+      return true;
+    });
+    const fresh = deduped.filter((it) => !isSeen(it.id));
+    return fresh.length > 0 ? fresh : deduped;
+  }, [items, focusItems, focus, storiesOpen]);
 
   const groupLabel = (type: GroupBy, value: string) => {
     if (type === "country") {
@@ -218,9 +236,9 @@ export default function NewsScreen() {
       <SearchSheet open={searchOpen} onClose={() => setSearchOpen(false)} onOpen={setReading} />
       <StoriesViewer
         open={storiesOpen}
-        items={focus ? focusItems : items}
+        items={storyItems}
         onClose={() => setStoriesOpen(false)}
-        onOpenArticle={(it) => { setStoriesOpen(false); setReading(it); }}
+        onOpenArticle={(it) => setReading(it)}
       />
       <ArticleReader item={reading} onClose={() => setReading(null)} />
     </div>

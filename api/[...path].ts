@@ -370,8 +370,17 @@ async function fetchOgImage(url: string): Promise<string | null> {
     const m =
       html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::url)?|twitter:image(?::src)?)["'][^>]+content=["']([^"']+)["']/i) ||
       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image(?::url)?|twitter:image(?::src)?)["']/i);
-    if (m && m[1]) {
-      const raw = decodeEntities(m[1].trim());
+    // Fallbacks for publishers that don't emit og:image: image_src link,
+    // schema.org itemprop, or a JSON-LD image/thumbnail field.
+    const alt =
+      m ||
+      html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+itemprop=["']image["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/"image"\s*:\s*"([^"']+?\.(?:jpe?g|png|webp)[^"']*)"/i) ||
+      html.match(/"image"\s*:\s*\{[^}]*?"url"\s*:\s*"([^"']+)"/i) ||
+      html.match(/"thumbnailUrl"\s*:\s*"([^"']+)"/i);
+    if (alt && alt[1]) {
+      const raw = decodeEntities(alt[1].trim());
       const abs = raw.startsWith("//") ? "https:" + raw : raw.startsWith("/") ? new URL(raw, url).toString() : raw;
       if (safeHttpUrl(abs)) return upscaleImage(abs);
     }

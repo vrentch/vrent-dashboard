@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, BookOpen, ExternalLink, ChevronUp } from "lucide-react";
 import type { NewsItem } from "../../lib/api";
 import { timeAgo, hostOf } from "../../lib/format";
+import { markSeen } from "../../lib/seen";
 import HeadlineImage from "./HeadlineImage";
 
 /** Full-screen, swipeable (vertical scroll-snap) news reader — Shorts/Stories style. */
@@ -32,6 +33,11 @@ export default function StoriesViewer({
     };
   }, [open, onClose]);
 
+  // Mark the current story as seen so Shorts stops resurfacing it.
+  useEffect(() => {
+    if (open && items[idx]) markSeen(items[idx].id);
+  }, [open, idx, items]);
+
   if (!open || items.length === 0) return null;
 
   function onScroll() {
@@ -42,7 +48,7 @@ export default function StoriesViewer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black">
+    <div className="fixed inset-0 z-40 bg-black">
       {/* Top bar: progress segments + close */}
       <div className="absolute top-0 inset-x-0 z-20 safe-top">
         <div className="flex gap-1 px-3 pt-3">
