@@ -22,7 +22,7 @@ import {
 
 // The app's canonical, always-current public link. Shown and shared verbatim
 // so the right URL goes out no matter which domain the app was opened from.
-const SHARE_URL = "https://ac-news-tau.vercel.app";
+const SHARE_URL = "https://acapp-ch.vercel.app";
 const SHARE_HOST = SHARE_URL.replace(/^https?:\/\//, "");
 import { usePrefs, resetPrefs, setPrefs, type Theme } from "../../lib/store";
 import { hasPasscode, clearPasscode } from "../../lib/lock";
