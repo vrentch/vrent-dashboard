@@ -11,7 +11,8 @@ import SettingsScreen from "./features/settings/SettingsScreen";
 import LockScreen from "./features/lock/LockScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { usePrefs } from "./lib/store";
-import { ingestHealth } from "./lib/health";
+import { ingestHealth, getSyncKey, applyHealthDays } from "./lib/health";
+import { fetchHealthStatus, pullHealth } from "./lib/api";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
@@ -59,6 +60,27 @@ export default function App() {
       }
       window.history.replaceState({}, "", window.location.pathname);
     }
+  }, []);
+
+  // Background sync: pull the metrics the iOS Shortcut sent to the server (keyed
+  // by this device's private sync key) so they appear in the installed app,
+  // whose storage is isolated from Safari. Runs on open and when refocused.
+  useEffect(() => {
+    let alive = true;
+    const sync = async () => {
+      try {
+        const st = await fetchHealthStatus();
+        if (!alive || !st.configured) return;
+        const { days } = await pullHealth(getSyncKey());
+        if (alive) applyHealthDays(days);
+      } catch {
+        /* offline or sync not set up — ignore */
+      }
+    };
+    sync();
+    const onVis = () => { if (document.visibilityState === "visible") sync(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   if (locked) return <LockScreen />;

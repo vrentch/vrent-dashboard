@@ -308,3 +308,62 @@ export function recentSummary(s: HealthState, days = 7) {
   const latestWeight = s.weights[0]?.kg ?? s.profile.weightKg ?? null;
   return { days: out, latestWeightKg: latestWeight };
 }
+
+// ── Background sync (Apple Health via Shortcut) ───────────────────────────────
+// Each installed app owns a private random sync key. The iOS Shortcut sends the
+// day's metrics to the server under this key; the app pulls them on open. The
+// key is what keeps everyone's data separate (his vs. girlfriend vs. mother).
+const SYNC_KEY_LS = "vrent.health.synckey.v1";
+const SYNCED_LS = "vrent.health.synced.v1";
+const SYNC_KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+export function getSyncKey(): string {
+  let k: string | null = null;
+  try { k = localStorage.getItem(SYNC_KEY_LS); } catch { /* ignore */ }
+  if (!k || !SYNC_KEY_RE.test(k)) {
+    k = randomSyncKey();
+    try { localStorage.setItem(SYNC_KEY_LS, k); } catch { /* ignore */ }
+  }
+  return k;
+}
+
+function randomSyncKey(): string {
+  try {
+    const a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return `k${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`.padEnd(16, "0");
+  }
+}
+
+export interface SyncDay {
+  date: string;
+  steps?: number;
+  weightKg?: number;
+  sleepH?: number;
+  waterMl?: number;
+  activeKcal?: number;
+}
+
+// Merge pulled server days into the local log, idempotently: a day is only
+// re-applied if its values actually changed since the last sync (so repeated
+// pulls don't stack duplicate weight entries).
+export function applyHealthDays(days: SyncDay[]): number {
+  if (!Array.isArray(days) || days.length === 0) return 0;
+  let sig: Record<string, string> = {};
+  try { sig = JSON.parse(localStorage.getItem(SYNCED_LS) || "{}"); } catch { sig = {}; }
+  let applied = 0;
+  for (const d of days) {
+    if (!d || !d.date) continue;
+    const s = JSON.stringify([d.steps, d.weightKg, d.sleepH, d.waterMl, d.activeKcal]);
+    if (sig[d.date] === s) continue;
+    ingestHealth({ steps: d.steps, weightKg: d.weightKg, sleepH: d.sleepH, waterMl: d.waterMl, activeKcal: d.activeKcal, date: d.date });
+    sig[d.date] = s;
+    applied++;
+  }
+  if (applied > 0) {
+    try { localStorage.setItem(SYNCED_LS, JSON.stringify(sig)); } catch { /* ignore */ }
+  }
+  return applied;
+}

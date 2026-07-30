@@ -208,6 +208,22 @@ export function fetchAiStatus(): Promise<{ configured: boolean; model: string | 
   return getJson(`/api/ai-status`);
 }
 
+// Apple Health background sync ------------------------------------------------
+export interface SyncDayDTO {
+  date: string;
+  steps?: number;
+  weightKg?: number;
+  sleepH?: number;
+  waterMl?: number;
+  activeKcal?: number;
+}
+export function fetchHealthStatus(): Promise<{ configured: boolean }> {
+  return getJson(`/api/health-status`);
+}
+export function pullHealth(key: string): Promise<{ configured: boolean; days: SyncDayDTO[] }> {
+  return getJson(`/api/health-pull?key=${encodeURIComponent(key)}`);
+}
+
 // Shared AI access code (stored once per device). Attached to every AI request.
 const AI_CODE_KEY = "vrent.aicode.v1";
 export function getAiCode(): string {

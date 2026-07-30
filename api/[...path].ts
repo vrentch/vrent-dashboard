@@ -1123,6 +1123,69 @@ async function testHandler(body: any) {
   return { status: 200, body: { ok } };
 }
 
+// ── Apple Health background sync ─────────────────────────────────────────────
+// An iOS Shortcut sends the day's metrics to health-push (keyed by a private
+// per-device sync key); the installed app pulls them on open. This is what lets
+// automation data reach the standalone Home Screen app, whose storage is
+// isolated from Safari (where the Shortcut's "Open URLs" would otherwise land).
+function kvConfigured(): boolean {
+  return !!(KV_URL && KV_TOKEN);
+}
+
+const HEALTH_KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const HEALTH_MAX_DAYS = 120;
+
+function healthNum(v: string | null | undefined): number | undefined {
+  if (v == null || v === "") return undefined;
+  const f = parseFloat(String(v));
+  return isFinite(f) && f > 0 ? f : undefined;
+}
+
+function readHealthParams(get: (k: string) => string | null) {
+  return {
+    date: (get("date") || "").slice(0, 10) || undefined,
+    steps: healthNum(get("steps")),
+    weightKg: healthNum(get("weight")),
+    sleepH: healthNum(get("sleep")),
+    waterMl: healthNum(get("water")),
+    activeKcal: healthNum(get("kcal")),
+  };
+}
+
+async function healthPush(key: string, get: (k: string) => string | null) {
+  if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { ok: false, error: "bad key" } };
+  const p = readHealthParams(get);
+  const date = p.date || new Date().toISOString().slice(0, 10);
+  const metrics: Record<string, number> = {};
+  if (p.steps != null) metrics.steps = Math.round(p.steps);
+  if (p.weightKg != null) metrics.weightKg = p.weightKg;
+  if (p.sleepH != null) metrics.sleepH = p.sleepH;
+  if (p.waterMl != null) metrics.waterMl = Math.round(p.waterMl);
+  if (p.activeKcal != null) metrics.activeKcal = Math.round(p.activeKcal);
+  if (Object.keys(metrics).length === 0) return { status: 400, body: { ok: false, error: "no data" } };
+
+  const raw = await kv(["GET", `health:${key}`]);
+  let map: Record<string, any> = {};
+  try { if (raw) map = JSON.parse(raw); } catch { map = {}; }
+  map[date] = { ...(map[date] || {}), ...metrics, at: Date.now() };
+  // Keep only the most recent days so the blob can't grow without bound.
+  const dates = Object.keys(map).sort();
+  while (dates.length > HEALTH_MAX_DAYS) { const d = dates.shift(); if (d) delete map[d]; }
+  await kv(["SET", `health:${key}`, JSON.stringify(map)]);
+  return { status: 200, body: { ok: true, configured: true, saved: { date, ...metrics } } };
+}
+
+async function healthPull(key: string) {
+  if (!kvConfigured()) return { status: 200, body: { configured: false, days: [] } };
+  if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { configured: true, error: "bad key", days: [] } };
+  const raw = await kv(["GET", `health:${key}`]);
+  let map: Record<string, any> = {};
+  try { if (raw) map = JSON.parse(raw); } catch { map = {}; }
+  const days = Object.keys(map).sort().map((date) => ({ date, ...map[date] }));
+  return { status: 200, body: { configured: true, days } };
+}
+
 // Exchange hours for open/close pushes.
 const PUSH_MARKETS = [
   { key: "us", name: "US markets", tz: "America/New_York", open: 9 * 60 + 30, close: 16 * 60 },
@@ -1312,6 +1375,27 @@ export async function handleApi(
       return await aiTextTask(ctx.body || {});
     }
 
+    if (route === "health-status") {
+      return { status: 200, body: { configured: kvConfigured() } };
+    }
+
+    if (route === "health-push") {
+      // Accept the key + metrics from either the query string (Shortcut GET) or
+      // a JSON POST body.
+      const body = ctx.body || {};
+      const key = search.get("key") || body.key || "";
+      const get = (k: string): string | null => {
+        const q = search.get(k);
+        if (q != null) return q;
+        return body[k] != null ? String(body[k]) : null;
+      };
+      return await healthPush(String(key), get);
+    }
+
+    if (route === "health-pull") {
+      return await healthPull(search.get("key") || ctx.body?.key || "");
+    }
+
     return { status: 404, body: { error: `unknown route: ${route}` } };
   } catch (err) {
     return { status: 502, body: { error: String(err instanceof Error ? err.message : err) } };
@@ -1360,7 +1444,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // sources momentarily down) must also not be cached, or the CDN would pin the
   // empty screen for its whole TTL — force a fresh retry on the next request.
   const emptyNews = url.pathname.endsWith("/news") && (out as any)?.count === 0;
-  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || emptyNews;
+  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || url.pathname.includes("/health-") || emptyNews;
   res.setHeader("Cache-Control", cache || (noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300"));
   res.end(JSON.stringify(out));
 }
