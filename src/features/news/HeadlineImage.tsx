@@ -34,20 +34,28 @@ export default function HeadlineImage({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const [broken, setBroken] = useState(false);
+  // Candidate image sources, tried in order. Google News items carry no
+  // imageUrl, so we fall back to the server-side og:image resolver
+  // (/api/img?u=<link>) which pulls the original picture from the source.
+  const candidates: string[] = [];
+  if (item.imageUrl) candidates.push(item.imageUrl);
+  if (item.link) candidates.push(`/api/img?u=${encodeURIComponent(item.link)}`);
+
+  const [step, setStep] = useState(0);
   const topic = topicByKey(item.topicKey);
   const [from, to] = GRADIENTS[hash(item.source + item.title) % GRADIENTS.length];
   const iconSize = size === "sm" ? 26 : size === "lg" ? 52 : 40;
 
-  if (item.imageUrl && !broken) {
+  const src = candidates[step];
+  if (src) {
     return (
       <div className={`overflow-hidden bg-slate-100 dark:bg-slate-800 ${className}`}>
         <img
-          src={item.imageUrl}
+          src={src}
           alt=""
           loading="lazy"
           className="h-full w-full object-cover"
-          onError={() => setBroken(true)}
+          onError={() => setStep((s) => s + 1)}
         />
       </div>
     );

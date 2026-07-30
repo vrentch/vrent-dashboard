@@ -273,6 +273,134 @@ async function getNews(specs: FeedSpec[], query?: string) {
   return { items: merged.slice(0, 150), errors, count: merged.length };
 }
 
+// ── Article image resolver ───────────────────────────────────────────────────
+//
+// Google News RSS carries no images, so headlines looked bare. This resolves an
+// article link to its real `og:image` (the picture the publisher set for
+// sharing), upscales Google's thumbnail, and 302-redirects the browser to it —
+// so `<img src="/api/img?u=…" loading="lazy">` shows the true source photo and
+// only fires for cards actually on screen. Results are cached hard.
+
+const IMG_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+const imgCache = new Map<string, { at: number; url: string | null }>();
+const IMG_TTL = 6 * 60 * 60 * 1000;
+
+function safeHttpUrl(raw: string): URL | null {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    const h = u.hostname.toLowerCase();
+    // Block obvious internal targets (basic SSRF guard).
+    if (h === "localhost" || h.endsWith(".local") || /^(127\.|10\.|192\.168\.|169\.254\.|0\.|::1)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) return null;
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+function upscaleImage(url: string): string {
+  // Google-hosted thumbnails (lh3/lh4/…googleusercontent) take a size suffix.
+  if (/googleusercontent\.com\//.test(url)) return url.replace(/=[-\w]+$/, "=w960");
+  return url;
+}
+
+// Google News RSS article links point at an aggregator page whose only image is
+// a generic Google card — useless. The real publisher URL is signed into the
+// page and resolved through Google's private `batchexecute` RPC. Decode it so we
+// can read the publisher's own og:image.
+async function decodeGoogleNewsUrl(link: string): Promise<string | null> {
+  const id = link.match(/\/articles\/([^?/]+)/)?.[1];
+  if (!id) return null;
+  try {
+    const page = await fetch(link, {
+      headers: { "User-Agent": IMG_UA, Accept: "text/html" },
+      signal: AbortSignal.timeout(9000),
+      redirect: "follow",
+    });
+    if (!page.ok) return null;
+    const html = await page.text();
+    const sg = html.match(/data-n-a-sg="([^"]+)"/)?.[1];
+    const ts = html.match(/data-n-a-ts="([^"]+)"/)?.[1];
+    if (!sg || !ts) return null;
+    const inner = JSON.stringify([
+      "garturlreq",
+      [["X", "X", ["X", "X"], null, null, 1, 1, "US:en", null, 1, null, null, null, null, null, 0, 1], "X", "X", 1, [1, 1, 1], 1, 1, null, 0, 0, null, 0],
+      id, Number(ts), sg,
+    ]);
+    const payload = JSON.stringify([[["Fbv4je", inner, null, "generic"]]]);
+    const rpc = await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute?rpcids=Fbv4je", {
+      method: "POST",
+      headers: { "User-Agent": IMG_UA, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      signal: AbortSignal.timeout(9000),
+      body: "f.req=" + encodeURIComponent(payload),
+    });
+    if (!rpc.ok) return null;
+    const txt = await rpc.text();
+    const m = txt.match(/https?:\/\/[^"\\\s]+/);
+    return m && safeHttpUrl(m[0]) ? m[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fetch a publisher page and pull its og:image / twitter:image. Streams only far
+// enough to reach the tag (it lives in <head>) and caps the read.
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": IMG_UA, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
+      signal: AbortSignal.timeout(9000),
+      redirect: "follow",
+    });
+    if (!res.ok || !res.body) return null;
+    const reader = (res.body as any).getReader();
+    const dec = new TextDecoder();
+    let html = "";
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.length;
+      html += dec.decode(value, { stream: true });
+      if (/og:image|twitter:image/i.test(html) || bytes > 320000) {
+        try { await reader.cancel(); } catch { /* ignore */ }
+        break;
+      }
+    }
+    const m =
+      html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::url)?|twitter:image(?::src)?)["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image(?::url)?|twitter:image(?::src)?)["']/i);
+    if (m && m[1]) {
+      const raw = decodeEntities(m[1].trim());
+      const abs = raw.startsWith("//") ? "https:" + raw : raw.startsWith("/") ? new URL(raw, url).toString() : raw;
+      if (safeHttpUrl(abs)) return upscaleImage(abs);
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+async function resolveArticleImage(link: string): Promise<string | null> {
+  const cached = imgCache.get(link);
+  if (cached && Date.now() - cached.at < IMG_TTL) return cached.url;
+
+  let found: string | null = null;
+  try {
+    let target = link;
+    const host = new URL(link).hostname.toLowerCase();
+    if (host === "news.google.com" || host.endsWith(".news.google.com")) {
+      const pub = await decodeGoogleNewsUrl(link);
+      target = pub || "";
+    }
+    if (target) found = await fetchOgImage(target);
+  } catch {
+    /* leave found null */
+  }
+  imgCache.set(link, { at: Date.now(), url: found });
+  return found;
+}
+
 // ── Stocks (CNBC public quote + chart endpoints) ─────────────────────────────
 //
 // Keyless and reachable from data-center IPs (unlike Yahoo, which rate-limits
@@ -1097,9 +1225,19 @@ export async function handleApi(
   pathname: string,
   search: URLSearchParams,
   ctx: { method?: string; body?: any } = {}
-): Promise<{ status: number; body: unknown }> {
+): Promise<{ status: number; body: unknown; location?: string; cache?: string }> {
   try {
     const route = pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
+
+    if (route === "img") {
+      const u = search.get("u") || "";
+      const safe = safeHttpUrl(u);
+      if (!safe) return { status: 400, body: { error: "bad url" } };
+      const img = await resolveArticleImage(safe.toString());
+      if (!img) return { status: 404, body: { error: "no image" }, cache: "no-store" };
+      // Redirect the <img> to the resolved photo; cache the redirect hard.
+      return { status: 302, body: null, location: img, cache: "public, max-age=86400, s-maxage=86400" };
+    }
 
     if (route === "push-status") return { status: 200, body: { configured: pushConfigured() } };
     if (route === "push-subscribe") return await subscribeHandler(ctx.body);
@@ -1205,7 +1343,17 @@ function safeJson(s: string): any {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://localhost");
   const body = req.method === "POST" ? await readBody(req) : undefined;
-  const { status, body: out } = await handleApi(url.pathname, url.searchParams, { method: req.method, body });
+  const { status, body: out, location, cache } = await handleApi(url.pathname, url.searchParams, { method: req.method, body });
+
+  // Redirect responses (e.g. the image resolver).
+  if (location) {
+    res.statusCode = status;
+    res.setHeader("Location", location);
+    if (cache) res.setHeader("Cache-Control", cache);
+    res.end();
+    return;
+  }
+
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   // Push/tick/AI endpoints must never be cached. An empty news response (all
@@ -1213,6 +1361,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // empty screen for its whole TTL — force a fresh retry on the next request.
   const emptyNews = url.pathname.endsWith("/news") && (out as any)?.count === 0;
   const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || emptyNews;
-  res.setHeader("Cache-Control", noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300");
+  res.setHeader("Cache-Control", cache || (noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300"));
   res.end(JSON.stringify(out));
 }
