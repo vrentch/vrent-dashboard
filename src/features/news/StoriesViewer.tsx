@@ -48,7 +48,7 @@ export default function StoriesViewer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-black">
+    <div className="fixed inset-0 z-[45] bg-black">
       {/* Top bar: progress segments + close */}
       <div className="absolute top-0 inset-x-0 z-20 safe-top">
         <div className="flex gap-1 px-3 pt-3">
