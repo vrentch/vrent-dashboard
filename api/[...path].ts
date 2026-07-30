@@ -92,13 +92,30 @@ function findImage(item: Record<string, any>, summaryHtml: string): string | nul
   return m ? m[1] : null;
 }
 
-async function fetchFeed(url: string, fallbackSource: string, limit = 40): Promise<FeedItem[]> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": RSS_UA, Accept: "application/rss+xml, application/xml, text/xml, */*" },
-    signal: AbortSignal.timeout(9000),
-  });
-  if (!res.ok) throw new Error(`feed ${res.status}`);
-  const xml = await res.text();
+async function fetchFeed(url: string, fallbackSource: string, limit = 40, tries = 2): Promise<FeedItem[]> {
+  // Google News RSS intermittently throttles data-center IPs (503 / hang), so
+  // retry transient failures before giving up (the caller then falls back to a
+  // different provider).
+  let xml = "";
+  let lastErr: unknown = new Error("feed failed");
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": RSS_UA, Accept: "application/rss+xml, application/xml, text/xml, */*" },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (res.ok) {
+        xml = await res.text();
+        lastErr = null;
+        break;
+      }
+      lastErr = new Error(`feed ${res.status}`);
+      if (res.status < 500 && res.status !== 429) throw lastErr; // 4xx won't fix on retry
+    } catch (e) {
+      lastErr = e; // network error / timeout — retry
+    }
+  }
+  if (lastErr) throw lastErr;
   const doc = parser.parse(xml);
 
   const channel = doc?.rss?.channel ?? doc?.["rdf:RDF"];
@@ -164,6 +181,29 @@ function gnUrl(spec: FeedSpec, extra?: string): string {
   return `${GN}/search?q=${encodeURIComponent(q)}&${loc}`;
 }
 
+// Fallback feeds for when Google News throttles our data-center IP. BBC's RSS
+// is keyless, standards-clean, and reliably reachable from data centres; it
+// covers every major topic, so we map each section to the closest BBC feed
+// (World is the default). Not localized per country, but it keeps real news
+// flowing instead of showing an empty screen during a Google outage window.
+const BBC = "https://feeds.bbci.co.uk";
+const FALLBACK_FEEDS: Record<string, string[]> = {
+  TOP: [`${BBC}/news/world/rss.xml`],
+  WORLD: [`${BBC}/news/world/rss.xml`],
+  NATION: [`${BBC}/news/rss.xml`],
+  BUSINESS: [`${BBC}/news/business/rss.xml`],
+  TECHNOLOGY: [`${BBC}/news/technology/rss.xml`],
+  SCIENCE: [`${BBC}/news/science_and_environment/rss.xml`],
+  HEALTH: [`${BBC}/news/health/rss.xml`],
+  ENTERTAINMENT: [`${BBC}/news/entertainment_and_arts/rss.xml`],
+  SPORTS: [`${BBC}/sport/rss.xml`],
+};
+
+function fallbackFeeds(spec: FeedSpec): string[] {
+  const key = (spec.section || "").toUpperCase();
+  return FALLBACK_FEEDS[key] || (spec.topic === "top" ? FALLBACK_FEEDS.TOP : FALLBACK_FEEDS.WORLD);
+}
+
 function dedupe(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
   const out: NewsItem[] = [];
@@ -178,19 +218,33 @@ function dedupe(items: NewsItem[]): NewsItem[] {
 
 async function getNews(specs: FeedSpec[], query?: string) {
   const list = specs.length ? specs : [];
-  const results = await Promise.allSettled(
-    list.map((s) => fetchFeed(gnUrl(s, query), `${s.country} · ${s.topic}`))
-  );
   const tagged: NewsItem[] = [];
   const errors: string[] = [];
-  results.forEach((r, i) => {
-    const s = list[i];
-    if (r.status === "fulfilled") {
-      for (const it of r.value) tagged.push({ ...it, countryCode: s.country, topicKey: s.topic });
-    } else {
-      errors.push(`${s.country}/${s.topic}: ${String(r.reason).slice(0, 100)}`);
-    }
-  });
+
+  await Promise.all(
+    list.map(async (s) => {
+      const tag = (items: FeedItem[]) => {
+        for (const it of items) tagged.push({ ...it, countryCode: s.country, topicKey: s.topic });
+      };
+      try {
+        tag(await fetchFeed(gnUrl(s, query), `${s.country} · ${s.topic}`));
+      } catch {
+        // Google News unreachable for this datacenter IP right now — fall back
+        // to BBC feeds so news still shows.
+        const before = tagged.length;
+        for (const url of fallbackFeeds(s)) {
+          try {
+            const items = await fetchFeed(url, `${s.country} · ${s.topic}`);
+            if (items.length) { tag(items); break; }
+          } catch {
+            /* try next fallback */
+          }
+        }
+        if (tagged.length === before) errors.push(`${s.country}/${s.topic}: news source unavailable`);
+      }
+    })
+  );
+
   const merged = dedupe(tagged);
   merged.sort((a, b) => (b.publishedAt ? Date.parse(b.publishedAt) : 0) - (a.publishedAt ? Date.parse(a.publishedAt) : 0));
   return { items: merged.slice(0, 150), errors, count: merged.length };
