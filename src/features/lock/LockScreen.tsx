@@ -26,8 +26,8 @@ export default function LockScreen() {
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#f6f7f9] dark:bg-[#0b1120] flex flex-col items-center justify-center px-8 safe-top safe-bottom">
-      <img src="/icon.svg" alt="AC News" className="w-16 h-16 rounded-2xl shadow-lg mb-5" />
-      <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">AC News</h1>
+      <img src="/icon.svg" alt="AC App" className="w-16 h-16 rounded-2xl shadow-lg mb-5" />
+      <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">AC App</h1>
       <p className="text-sm text-slate-400 dark:text-slate-500 mt-1 mb-6">Enter your passcode</p>
 
       <div className={`flex gap-3 mb-8 ${shake ? "animate-[wiggle_0.4s]" : ""}`} style={shake ? { animation: "wiggle 0.4s" } : undefined}>

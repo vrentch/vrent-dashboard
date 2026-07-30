@@ -62,7 +62,7 @@ export default function NotificationsSettings() {
 
       {!supported && (
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Add AC News to your Home Screen first, then reopen it here to enable notifications.
+          Add AC App to your Home Screen first, then reopen it here to enable notifications.
         </p>
       )}
 

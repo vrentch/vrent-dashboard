@@ -57,7 +57,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
   async function share() {
     try {
-      if (navigator.share) await navigator.share({ title: "AC News", text: "Live world news & markets", url: SHARE_URL });
+      if (navigator.share) await navigator.share({ title: "AC App", text: "Live world news & markets", url: SHARE_URL });
       else await copyLink();
     } catch {
       /* user dismissed the share sheet */
@@ -180,7 +180,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
               <Share2 size={17} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Share AC News</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Share AC App</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">This is your app's link — send it to anyone</p>
             </div>
           </div>
@@ -240,7 +240,7 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
           {didReset ? "Reset to defaults" : "Reset all preferences"}
         </button>
 
-        <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">AC News · News, markets &amp; sports · v0.4</p>
+        <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">AC App · news · markets · sports · health · v0.5</p>
       </div>
 
       <PasscodeSetup open={lockSetup} onClose={() => setLockSetup(false)} />

@@ -4,11 +4,12 @@ import { fetchQuotes, type Quote } from "../../lib/api";
 import { usePrefs, activeWatchlist, setActiveWatchlist } from "../../lib/store";
 import { fmtPct, cleanSymbol, displayPrice } from "../../lib/format";
 
-// Deterministic pastel gradient per symbol, so each row has a stable "coin".
+// Deterministic graphite gradient per symbol — a stable monochrome "coin".
 function monogramStyle(sym: string): React.CSSProperties {
   let h = 0;
-  for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) % 360;
-  return { background: `linear-gradient(135deg, hsl(${h} 75% 62%), hsl(${(h + 40) % 360} 75% 52%))` };
+  for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) % 100;
+  const l1 = 26 + (h % 12); // 26–38% lightness
+  return { background: `linear-gradient(135deg, hsl(240 4% ${l1 + 10}%), hsl(240 5% ${l1 - 6}%))` };
 }
 
 export default function WatchlistCard({

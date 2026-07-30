@@ -52,7 +52,13 @@ function baseDefaults(): Prefs {
 
 function normalize(p: Prefs): Prefs {
   let watchlists = Array.isArray(p.watchlists) && p.watchlists.length ? p.watchlists : baseDefaults().watchlists;
-  let active = watchlists.find((w) => w.id === p.activeWatchlistId) || watchlists[0];
+  // Coerce each stored list so a malformed entry can't throw on spread/read.
+  watchlists = watchlists.map((w) => ({
+    id: String(w?.id ?? uid()),
+    name: String(w?.name ?? "My list"),
+    symbols: Array.isArray(w?.symbols) ? w.symbols : [],
+  }));
+  const active = watchlists.find((w) => w.id === p.activeWatchlistId) || watchlists[0];
   return { ...p, watchlists, activeWatchlistId: active.id, watchlist: [...active.symbols] };
 }
 

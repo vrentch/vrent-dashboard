@@ -44,7 +44,7 @@ export default function PasscodeSetup({ open, onClose }: { open: boolean; onClos
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          You'll enter this passcode each time you open AC News on this device. Choose 4–8 digits.
+          You'll enter this passcode each time you open AC App on this device. Choose 4–8 digits.
         </p>
         <input
           value={pin}

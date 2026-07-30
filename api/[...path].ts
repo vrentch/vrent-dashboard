@@ -1,4 +1,4 @@
-// Self-contained serverless API for AC News.
+// Self-contained serverless API for AC App.
 //
 // IMPORTANT: this file must not use relative imports. Vercel runs each API
 // file as native ESM (the project is `"type": "module"`), and native ESM does
@@ -694,8 +694,52 @@ function aiConfigured(): boolean {
 function aiLocked(): boolean {
   return !!AI_CODE;
 }
+// Length-independent, early-exit-free comparison so the access code can't be
+// recovered via response-timing analysis.
+function constantTimeEq(a: string, b: string): boolean {
+  let diff = a.length ^ b.length;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
 function codeMatches(code: unknown): boolean {
-  return !AI_CODE || (typeof code === "string" && code === AI_CODE);
+  return !AI_CODE || (typeof code === "string" && constantTimeEq(code, AI_CODE));
+}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// ── AI response normalization (never trust the model's JSON shape) ───────────
+const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
+const nnum = (v: unknown): number => {
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return isFinite(n) ? n : 0;
+};
+const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+function normalizeVision(task: string, d: any) {
+  if (task === "food") {
+    const t = d?.total && typeof d.total === "object" ? d.total : {};
+    return {
+      items: arr<any>(d?.items).map((it) => ({
+        name: str(it?.name) || "Item",
+        portion: str(it?.portion),
+        calories: nnum(it?.calories),
+        protein_g: nnum(it?.protein_g),
+        carbs_g: nnum(it?.carbs_g),
+        fat_g: nnum(it?.fat_g),
+      })),
+      total: { calories: nnum(t.calories), protein_g: nnum(t.protein_g), carbs_g: nnum(t.carbs_g), fat_g: nnum(t.fat_g) },
+      confidence: str(d?.confidence) || "medium",
+      note: str(d?.note),
+    };
+  }
+  return {
+    title: str(d?.title) || "Unknown",
+    category: str(d?.category) || "Other",
+    summary: str(d?.summary),
+    details: arr<any>(d?.details).map((x) => ({ label: str(x?.label), value: str(x?.value) })).filter((x) => x.label || x.value),
+    detectedText: str(d?.detectedText),
+    searchQuery: str(d?.searchQuery) || str(d?.title),
+  };
 }
 // Returned (no Anthropic call) when the code is missing/wrong — zero cost.
 const NEED_CODE = { status: 200, body: { ok: false, needCode: true, error: "Enter the access code to use AI features." } };
@@ -792,7 +836,19 @@ async function aiVision(task: string, image: string, mediaType: string, code?: u
   });
   const data = parseModelJson(aiText(json));
   if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
-  return { status: 200, body: { ok: true, data, model: AI_MODEL } };
+  return { status: 200, body: { ok: true, data: normalizeVision(task, data), model: AI_MODEL } };
+}
+
+function normalizePlan(d: any) {
+  const t = d?.targets && typeof d.targets === "object" ? d.targets : {};
+  return {
+    headline: str(d?.headline) || "Your plan",
+    summary: str(d?.summary),
+    targets: { calories: nnum(t.calories), protein_g: nnum(t.protein_g), carbs_g: nnum(t.carbs_g), fat_g: nnum(t.fat_g), steps: nnum(t.steps) },
+    today: str(d?.today),
+    workouts: arr<any>(d?.workouts).map((w) => ({ day: str(w?.day), focus: str(w?.focus), detail: str(w?.detail) })),
+    nutrition: arr<any>(d?.nutrition).map(str).filter(Boolean),
+  };
 }
 
 async function aiTextTask(body: any) {
@@ -837,7 +893,12 @@ Base calorie/macro targets on the profile (goal, activity). Provide a 7-day work
   });
   const data = parseModelJson(aiText(json));
   if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
-  return { status: 200, body: { ok: true, data, model: AI_MODEL } };
+  if (task === "plan") return { status: 200, body: { ok: true, data: normalizePlan(data), model: AI_MODEL } };
+  if (task === "explain") {
+    return { status: 200, body: { ok: true, data: { explanation: str(data?.explanation), keyPoints: arr<any>(data?.keyPoints).map(str).filter(Boolean) }, model: AI_MODEL } };
+  }
+  // translate
+  return { status: 200, body: { ok: true, data: { translation: str(data?.translation), sourceLang: str(data?.sourceLang) }, model: AI_MODEL } };
 }
 
 // ── Push notifications (privacy-preserving: market open/close + daily recap) ─
@@ -928,7 +989,7 @@ async function testHandler(body: any) {
   if (!sub?.endpoint) return { status: 400, body: { ok: false } };
   const ok = await sendTo(
     { subscription: sub, settings: { marketOpen: true, marketClose: true, dailyRecap: true, recapTime: "" }, tz: "UTC" },
-    { title: "AC News", body: "🔔 Notifications are working — you're all set!", url: "/" },
+    { title: "AC App", body: "🔔 Notifications are working — you're all set!", url: "/" },
     subId(sub.endpoint)
   );
   return { status: 200, body: { ok } };
@@ -967,9 +1028,9 @@ async function recapText(): Promise<string> {
     const bits = quotes
       .filter((q) => q.changePercent != null)
       .map((q) => `${q.symbol.replace("^GSPC", "S&P").replace("^IXIC", "Nasdaq").replace("^DJI", "Dow")} ${q.changePercent! >= 0 ? "+" : ""}${q.changePercent!.toFixed(1)}%`);
-    return bits.length ? `Today: ${bits.join(", ")}. Open AC News for your watchlist.` : "Open AC News for today's market recap.";
+    return bits.length ? `Today: ${bits.join(", ")}. Open AC App for your watchlist.` : "Open AC App for today's market recap.";
   } catch {
-    return "Open AC News for today's market recap.";
+    return "Open AC App for today's market recap.";
   }
 }
 
@@ -1008,7 +1069,7 @@ async function tickHandler() {
       if (f.type === "open" && !s.marketOpen) continue;
       if (f.type === "close" && !s.marketClose) continue;
       if (await once(id, "", f.kind)) {
-        const ok = await sendTo(rec, { title: "AC News", body: f.type === "open" ? `🟢 ${f.name} are open` : `🔴 ${f.name} have closed`, url: "/markets" }, id);
+        const ok = await sendTo(rec, { title: "AC App", body: f.type === "open" ? `🟢 ${f.name} are open` : `🔴 ${f.name} have closed`, url: "/markets" }, id);
         if (ok) sent++;
       }
     }
@@ -1095,9 +1156,12 @@ export async function handleApi(
     }
 
     if (route === "ai-unlock") {
-      // Verify an access code without spending any credit.
+      // Verify an access code without spending any credit. Constant-time
+      // compare + a small delay throttle brute-force attempts.
       if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false } };
-      return { status: 200, body: { ok: codeMatches(ctx.body?.code) } };
+      const ok = codeMatches(ctx.body?.code);
+      if (!ok) await sleep(400);
+      return { status: 200, body: { ok } };
     }
 
     if (route === "ai-vision") {

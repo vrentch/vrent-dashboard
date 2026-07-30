@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImageIcon, Search, Languages, Sparkles, RotateCcw, X, Loader2 } from "lucide-react";
+import { Camera, ImageIcon, Search, Languages, Sparkles, RotateCcw, X, Loader2, Trash2 } from "lucide-react";
 import { analyzeImage, aiTranslate, aiExplain, type Identified } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
 import { useAiAccess } from "../../lib/aiAccess";
@@ -25,7 +25,8 @@ interface ScanRecord {
 
 function loadHistory(): ScanRecord[] {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    return Array.isArray(v) ? v : [];
   } catch {
     return [];
   }
@@ -78,6 +79,13 @@ export default function ScanScreen() {
     setError(null);
   }
 
+  function persistHistory(next: ScanRecord[]) {
+    setHistory(next);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* quota */ }
+  }
+  const deleteHistory = (i: number) => persistHistory(history.filter((_, idx) => idx !== i));
+  const clearHistory = () => persistHistory([]);
+
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
@@ -99,7 +107,7 @@ export default function ScanScreen() {
             onClick={() => fileRef.current?.click()}
             disabled={status === "loading"}
             className="w-full relative overflow-hidden rounded-3xl p-8 text-white active:scale-[0.99] transition disabled:opacity-60"
-            style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #6366f1 55%, #a855f7 100%)", boxShadow: "0 12px 40px rgba(99,102,241,0.35)" }}
+            style={{ background: "linear-gradient(135deg, #27272a 0%, #18181b 55%, #09090b 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
           >
             <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
             <div className="relative flex flex-col items-center gap-3">
@@ -148,7 +156,7 @@ export default function ScanScreen() {
 
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{result.summary}</p>
 
-            {result.details?.length > 0 && (
+            {Array.isArray(result.details) && result.details.length > 0 && (
               <div className="rounded-2xl glass-subtle divide-y divide-white/40 dark:divide-white/5">
                 {result.details.map((d, i) => (
                   <div key={i} className="flex items-start justify-between gap-3 px-3.5 py-2.5">
@@ -182,21 +190,27 @@ export default function ScanScreen() {
         {/* History */}
         {history.length > 0 && (
           <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Recent scans</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Recent scans</h2>
+              <button onClick={clearHistory} className="text-xs font-semibold text-slate-400 dark:text-slate-500 active:text-rose-500">Clear all</button>
+            </div>
             <div className="space-y-2">
               {history.map((h, i) => (
-                <button
-                  key={i}
-                  onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(h.searchQuery || h.title)}`, "_blank")}
-                  className="w-full flex items-center gap-3 rounded-2xl glass-subtle p-3 text-left active:scale-[0.99]"
-                >
-                  <span className="text-2xl leading-none">{emojiFor(h.category)}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{h.title}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{h.summary}</p>
-                  </div>
-                  <Search size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                </button>
+                <div key={i} className="flex items-center gap-2 rounded-2xl glass-subtle p-3">
+                  <button
+                    onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(h.searchQuery || h.title)}`, "_blank")}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-70"
+                  >
+                    <span className="text-2xl leading-none">{emojiFor(h.category)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{h.title}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{h.summary}</p>
+                    </div>
+                  </button>
+                  <button onClick={() => deleteHistory(i)} className="grid place-items-center w-8 h-8 shrink-0 rounded-full text-slate-300 dark:text-slate-600 active:text-rose-500" aria-label="Delete scan">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               ))}
             </div>
           </section>

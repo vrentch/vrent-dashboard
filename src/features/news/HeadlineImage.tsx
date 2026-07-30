@@ -3,20 +3,20 @@ import type { NewsItem } from "../../lib/api";
 import { topicByKey } from "../../../shared/catalog";
 import TopicIcon from "../../components/TopicIcon";
 
-// Tasteful on-brand gradient pairs. Google News carries no images, so headlines
-// without a picture get a designed tile (topic icon on a colored gradient)
+// Monochrome graphite gradient pairs. Google News carries no images, so
+// headlines without a picture get a designed tile (topic icon on a gradient)
 // instead of an empty box — keyed by content so cards look varied but stable.
 const GRADIENTS: [string, string][] = [
-  ["#3b82f6", "#2563eb"],
-  ["#6366f1", "#4f46e5"],
-  ["#0ea5e9", "#0369a1"],
-  ["#14b8a6", "#0d9488"],
-  ["#8b5cf6", "#6d28d9"],
-  ["#06b6d4", "#0e7490"],
-  ["#10b981", "#047857"],
-  ["#f59e0b", "#b45309"],
-  ["#ec4899", "#be185d"],
-  ["#64748b", "#334155"],
+  ["#3f3f46", "#18181b"],
+  ["#52525b", "#27272a"],
+  ["#3f3f46", "#09090b"],
+  ["#4b5563", "#1f2937"],
+  ["#57534e", "#292524"],
+  ["#334155", "#0f172a"],
+  ["#44403c", "#1c1917"],
+  ["#3f3f46", "#111113"],
+  ["#4b5563", "#111827"],
+  ["#52525b", "#18181b"],
 ];
 
 function hash(s: string): number {

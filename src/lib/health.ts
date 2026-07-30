@@ -46,11 +46,28 @@ export interface WeightEntry {
   at: number;
 }
 
+// Daily "total" metrics — one value per day, upserted (steps live in activities
+// for backwards-compat, but water/sleep are here).
+export interface WaterEntry {
+  id: string;
+  date: string;
+  ml: number;
+  at: number;
+}
+export interface SleepEntry {
+  id: string;
+  date: string;
+  hours: number;
+  at: number;
+}
+
 export interface HealthState {
   profile: Profile;
   foods: FoodEntry[];
   activities: ActivityEntry[];
   weights: WeightEntry[];
+  waters: WaterEntry[];
+  sleeps: SleepEntry[];
   plan: HealthPlan | null;
   planAt: number | null;
 }
@@ -78,6 +95,8 @@ function defaults(): HealthState {
     foods: [],
     activities: [],
     weights: [],
+    waters: [],
+    sleeps: [],
     plan: null,
     planAt: null,
   };
@@ -94,6 +113,8 @@ function load(): HealthState {
       foods: Array.isArray(p.foods) ? p.foods : [],
       activities: Array.isArray(p.activities) ? p.activities : [],
       weights: Array.isArray(p.weights) ? p.weights : [],
+      waters: Array.isArray(p.waters) ? p.waters : [],
+      sleeps: Array.isArray(p.sleeps) ? p.sleeps : [],
       plan: p.plan ?? null,
       planAt: p.planAt ?? null,
     };
@@ -150,8 +171,55 @@ export function addWeight(kg: number, date?: string) {
 export function removeFood(id: string) {
   set({ foods: state.foods.filter((f) => f.id !== id) });
 }
+export function updateFood(id: string, patch: Partial<Omit<FoodEntry, "id">>) {
+  set({ foods: state.foods.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
+}
 export function removeActivity(id: string) {
   set({ activities: state.activities.filter((a) => a.id !== id) });
+}
+export function updateActivity(id: string, patch: Partial<Omit<ActivityEntry, "id">>) {
+  set({ activities: state.activities.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+}
+export function removeWeight(id: string) {
+  set({ weights: state.weights.filter((w) => w.id !== id) });
+}
+
+// Steps are a daily total — replace the day's step entry instead of stacking.
+export function setSteps(steps: number, date?: string) {
+  const d = date || todayKey();
+  const kept = state.activities.filter((a) => !(a.kind === "steps" && a.date === d));
+  if (steps > 0) kept.unshift({ id: uid(), at: Date.now(), date: d, kind: "steps", steps, calories: Math.round(steps * 0.04) });
+  set({ activities: kept });
+}
+
+// Water & sleep are daily totals — upsert per day.
+export function setWater(ml: number, date?: string) {
+  const d = date || todayKey();
+  const rest = state.waters.filter((w) => w.date !== d);
+  set({ waters: ml > 0 ? [{ id: uid(), at: Date.now(), date: d, ml }, ...rest] : rest });
+}
+export function addWater(ml: number, date?: string) {
+  const d = date || todayKey();
+  setWater(waterOn(state, d) + ml, d);
+}
+export function setSleep(hours: number, date?: string) {
+  const d = date || todayKey();
+  const rest = state.sleeps.filter((s) => s.date !== d);
+  set({ sleeps: hours > 0 ? [{ id: uid(), at: Date.now(), date: d, hours }, ...rest] : rest });
+}
+
+// Apple Health import: an iOS Shortcut opens the app with these query params;
+// we log whatever it sends for the given day (defaults to today).
+export function ingestHealth(p: { steps?: number; weightKg?: number; sleepH?: number; waterMl?: number; activeKcal?: number; date?: string }) {
+  const d = p.date || todayKey();
+  if (p.steps != null && p.steps > 0) setSteps(Math.round(p.steps), d);
+  if (p.weightKg != null && p.weightKg > 0) addWeight(p.weightKg, d);
+  if (p.sleepH != null && p.sleepH > 0) setSleep(p.sleepH, d);
+  if (p.waterMl != null && p.waterMl > 0) setWater(Math.round(p.waterMl), d);
+  if (p.activeKcal != null && p.activeKcal > 0) {
+    const rest = state.activities.filter((a) => !(a.label === "Active energy" && a.date === d));
+    set({ activities: [{ id: uid(), at: Date.now(), date: d, kind: "workout", label: "Active energy", minutes: 0, calories: Math.round(p.activeKcal) }, ...rest] });
+  }
 }
 
 export function savePlan(plan: HealthPlan) {
@@ -184,6 +252,16 @@ export function stepsOn(s: HealthState, date: string): number {
 }
 export function burnOn(s: HealthState, date: string): number {
   return activitiesOn(s, date).reduce((n, a) => n + (a.calories || 0), 0);
+}
+export function waterOn(s: HealthState, date: string): number {
+  return s.waters.filter((w) => w.date === date).reduce((n, w) => n + (w.ml || 0), 0);
+}
+export function sleepOn(s: HealthState, date: string): number {
+  const e = s.sleeps.find((x) => x.date === date);
+  return e ? e.hours : 0;
+}
+export function latestWeight(s: HealthState): number | null {
+  return s.weights[0]?.kg ?? s.profile.weightKg ?? null;
 }
 
 const ACTIVITY_FACTOR: Record<Activity, number> = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725 };

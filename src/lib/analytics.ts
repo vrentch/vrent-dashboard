@@ -20,7 +20,7 @@ export function computeAnalytics(h: History | null): Analytics {
     volatilityPct: null,
     trend: "flat",
   };
-  if (!h || h.closes.length < 2) return empty;
+  if (!h || !Array.isArray(h.closes) || h.closes.length < 2) return empty;
 
   const c = h.closes;
   const first = c[0];

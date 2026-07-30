@@ -9,7 +9,9 @@ import ScanScreen from "./features/scan/ScanScreen";
 import CalendarScreen from "./features/calendar/CalendarScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import LockScreen from "./features/lock/LockScreen";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { usePrefs } from "./lib/store";
+import { ingestHealth } from "./lib/health";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
@@ -37,19 +39,43 @@ export default function App() {
   }, [theme]);
   useEffect(() => watchSystemTheme(() => theme), [theme]);
 
+  // Apple Health bridge: an iOS Shortcut can open the app with ?steps=&weight=…
+  // We log whatever it sends, then strip the params from the URL.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const n = (k: string) => {
+      const v = q.get(k);
+      if (v == null || v === "") return undefined;
+      const f = parseFloat(v);
+      return isFinite(f) ? f : undefined;
+    };
+    const payload = { steps: n("steps"), weightKg: n("weight"), sleepH: n("sleep"), waterMl: n("water"), activeKcal: n("kcal"), date: q.get("date") || undefined };
+    if (payload.steps || payload.weightKg || payload.sleepH || payload.waterMl || payload.activeKcal) {
+      try {
+        ingestHealth(payload);
+        setTab("health");
+      } catch {
+        /* ignore malformed input */
+      }
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   if (locked) return <LockScreen />;
 
   return (
     <div className="min-h-full flex flex-col">
       <main className="flex-1 pb-20">
-        {tab === "home" && <HomeScreen onNavigate={setTab} />}
-        {tab === "news" && <NewsScreen />}
-        {tab === "markets" && <MarketsScreen />}
-        {tab === "sports" && <SportsScreen />}
-        {tab === "health" && <HealthScreen />}
-        {tab === "scan" && <ScanScreen />}
-        {tab === "calendar" && <CalendarScreen />}
-        {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
+        <ErrorBoundary resetKey={tab}>
+          {tab === "home" && <HomeScreen onNavigate={setTab} />}
+          {tab === "news" && <NewsScreen />}
+          {tab === "markets" && <MarketsScreen />}
+          {tab === "sports" && <SportsScreen />}
+          {tab === "health" && <HealthScreen />}
+          {tab === "scan" && <ScanScreen />}
+          {tab === "calendar" && <CalendarScreen />}
+          {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
+        </ErrorBoundary>
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 glass-nav border-t border-white/40 dark:border-white/10 safe-bottom">

@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { Camera, Plus, SlidersHorizontal, Sparkles, Trash2, Footprints, Flame, RefreshCw, ChevronRight, Loader2 } from "lucide-react";
+import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
-  removeFood, savePlan, recentSummary, toKey,
+  waterOn, sleepOn, latestWeight, removeActivity, savePlan, recentSummary, toKey, type FoodEntry,
 } from "../../lib/health";
 import { analyzeImage, aiPlan, type FoodEstimate } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
@@ -11,7 +11,9 @@ import AiUnlock from "../ai/AiUnlock";
 import ProfileSheet from "./ProfileSheet";
 import LogSheet from "./LogSheet";
 import FoodConfirmSheet from "./FoodConfirmSheet";
+import MealEditSheet from "./MealEditSheet";
 import PlanSheet from "./PlanSheet";
+import AppleHealthSheet from "./AppleHealthSheet";
 
 export default function HealthScreen() {
   const s = useHealth();
@@ -21,7 +23,12 @@ export default function HealthScreen() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [logMode, setLogMode] = useState<"steps" | "workout" | "weight" | "water" | "sleep">("steps");
   const [planOpen, setPlanOpen] = useState(false);
+  const [editMeal, setEditMeal] = useState<FoodEntry | null>(null);
+  const [appleOpen, setAppleOpen] = useState(false);
+
+  const openLog = (mode: typeof logMode) => { setLogMode(mode); setLogOpen(true); };
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [foodOpen, setFoodOpen] = useState(false);
@@ -38,6 +45,9 @@ export default function HealthScreen() {
   const pct = Math.min(1, target ? eaten.calories / target : 0);
   const steps = stepsOn(s, today);
   const burn = burnOn(s, today);
+  const water = waterOn(s, today);
+  const sleep = sleepOn(s, today);
+  const weight = latestWeight(s);
   const meals = foodsOn(s, today);
   const acts = activitiesOn(s, today).filter((a) => a.kind === "workout");
 
@@ -124,16 +134,24 @@ export default function HealthScreen() {
               <p className="text-xs text-slate-400 dark:text-slate-500">of {target} kcal · {remaining} left</p>
               <div className="mt-3 flex items-center gap-3 text-xs">
                 <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"><Footprints size={13} /> {steps.toLocaleString()}</span>
-                <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"><Flame size={13} className="text-orange-500" /> {burn} kcal</span>
+                <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"><Flame size={13} className="text-slate-400 dark:text-slate-500" /> {burn} kcal</span>
               </div>
             </div>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <Macro label="Protein" val={Math.round(eaten.protein_g)} tgt={targets.protein_g} color="#3b82f6" />
-            <Macro label="Carbs" val={Math.round(eaten.carbs_g)} tgt={targets.carbs_g} color="#f59e0b" />
-            <Macro label="Fat" val={Math.round(eaten.fat_g)} tgt={targets.fat_g} color="#ec4899" />
+            <Macro label="Protein" val={Math.round(eaten.protein_g)} tgt={targets.protein_g} color="#3f3f46" />
+            <Macro label="Carbs" val={Math.round(eaten.carbs_g)} tgt={targets.carbs_g} color="#71717a" />
+            <Macro label="Fat" val={Math.round(eaten.fat_g)} tgt={targets.fat_g} color="#a1a1aa" />
           </div>
         </section>
+
+        {/* Quick stats — tap to log/amend */}
+        <div className="grid grid-cols-4 gap-2">
+          <Stat icon={Footprints} label="Steps" value={steps ? steps.toLocaleString() : "—"} onClick={() => openLog("steps")} />
+          <Stat icon={Droplets} label="Water" value={water ? `${(water / 1000).toFixed(1)}L` : "—"} onClick={() => openLog("water")} />
+          <Stat icon={Moon} label="Sleep" value={sleep ? `${sleep}h` : "—"} onClick={() => openLog("sleep")} />
+          <Stat icon={Scale} label="Weight" value={weight ? `${weight}kg` : "—"} onClick={() => openLog("weight")} />
+        </div>
 
         {/* Actions */}
         <div className="grid grid-cols-2 gap-3">
@@ -141,18 +159,28 @@ export default function HealthScreen() {
             onClick={() => fileRef.current?.click()}
             disabled={!aiReady}
             className="relative overflow-hidden rounded-2xl p-4 text-white text-left active:scale-[0.98] transition disabled:opacity-60"
-            style={{ background: "linear-gradient(135deg, #059669 0%, #10b981 100%)", boxShadow: "0 10px 30px rgba(16,185,129,0.30)" }}
+            style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)", boxShadow: "0 10px 30px rgba(0,0,0,0.28)" }}
           >
             <Camera size={22} />
             <p className="mt-2 text-sm font-bold">Snap a meal</p>
             <p className="text-[11px] text-white/80">{aiReady ? "AI counts the calories" : aiStatus === "locked" ? "Unlock AI above" : "Needs AI setup"}</p>
           </button>
-          <button onClick={() => setLogOpen(true)} className="rounded-2xl glass p-4 text-left active:scale-[0.98] transition">
+          <button onClick={() => openLog("steps")} className="rounded-2xl glass p-4 text-left active:scale-[0.98] transition">
             <Plus size={22} className="text-slate-700 dark:text-slate-200" />
             <p className="mt-2 text-sm font-bold text-slate-900 dark:text-slate-100">Log activity</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">Steps · workout · weight</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">Steps · workout · water · sleep</p>
           </button>
         </div>
+
+        {/* Apple Health */}
+        <button onClick={() => setAppleOpen(true)} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">
+          <span className="grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-rose-500/15 text-rose-500"><Heart size={18} fill="currentColor" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Connect Apple Health</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">Sync steps, weight & sleep via a Shortcut</p>
+          </div>
+          <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+        </button>
 
         {/* AI plan */}
         <section>
@@ -165,7 +193,7 @@ export default function HealthScreen() {
             )}
           </div>
           {s.plan ? (
-            <button onClick={() => setPlanOpen(true)} className="w-full text-left rounded-2xl p-4 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)" }}>
+            <button onClick={() => setPlanOpen(true)} className="w-full text-left rounded-2xl p-4 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold">{s.plan.headline}</p>
                 <ChevronRight size={16} className="text-white/70" />
@@ -185,17 +213,15 @@ export default function HealthScreen() {
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Today's meals</h2>
             <div className="space-y-2">
               {meals.map((m) => (
-                <div key={m.id} className="flex items-center gap-3 rounded-2xl glass-subtle p-3">
-                  <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-base">🍽️</span>
+                <button key={m.id} onClick={() => setEditMeal(m)} className="w-full flex items-center gap-3 rounded-2xl glass-subtle p-3 text-left active:scale-[0.99] transition">
+                  <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-slate-500/15 text-slate-600 dark:text-slate-300 text-base">🍽️</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
                     <p className="text-[11px] text-slate-400 dark:text-slate-500">P {m.protein_g} · C {m.carbs_g} · F {m.fat_g} g</p>
                   </div>
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{m.calories}</span>
-                  <button onClick={() => removeFood(m.id)} className="grid place-items-center w-8 h-8 rounded-full text-slate-300 dark:text-slate-600 active:text-rose-500" aria-label="Remove">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+                  <Pencil size={14} className="text-slate-300 dark:text-slate-600 shrink-0" />
+                </button>
               ))}
             </div>
           </section>
@@ -206,8 +232,11 @@ export default function HealthScreen() {
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Today's workouts</h2>
             <div className="flex flex-wrap gap-2">
               {acts.map((a) => (
-                <span key={a.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-subtle text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  <Flame size={12} className="text-orange-500" /> {a.label} · {a.minutes}m
+                <span key={a.id} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full glass-subtle text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <Flame size={12} className="text-slate-400 dark:text-slate-500" /> {a.label}{a.minutes ? ` · ${a.minutes}m` : ""}
+                  <button onClick={() => removeActivity(a.id)} className="grid place-items-center w-5 h-5 rounded-full text-slate-400 active:text-rose-500 active:bg-rose-500/10" aria-label="Remove">
+                    <X size={12} />
+                  </button>
                 </span>
               ))}
             </div>
@@ -238,10 +267,22 @@ export default function HealthScreen() {
       </div>
 
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
-      <LogSheet open={logOpen} onClose={() => setLogOpen(false)} />
+      <LogSheet open={logOpen} onClose={() => setLogOpen(false)} initial={logMode} />
       <PlanSheet open={planOpen} onClose={() => setPlanOpen(false)} plan={s.plan} />
       <FoodConfirmSheet open={foodOpen} onClose={() => setFoodOpen(false)} loading={foodLoading} error={foodErr} estimate={foodEstimate} preview={foodPreview} />
+      <MealEditSheet open={!!editMeal} onClose={() => setEditMeal(null)} entry={editMeal} />
+      <AppleHealthSheet open={appleOpen} onClose={() => setAppleOpen(false)} />
     </div>
+  );
+}
+
+function Stat({ icon: Icon, label, value, onClick }: { icon: typeof Footprints; label: string; value: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="rounded-2xl glass p-2.5 text-center active:scale-95 transition">
+      <Icon size={16} className="mx-auto text-slate-500 dark:text-slate-400" />
+      <p className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums leading-tight">{value}</p>
+      <p className="text-[10px] text-slate-400 dark:text-slate-500">{label}</p>
+    </button>
   );
 }
 
@@ -253,7 +294,7 @@ function Ring({ pct }: { pct: number }) {
     <div className="relative w-24 h-24 shrink-0">
       <svg viewBox="0 0 80 80" className="w-24 h-24 -rotate-90">
         <circle cx="40" cy="40" r={r} fill="none" strokeWidth="8" className="stroke-slate-200/70 dark:stroke-slate-700" />
-        <circle cx="40" cy="40" r={r} fill="none" strokeWidth="8" strokeLinecap="round" stroke={over ? "#f43f5e" : "#10b981"} strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, pct))} />
+        <circle cx="40" cy="40" r={r} fill="none" strokeWidth="8" strokeLinecap="round" className={over ? "stroke-rose-500" : "stroke-zinc-900 dark:stroke-zinc-100"} strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, pct))} />
       </svg>
       <div className="absolute inset-0 grid place-items-center">
         <span className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums">{Math.round(pct * 100)}%</span>

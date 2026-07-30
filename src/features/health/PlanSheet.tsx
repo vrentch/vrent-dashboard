@@ -27,13 +27,13 @@ export default function PlanSheet({ open, onClose, plan }: { open: boolean; onCl
           </section>
 
           {plan.today && (
-            <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)" }}>
+            <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80 mb-1">Focus today</p>
               <p className="text-sm font-medium">{plan.today}</p>
             </div>
           )}
 
-          {plan.workouts?.length > 0 && (
+          {Array.isArray(plan.workouts) && plan.workouts.length > 0 && (
             <section>
               <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
                 <Dumbbell size={12} /> Weekly workouts
@@ -52,7 +52,7 @@ export default function PlanSheet({ open, onClose, plan }: { open: boolean; onCl
             </section>
           )}
 
-          {plan.nutrition?.length > 0 && (
+          {Array.isArray(plan.nutrition) && plan.nutrition.length > 0 && (
             <section>
               <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
                 <Utensils size={12} /> Nutrition tips

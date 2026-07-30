@@ -1,4 +1,4 @@
-# AC News
+# AC App
 
 A mobile-first **PWA** (installable web app) with two sections:
 
@@ -54,7 +54,7 @@ Alternatively, import the existing repo at
 ### Then install on your phone
 
 Open the deployed URL on your phone → browser menu → **Add to Home Screen**.
-It launches full-screen like a native app called **AC News**.
+It launches full-screen like a native app called **AC App**.
 
 ## How to use
 

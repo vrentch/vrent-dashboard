@@ -29,7 +29,7 @@ export default function FoodConfirmSheet({
   }, [estimate]);
 
   const t = estimate?.total;
-  const hasFood = !!estimate && (estimate.items?.length ?? 0) > 0;
+  const hasFood = !!estimate && Array.isArray(estimate.items) && estimate.items.length > 0;
 
   function log() {
     if (!t) return;
@@ -74,7 +74,7 @@ export default function FoodConfirmSheet({
           </div>
 
           {/* Total */}
-          <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg, #059669 0%, #10b981 100%)" }}>
+          <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
             <div className="flex items-end justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Estimated total</p>

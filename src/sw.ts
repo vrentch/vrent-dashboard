@@ -13,7 +13,7 @@ self.addEventListener("push", (event: PushEvent) => {
   } catch {
     data = { body: event.data?.text() };
   }
-  const title = data.title || "AC News";
+  const title = data.title || "AC App";
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",

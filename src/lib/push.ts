@@ -95,7 +95,7 @@ async function currentSubscription(): Promise<PushSubscription | null> {
 
 /** Ask permission, subscribe, and register with the server. */
 export async function enablePush(settings: PushSettings): Promise<{ ok: boolean; reason?: string }> {
-  if (!pushSupported()) return { ok: false, reason: "This browser can't do notifications. On iPhone, add AC News to your Home Screen first." };
+  if (!pushSupported()) return { ok: false, reason: "This browser can't do notifications. On iPhone, add AC App to your Home Screen first." };
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return { ok: false, reason: "Notification permission was not granted." };
 

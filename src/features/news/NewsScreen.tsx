@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SlidersHorizontal, RefreshCw, AlertCircle, ChevronRight, ChevronLeft, Search } from "lucide-react";
+import { SlidersHorizontal, RefreshCw, AlertCircle, ChevronRight, ChevronLeft, Search, Play } from "lucide-react";
 import { fetchNews, type NewsItem } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { topicByKey, countryByCode } from "../../../shared/catalog";
@@ -8,6 +8,7 @@ import NewsCard from "./NewsCard";
 import NewsFilters from "./NewsFilters";
 import ArticleReader from "./ArticleReader";
 import SearchSheet from "./SearchSheet";
+import StoriesViewer from "./StoriesViewer";
 
 type GroupBy = "country" | "topic";
 type Focus = { type: GroupBy; value: string } | null;
@@ -23,6 +24,7 @@ export default function NewsScreen() {
   const [focus, setFocus] = useState<Focus>(null);
   const [reading, setReading] = useState<NewsItem | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [storiesOpen, setStoriesOpen] = useState(false);
 
   const key = `${prefs.countries.join(",")}|${prefs.topics.join(",")}|${prefs.newsQuery}`;
 
@@ -97,6 +99,14 @@ export default function NewsScreen() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setStoriesOpen(true)}
+                disabled={items.length === 0}
+                className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95 disabled:opacity-40"
+                aria-label="Story mode"
+              >
+                <Play size={18} />
+              </button>
               <button
                 onClick={() => setSearchOpen(true)}
                 className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"
@@ -206,6 +216,12 @@ export default function NewsScreen() {
 
       <NewsFilters open={filtersOpen} onClose={() => setFiltersOpen(false)} />
       <SearchSheet open={searchOpen} onClose={() => setSearchOpen(false)} onOpen={setReading} />
+      <StoriesViewer
+        open={storiesOpen}
+        items={focus ? focusItems : items}
+        onClose={() => setStoriesOpen(false)}
+        onOpenArticle={(it) => { setStoriesOpen(false); setReading(it); }}
+      />
       <ArticleReader item={reading} onClose={() => setReading(null)} />
     </div>
   );

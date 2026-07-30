@@ -11,7 +11,7 @@ export function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.toggle("dark", dark);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", dark ? "#0b1120" : "#f6f7f9");
+  if (meta) meta.setAttribute("content", dark ? "#09090b" : "#f4f4f5");
 }
 
 /** Keep in sync with the OS setting while on "system". Returns an unsubscribe. */
