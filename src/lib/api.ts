@@ -307,6 +307,76 @@ export function aiNutrition(items: { name: string; grams: number }[]): Promise<A
   return postJson(`/api/ai-text`, { task: "nutrition", items, code: getAiCode() });
 }
 
+// ── AI Studio (Instagram content generator) ──────────────────────────────────
+
+export interface StudioPhoto {
+  data: string; // base64, no data-URL prefix
+  mediaType: string;
+}
+export interface StudioBrandInfo {
+  name: string;
+  handle: string;
+  tagline: string;
+  about: string;
+  primary: string;
+  secondary: string;
+  language: string;
+}
+export interface StudioQuestion {
+  id: string;
+  question: string;
+  options: { key: string; label: string }[];
+}
+export interface StudioAnswer {
+  question: string;
+  answer: string;
+}
+export interface StudioLayout {
+  template: "clean" | "bold" | "frame";
+  headline: string;
+  subline: string;
+  cta: string;
+  textPosition: "top" | "center" | "bottom";
+  accentColor: string;
+  textColor: string;
+  logoPosition: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  photoIndex: number;
+}
+export interface StudioScene {
+  text: string;
+  photoIndex: number;
+  seconds: number;
+}
+export interface StudioPackage {
+  category: string;
+  concept: string;
+  post: { caption: string; hashtags: string[]; altText: string; layout: StudioLayout };
+  story: { layout: StudioLayout; sticker: string };
+  reel: { hook: string; caption: string; audio: string; cover: StudioLayout; scenes: StudioScene[] };
+  tips: string[];
+  alternatives: string[];
+}
+
+export function aiStudioQuestions(
+  photos: StudioPhoto[],
+  prompt: string,
+  brand: StudioBrandInfo,
+  formats: string[]
+): Promise<AiResult<{ questions: StudioQuestion[] }>> {
+  return postJson(`/api/ai-studio`, { task: "questions", photos, prompt, brand, formats, code: getAiCode() });
+}
+
+export function aiStudioGenerate(
+  photos: StudioPhoto[],
+  prompt: string,
+  brand: StudioBrandInfo,
+  formats: string[],
+  answers: StudioAnswer[],
+  revision?: string
+): Promise<AiResult<StudioPackage>> {
+  return postJson(`/api/ai-studio`, { task: "generate", photos, prompt, brand, formats, answers, revision, code: getAiCode() });
+}
+
 // Multi-turn chat about a scanned photo. `image` (base64, no prefix) is only
 // needed on the first message; the server keeps it in context via the history.
 export interface ChatTurn { role: "user" | "assistant"; text: string }

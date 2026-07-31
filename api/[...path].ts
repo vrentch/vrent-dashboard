@@ -1110,6 +1110,195 @@ Round to whole numbers. Foods (name @ grams): ${JSON.stringify(items)}`;
   return { status: 200, body: { ok: true, data: { translation: str(data?.translation), sourceLang: str(data?.sourceLang) }, model: AI_MODEL } };
 }
 
+// ── AI Studio (Instagram content generator) ─────────────────────────────────
+//
+// Powers the Studio tab: photos + a prompt (+ brand kit + brief answers) go in,
+// a complete ready-to-publish Instagram package comes out — caption, hashtags,
+// a layout spec the client renders onto the photos (post + story), and a
+// scene-by-scene reel plan. Creative work runs on the strongest configured
+// model (AI_STUDIO_MODEL, e.g. claude-opus-5) and falls back down the chain.
+
+const AI_STUDIO_MODEL = process.env.AI_STUDIO_MODEL || AI_VISION_MODEL;
+
+const STUDIO_TEMPLATES = ["clean", "bold", "frame"];
+const STUDIO_POSITIONS = ["top", "center", "bottom"];
+const STUDIO_CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"];
+
+function hexColor(v: unknown, fallback: string): string {
+  const s = str(v).trim();
+  return /^#[0-9a-fA-F]{6}$/.test(s) ? s : fallback;
+}
+function oneOf(v: unknown, allowed: string[], fallback: string): string {
+  const s = str(v).trim();
+  return allowed.includes(s) ? s : fallback;
+}
+
+function normalizeLayout(d: any, photoCount: number) {
+  const idx = Math.min(Math.max(0, Math.round(nnum(d?.photoIndex))), Math.max(0, photoCount - 1));
+  return {
+    template: oneOf(d?.template, STUDIO_TEMPLATES, "clean"),
+    headline: str(d?.headline).slice(0, 60),
+    subline: str(d?.subline).slice(0, 90),
+    cta: str(d?.cta).slice(0, 30),
+    textPosition: oneOf(d?.textPosition, STUDIO_POSITIONS, "bottom"),
+    accentColor: hexColor(d?.accentColor, "#ffffff"),
+    textColor: hexColor(d?.textColor, "#ffffff"),
+    logoPosition: oneOf(d?.logoPosition, STUDIO_CORNERS, "top-left"),
+    photoIndex: idx,
+  };
+}
+
+function normalizeStudio(d: any, photoCount: number) {
+  const post = d?.post && typeof d.post === "object" ? d.post : {};
+  const story = d?.story && typeof d.story === "object" ? d.story : {};
+  const reel = d?.reel && typeof d.reel === "object" ? d.reel : {};
+  return {
+    category: str(d?.category).slice(0, 40) || "General",
+    concept: str(d?.concept).slice(0, 200),
+    post: {
+      caption: str(post?.caption).slice(0, 2200),
+      hashtags: arr<any>(post?.hashtags).map(str).filter(Boolean).slice(0, 30),
+      altText: str(post?.altText).slice(0, 200),
+      layout: normalizeLayout(post?.layout, photoCount),
+    },
+    story: {
+      layout: normalizeLayout(story?.layout, photoCount),
+      sticker: str(story?.sticker).slice(0, 140),
+    },
+    reel: {
+      hook: str(reel?.hook).slice(0, 90),
+      caption: str(reel?.caption).slice(0, 2200),
+      audio: str(reel?.audio).slice(0, 140),
+      cover: normalizeLayout(reel?.cover, photoCount),
+      scenes: arr<any>(reel?.scenes)
+        .map((s) => ({
+          text: str(s?.text).slice(0, 60),
+          photoIndex: Math.min(Math.max(0, Math.round(nnum(s?.photoIndex))), Math.max(0, photoCount - 1)),
+          seconds: Math.min(5, Math.max(1, nnum(s?.seconds) || 2.5)),
+        }))
+        .filter((s) => s.text || photoCount > 0)
+        .slice(0, 8),
+    },
+    tips: arr<any>(d?.tips).map(str).filter(Boolean).slice(0, 4),
+    alternatives: arr<any>(d?.alternatives).map(str).filter(Boolean).slice(0, 3),
+  };
+}
+
+function studioPhotoBlocks(body: any): any[] {
+  return arr<any>(body?.photos)
+    .slice(0, 4)
+    .map((p) => ({
+      type: "image",
+      source: { type: "base64", media_type: str(p?.mediaType) || "image/jpeg", data: str(p?.data) },
+    }))
+    .filter((b) => b.source.data);
+}
+
+function studioContext(body: any): string {
+  const brand = body?.brand && typeof body.brand === "object" ? body.brand : {};
+  const bits = [
+    brand.name && `Business: ${str(brand.name).slice(0, 80)}`,
+    brand.handle && `Instagram handle: ${str(brand.handle).slice(0, 60)}`,
+    brand.tagline && `Tagline: ${str(brand.tagline).slice(0, 120)}`,
+    brand.about && `About the business: ${str(brand.about).slice(0, 400)}`,
+    brand.primary && `Brand colors: primary ${hexColor(brand.primary, "#18181b")}, secondary ${hexColor(brand.secondary, "#f4f4f5")}`,
+    `Caption language: ${str(brand.language).slice(0, 30) || "match the user's request, default English"}`,
+  ].filter(Boolean);
+  const answers = arr<any>(body?.answers)
+    .map((a) => `- ${str(a?.question).slice(0, 120)}: ${str(a?.answer).slice(0, 120)}`)
+    .filter((a) => a.length > 4)
+    .slice(0, 6);
+  return [
+    `BRAND KIT:\n${bits.join("\n")}`,
+    `USER REQUEST: ${str(body?.prompt).slice(0, 1000) || "(none — infer the best angle from the photos)"}`,
+    answers.length ? `CREATIVE BRIEF (the user answered these):\n${answers.join("\n")}` : "",
+    str(body?.revision) ? `REVISION REQUEST (the user wants this changed vs. the previous attempt): ${str(body.revision).slice(0, 500)}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+const STUDIO_QUESTIONS_PROMPT = `You are an elite Instagram creative director doing a rapid client brief. Look at the photos and the context above, then ask the 3 multiple-choice questions whose answers would MOST improve the final content (think: goal of the post, tone/vibe, audience, offer/CTA, angle). Never ask something already answered by the context. Respond with ONLY a JSON object, no prose, matching exactly:
+{
+  "questions": [
+    {"id": "q1", "question": "short clear question", "options": [{"key": "a", "label": "short option (max 6 words)"}]}
+  ]
+}
+Exactly 3 questions, each with exactly 4 distinct options. Options must be concrete and opinionated, not vague.`;
+
+function studioGeneratePrompt(photoCount: number, formats: string[]): string {
+  return `You are an elite Instagram creative director and copywriter for small businesses. Using the brand kit, user request, brief answers and the ${photoCount} photo(s) above (indexed 0..${photoCount - 1}), produce a complete ready-to-publish package for: ${formats.join(", ")}.
+
+Craft rules:
+- Caption: scroll-stopping first line (the hook), then short line-broken paragraphs, tasteful emoji, and a clear CTA matching the goal. Write in the brand's caption language.
+- Hashtags: 12-18, mixing broad reach and niche/local tags relevant to the business and photo. No banned or spammy tags.
+- Layouts: pick the best photoIndex per format. headline <= 6 punchy words, subline <= 10 words, cta <= 4 words. Choose template ("clean" = elegant scrim + type, "bold" = big centered statement, "frame" = bordered editorial card) and textPosition to suit the photo's composition — never cover the photo's main subject. accentColor: a #rrggbb that complements BOTH the photo and brand palette. textColor: #ffffff or a near-black #rrggbb, whichever contrasts with the photo area behind the text. The client app overlays the business logo automatically — never mention the logo in text.
+- Reel: hook <= 8 words, then 4-6 scenes. Each scene: on-screen text <= 8 words, a photoIndex, seconds (1.5-3.5). Story arc: hook → value/details → CTA. "audio" = a specific style of trending audio to search for (do not invent song licenses).
+- Story: design for taps — bigger, bolder, one idea. "sticker" = one engagement sticker idea (poll/question/countdown) with its exact text.
+- category: a short reusable library category for this shoot (e.g. "Apartments", "Team", "Promotions", "Behind the scenes").
+- tips: 2-3 sharp, specific posting tips (best time, first comment, cross-posting). alternatives: 2 different creative angles the user could try next.
+
+Respond with ONLY a JSON object, no prose, matching exactly:
+{
+  "category": "...",
+  "concept": "one-line creative concept",
+  "post": {
+    "caption": "...", "hashtags": ["#..."], "altText": "accessibility description of the final image",
+    "layout": {"template": "clean|bold|frame", "headline": "...", "subline": "...", "cta": "...", "textPosition": "top|center|bottom", "accentColor": "#rrggbb", "textColor": "#rrggbb", "logoPosition": "top-left|top-right|bottom-left|bottom-right", "photoIndex": 0}
+  },
+  "story": {"layout": {same shape as post.layout}, "sticker": "..."},
+  "reel": {"hook": "...", "caption": "...", "audio": "...", "cover": {same shape as post.layout}, "scenes": [{"text": "...", "photoIndex": 0, "seconds": 2.5}]},
+  "tips": ["..."], "alternatives": ["..."]
+}
+Include every key even for formats not requested (fill them sensibly anyway — they cost you nothing and the user may want them later).`;
+}
+
+async function aiStudio(body: any) {
+  if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
+  if (!codeMatches(body?.code)) return NEED_CODE;
+  const task = str(body?.task);
+  const photos = studioPhotoBlocks(body);
+  if (!photos.length) return { status: 400, body: { ok: false, error: "At least one photo is required" } };
+  const formats = arr<any>(body?.formats).map(str).filter((f) => ["post", "story", "reel"].includes(f));
+  const context = studioContext(body);
+
+  const content: any[] = [...photos, { type: "text", text: `${context}\n\n${task === "questions" ? STUDIO_QUESTIONS_PROMPT : studioGeneratePrompt(photos.length, formats.length ? formats : ["post", "story", "reel"])}` }];
+  const maxTokens = task === "questions" ? 900 : 3000;
+
+  // Strongest model first (creative quality matters here), then down the chain.
+  let json: any;
+  let usedModel = AI_STUDIO_MODEL;
+  try {
+    json = await anthropic({ model: AI_STUDIO_MODEL, max_tokens: maxTokens, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
+  } catch {
+    try {
+      usedModel = AI_VISION_MODEL;
+      json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
+    } catch {
+      usedModel = AI_MODEL;
+      json = await anthropic({ model: AI_MODEL, max_tokens: maxTokens, messages: [{ role: "user", content }] });
+    }
+  }
+
+  const data = parseModelJson(aiText(json));
+  if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
+
+  if (task === "questions") {
+    const questions = arr<any>(data?.questions)
+      .map((q, i) => ({
+        id: str(q?.id) || `q${i + 1}`,
+        question: str(q?.question).slice(0, 160),
+        options: arr<any>(q?.options)
+          .map((o, j) => ({ key: str(o?.key) || String.fromCharCode(97 + j), label: str(o?.label).slice(0, 60) }))
+          .filter((o) => o.label)
+          .slice(0, 4),
+      }))
+      .filter((q) => q.question && q.options.length >= 2)
+      .slice(0, 3);
+    return { status: 200, body: { ok: true, data: { questions }, model: usedModel } };
+  }
+
+  return { status: 200, body: { ok: true, data: normalizeStudio(data, photos.length), model: usedModel } };
+}
+
 // ── Push notifications (privacy-preserving: market open/close + daily recap) ─
 //
 // Storage is Vercel KV (Upstash Redis REST). VAPID keys come from env. If any
@@ -1576,6 +1765,10 @@ export async function handleApi(
 
     if (route === "ai-chat") {
       return await aiChat(ctx.body || {});
+    }
+
+    if (route === "ai-studio") {
+      return await aiStudio(ctx.body || {});
     }
 
     if (route === "health-status") {
