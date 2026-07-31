@@ -192,6 +192,7 @@ export interface AiResult<T = any> {
   model?: string;
   error?: string;
   configured?: boolean;
+  needCode?: boolean;
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -298,4 +299,17 @@ export interface HealthPlan {
 
 export function aiPlan(profile: unknown, recent: unknown): Promise<AiResult<HealthPlan>> {
   return postJson(`/api/ai-text`, { task: "plan", profile, recent, code: getAiCode() });
+}
+
+// Re-estimate nutrition after the user corrects a food's name and/or grams.
+export interface NutritionItem { name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }
+export function aiNutrition(items: { name: string; grams: number }[]): Promise<AiResult<{ items: NutritionItem[] }>> {
+  return postJson(`/api/ai-text`, { task: "nutrition", items, code: getAiCode() });
+}
+
+// Multi-turn chat about a scanned photo. `image` (base64, no prefix) is only
+// needed on the first message; the server keeps it in context via the history.
+export interface ChatTurn { role: "user" | "assistant"; text: string }
+export function aiChat(image: string | null, mediaType: string, messages: ChatTurn[]): Promise<{ ok: boolean; reply?: string; error?: string; needCode?: boolean; configured?: boolean }> {
+  return postJson(`/api/ai-chat`, { image: image || undefined, mediaType, messages, code: getAiCode() });
 }

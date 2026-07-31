@@ -309,6 +309,52 @@ export function recentSummary(s: HealthState, days = 7) {
   return { days: out, latestWeightKg: latestWeight };
 }
 
+// Rolling 7-day aggregates for the weekly stats card.
+export interface WeeklyStats {
+  avgCalories: number;
+  avgSteps: number;
+  avgWaterMl: number;
+  avgSleep: number;
+  workouts: number;
+  onTargetDays: number;
+  loggedDays: number;
+  target: number;
+  weightChange: number | null;
+}
+export function weeklyStats(s: HealthState): WeeklyStats {
+  const target = calorieTarget(s.profile);
+  let calTotal = 0, calDays = 0, stepTotal = 0, stepDays = 0, water = 0, waterDays = 0, sleepTotal = 0, sleepDays = 0, workouts = 0, onTarget = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const k = toKey(d);
+    const cal = Math.round(macrosOn(s, k).calories);
+    if (cal > 0) { calTotal += cal; calDays++; if (target > 0 && cal <= target) onTarget++; }
+    const st = stepsOn(s, k);
+    if (st > 0) { stepTotal += st; stepDays++; }
+    const w = waterOn(s, k);
+    if (w > 0) { water += w; waterDays++; }
+    const sl = sleepOn(s, k);
+    if (sl > 0) { sleepTotal += sl; sleepDays++; }
+    workouts += activitiesOn(s, k).filter((a) => a.kind === "workout").length;
+  }
+  // Weight change across roughly the last week (weights are newest-first).
+  const cutoff = toKey(new Date(Date.now() - 8 * 86400000));
+  const recentW = s.weights.filter((w) => w.date >= cutoff);
+  const weightChange = recentW.length >= 2 ? +(recentW[0].kg - recentW[recentW.length - 1].kg).toFixed(1) : null;
+  return {
+    avgCalories: calDays ? Math.round(calTotal / calDays) : 0,
+    avgSteps: stepDays ? Math.round(stepTotal / stepDays) : 0,
+    avgWaterMl: waterDays ? Math.round(water / waterDays) : 0,
+    avgSleep: sleepDays ? +(sleepTotal / sleepDays).toFixed(1) : 0,
+    workouts,
+    onTargetDays: onTarget,
+    loggedDays: calDays,
+    target,
+    weightChange,
+  };
+}
+
 // ── Background sync (Apple Health via Shortcut) ───────────────────────────────
 // Each installed app owns a private random sync key. The iOS Shortcut sends the
 // day's metrics to the server under this key; the app pulls them on open. The

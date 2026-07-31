@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
-  waterOn, sleepOn, latestWeight, removeActivity, savePlan, recentSummary, toKey, type FoodEntry,
+  waterOn, sleepOn, latestWeight, removeActivity, savePlan, recentSummary, toKey, weeklyStats, type FoodEntry,
 } from "../../lib/health";
 import { analyzeImage, aiPlan, type FoodEstimate } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
@@ -28,6 +28,8 @@ export default function HealthScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [editMeal, setEditMeal] = useState<FoodEntry | null>(null);
   const [appleOpen, setAppleOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(today);
+  const isToday = viewDate === today;
 
   const openLog = (mode: typeof logMode) => { setLogMode(mode); setLogOpen(true); };
 
@@ -39,18 +41,37 @@ export default function HealthScreen() {
   const [foodPreview, setFoodPreview] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
 
-  const eaten = macrosOn(s, today);
+  const eaten = macrosOn(s, viewDate);
   const targets = macroTargets(s.profile);
   const target = calorieTarget(s.profile);
   const remaining = Math.max(0, target - eaten.calories);
   const pct = Math.min(1, target ? eaten.calories / target : 0);
-  const steps = stepsOn(s, today);
-  const burn = burnOn(s, today);
-  const water = waterOn(s, today);
-  const sleep = sleepOn(s, today);
-  const weight = latestWeight(s);
-  const meals = foodsOn(s, today);
-  const acts = activitiesOn(s, today).filter((a) => a.kind === "workout");
+  const steps = stepsOn(s, viewDate);
+  const burn = burnOn(s, viewDate);
+  const water = waterOn(s, viewDate);
+  const sleep = sleepOn(s, viewDate);
+  const weight = s.weights.find((w) => w.date === viewDate)?.kg ?? latestWeight(s);
+  const meals = foodsOn(s, viewDate);
+  const acts = activitiesOn(s, viewDate).filter((a) => a.kind === "workout");
+  const wk = useMemo(() => weeklyStats(s), [s]);
+
+  // Last 14 days for the day picker (today first).
+  const dayStrip = useMemo(() => {
+    const arr: { key: string; dow: string; day: number; has: boolean }[] = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const k = toKey(d);
+      arr.push({
+        key: k,
+        dow: d.toLocaleDateString(undefined, { weekday: "short" }),
+        day: d.getDate(),
+        has: macrosOn(s, k).calories > 0 || stepsOn(s, k) > 0 || waterOn(s, k) > 0 || sleepOn(s, k) > 0,
+      });
+    }
+    return arr;
+  }, [s]);
+  const viewLabel = isToday ? "Today" : new Date(viewDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const week = useMemo(() => {
     const arr: { key: string; label: string; cal: number }[] = [];
@@ -107,24 +128,47 @@ export default function HealthScreen() {
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
             <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Health</h1>
-            <p className="text-xs text-slate-400 dark:text-slate-500">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">{viewLabel}</p>
           </div>
-          <button onClick={() => setProfileOpen(true)} className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95" aria-label="Profile">
-            <SlidersHorizontal size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isToday && (
+              <button onClick={() => setViewDate(today)} className="h-9 px-3 rounded-full glass text-xs font-semibold text-brand-600 dark:text-brand-400 active:scale-95">Today</button>
+            )}
+            <button onClick={() => setProfileOpen(true)} className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95" aria-label="Profile">
+              <SlidersHorizontal size={18} />
+            </button>
+          </div>
         </div>
       </header>
 
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" />
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
-        {aiStatus === "off" && (
+        {/* Day picker — review any of the last 14 days */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4">
+          {dayStrip.map((d) => {
+            const sel = d.key === viewDate;
+            return (
+              <button
+                key={d.key}
+                onClick={() => setViewDate(d.key)}
+                className={`shrink-0 w-11 py-1.5 rounded-2xl flex flex-col items-center gap-0.5 transition ${sel ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-600 dark:text-slate-300"}`}
+              >
+                <span className="text-[10px] font-medium opacity-70">{d.dow}</span>
+                <span className="text-sm font-bold tabular-nums">{d.day}</span>
+                <span className={`w-1 h-1 rounded-full ${d.has ? (sel ? "bg-white/80 dark:bg-slate-900/80" : "bg-emerald-500") : "bg-transparent"}`} />
+              </button>
+            );
+          })}
+        </div>
+
+        {isToday && aiStatus === "off" && (
           <div className="rounded-2xl glass-subtle p-4">
             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Turn on AI for food scanning</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Add <code className="px-1 rounded bg-slate-200/70 dark:bg-slate-700 text-[11px]">ANTHROPIC_API_KEY</code> in Vercel to snap meals and get AI plans. Manual logging works without it.</p>
           </div>
         )}
-        {aiStatus === "locked" && <AiUnlock onSubmit={unlock} compact />}
+        {isToday && aiStatus === "locked" && <AiUnlock onSubmit={unlock} compact />}
 
         {/* Today ring */}
         <section className="rounded-3xl glass p-5">
@@ -148,12 +192,13 @@ export default function HealthScreen() {
 
         {/* Quick stats — tap to log/amend */}
         <div className="grid grid-cols-4 gap-2">
-          <Stat icon={Footprints} label="Steps" value={steps ? steps.toLocaleString() : "—"} onClick={() => openLog("steps")} />
-          <Stat icon={Droplets} label="Water" value={water ? `${(water / 1000).toFixed(1)}L` : "—"} onClick={() => openLog("water")} />
-          <Stat icon={Moon} label="Sleep" value={sleep ? `${sleep}h` : "—"} onClick={() => openLog("sleep")} />
-          <Stat icon={Scale} label="Weight" value={weight ? `${weight}kg` : "—"} onClick={() => openLog("weight")} />
+          <Stat icon={Footprints} label="Steps" value={steps ? steps.toLocaleString() : "—"} onClick={isToday ? () => openLog("steps") : undefined} />
+          <Stat icon={Droplets} label="Water" value={water ? `${(water / 1000).toFixed(1)}L` : "—"} onClick={isToday ? () => openLog("water") : undefined} />
+          <Stat icon={Moon} label="Sleep" value={sleep ? `${sleep}h` : "—"} onClick={isToday ? () => openLog("sleep") : undefined} />
+          <Stat icon={Scale} label="Weight" value={weight ? `${weight}kg` : "—"} onClick={isToday ? () => openLog("weight") : undefined} />
         </div>
 
+        {isToday && (<>
         {/* Actions */}
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -210,11 +255,12 @@ export default function HealthScreen() {
             </button>
           )}
         </section>
+        </>)}
 
-        {/* Today's meals */}
+        {/* Meals for the selected day */}
         {meals.length > 0 && (
           <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Today's meals</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">{isToday ? "Today's meals" : "Meals"}</h2>
             <div className="space-y-2">
               {meals.map((m) => (
                 <button key={m.id} onClick={() => setEditMeal(m)} className="w-full flex items-center gap-3 rounded-2xl glass-subtle p-3 text-left active:scale-[0.99] transition">
@@ -233,7 +279,7 @@ export default function HealthScreen() {
 
         {acts.length > 0 && (
           <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Today's workouts</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">{isToday ? "Today's workouts" : "Workouts"}</h2>
             <div className="flex flex-wrap gap-2">
               {acts.map((a) => (
                 <span key={a.id} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full glass-subtle text-xs font-semibold text-slate-700 dark:text-slate-200">
@@ -251,7 +297,17 @@ export default function HealthScreen() {
         <section>
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">This week</h2>
-            <span className="text-xs text-slate-400 dark:text-slate-500">avg {weekAvg} kcal</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              avg {weekAvg} kcal{wk.weightChange != null ? ` · ${wk.weightChange > 0 ? "+" : ""}${wk.weightChange}kg` : ""}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-2.5">
+            <WStat label="Avg kcal" value={wk.avgCalories ? wk.avgCalories.toLocaleString() : "—"} />
+            <WStat label="Avg steps" value={wk.avgSteps ? wk.avgSteps.toLocaleString() : "—"} />
+            <WStat label="Workouts" value={String(wk.workouts)} />
+            <WStat label="Avg sleep" value={wk.avgSleep ? `${wk.avgSleep}h` : "—"} />
+            <WStat label="Avg water" value={wk.avgWaterMl ? `${(wk.avgWaterMl / 1000).toFixed(1)}L` : "—"} />
+            <WStat label="On target" value={wk.loggedDays ? `${wk.onTargetDays}/${wk.loggedDays}` : "—"} />
           </div>
           <div className="rounded-2xl glass p-4">
             <div className="flex items-end justify-between gap-2 h-28">
@@ -280,13 +336,22 @@ export default function HealthScreen() {
   );
 }
 
-function Stat({ icon: Icon, label, value, onClick }: { icon: typeof Footprints; label: string; value: string; onClick: () => void }) {
+function Stat({ icon: Icon, label, value, onClick }: { icon: typeof Footprints; label: string; value: string; onClick?: () => void }) {
   return (
-    <button onClick={onClick} className="rounded-2xl glass p-2.5 text-center active:scale-95 transition">
+    <button onClick={onClick} disabled={!onClick} className="rounded-2xl glass p-2.5 text-center active:scale-95 transition disabled:active:scale-100">
       <Icon size={16} className="mx-auto text-slate-500 dark:text-slate-400" />
       <p className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums leading-tight">{value}</p>
       <p className="text-[10px] text-slate-400 dark:text-slate-500">{label}</p>
     </button>
+  );
+}
+
+function WStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl glass p-2.5 text-center">
+      <p className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums leading-tight">{value}</p>
+      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{label}</p>
+    </div>
   );
 }
 

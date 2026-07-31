@@ -989,6 +989,43 @@ async function aiVision(task: string, image: string, mediaType: string, code?: u
   return { status: 200, body: { ok: true, data: normalizeVision(task, data), model: usedModel } };
 }
 
+// Multi-turn chat about a photo: the Scanner's "ask a follow-up" feature. The
+// image rides on the first user turn; later turns are plain text and the whole
+// history is re-sent each request (the API is stateless).
+async function aiChat(body: any) {
+  if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  if (!codeMatches(body?.code)) return NEED_CODE;
+  const turns = arr<any>(body?.messages)
+    .map((m) => ({ role: m?.role === "assistant" ? "assistant" : "user", text: str(m?.text).slice(0, 4000) }))
+    .filter((m) => m.text);
+  if (!turns.length) return { status: 200, body: { ok: false, error: "No message" } };
+  const image = typeof body?.image === "string" ? body.image : "";
+  const mediaType = str(body?.mediaType) || "image/jpeg";
+
+  const messages = turns.map((m, i) => {
+    if (i === 0 && image && m.role === "user") {
+      return { role: "user", content: [{ type: "image", source: { type: "base64", media_type: mediaType, data: image } }, { type: "text", text: m.text }] };
+    }
+    return { role: m.role, content: m.text };
+  });
+
+  let json: any;
+  try {
+    json = await anthropic({
+      model: AI_VISION_MODEL,
+      max_tokens: 1024,
+      thinking: { type: "disabled" },
+      system: "You are a sharp, helpful visual assistant. The user shared a photo and is asking about it or giving you a task (translate text, identify, find, explain, extract details). Answer concisely and usefully in plain language. If you can't tell from the image, say so.",
+      messages,
+    });
+  } catch {
+    json = await anthropic({ model: AI_MODEL, max_tokens: 1024, system: "You are a helpful visual assistant answering questions about a photo the user shared.", messages });
+  }
+  const reply = aiText(json);
+  if (!reply) return { status: 200, body: { ok: false, error: "No reply" } };
+  return { status: 200, body: { ok: true, reply } };
+}
+
 function normalizePlan(d: any) {
   const t = d?.targets && typeof d.targets === "object" ? d.targets : {};
   return {
@@ -1032,6 +1069,17 @@ Respond with ONLY a JSON object matching exactly:
   "nutrition": ["short actionable tip", "..."]
 }
 Base calorie/macro targets on the profile (goal, activity). Provide a 7-day workout array. Keep everything practical and safe; this is general guidance, not medical advice.`;
+  } else if (task === "nutrition") {
+    // Re-estimate nutrition for user-corrected items (fixed name and/or grams).
+    const items = arr<any>(body?.items)
+      .map((i) => ({ name: str(i?.name).slice(0, 80), grams: nnum(i?.grams) || 0 }))
+      .filter((i) => i.name)
+      .slice(0, 20);
+    if (!items.length) return { status: 200, body: { ok: false, error: "No items" } };
+    maxTokens = 800;
+    prompt = `Give accurate nutrition for each food at the exact gram amount specified. Use the corrected food name (it may differ from what a photo suggested — e.g. beef vs chicken). Respond with ONLY a JSON object:
+{"items":[{"name":"...","grams":0,"calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}]}
+Round to whole numbers. Foods (name @ grams): ${JSON.stringify(items)}`;
   } else {
     return { status: 400, body: { ok: false, error: "unknown task" } };
   }
@@ -1043,6 +1091,17 @@ Base calorie/macro targets on the profile (goal, activity). Provide a 7-day work
   });
   const data = parseModelJson(aiText(json));
   if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
+  if (task === "nutrition") {
+    const items = arr<any>(data?.items).map((i) => ({
+      name: str(i?.name),
+      grams: nnum(i?.grams) || 0,
+      calories: nnum(i?.calories) || 0,
+      protein_g: nnum(i?.protein_g) || 0,
+      carbs_g: nnum(i?.carbs_g) || 0,
+      fat_g: nnum(i?.fat_g) || 0,
+    }));
+    return { status: 200, body: { ok: true, data: { items }, model: AI_MODEL } };
+  }
   if (task === "plan") return { status: 200, body: { ok: true, data: normalizePlan(data), model: AI_MODEL } };
   if (task === "explain") {
     return { status: 200, body: { ok: true, data: { explanation: str(data?.explanation), keyPoints: arr<any>(data?.keyPoints).map(str).filter(Boolean) }, model: AI_MODEL } };
@@ -1513,6 +1572,10 @@ export async function handleApi(
 
     if (route === "ai-text") {
       return await aiTextTask(ctx.body || {});
+    }
+
+    if (route === "ai-chat") {
+      return await aiChat(ctx.body || {});
     }
 
     if (route === "health-status") {

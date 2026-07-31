@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImageIcon, Search, Languages, Sparkles, RotateCcw, X, Loader2, Trash2 } from "lucide-react";
-import { analyzeImage, aiTranslate, aiExplain, type Identified } from "../../lib/api";
+import { Camera, ImageIcon, Search, Languages, Sparkles, RotateCcw, X, Loader2, Trash2, MessageCircle, Send } from "lucide-react";
+import { analyzeImage, aiTranslate, aiExplain, aiChat, type Identified, type ChatTurn } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
 import { useAiAccess } from "../../lib/aiAccess";
 import AiUnlock from "../ai/AiUnlock";
@@ -41,6 +41,9 @@ export default function ScanScreen() {
   const [history, setHistory] = useState<ScanRecord[]>(loadHistory);
   const [translateOpen, setTranslateOpen] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [imgB64, setImgB64] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState("image/jpeg");
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -53,6 +56,8 @@ export default function ScanScreen() {
     try {
       const img = await prepareImage(file);
       setPreview(img.dataUrl);
+      setImgB64(img.base64);
+      setMediaType(img.mediaType);
       const res = await analyzeImage<Identified>("identify", img.base64, img.mediaType);
       if (!res.ok || !res.data) {
         setError(res.configured === false ? "AI isn't set up yet." : res.error || "Couldn't analyze that photo.");
@@ -77,6 +82,7 @@ export default function ScanScreen() {
     setPreview(null);
     setResult(null);
     setError(null);
+    setImgB64(null);
   }
 
   function persistHistory(next: ScanRecord[]) {
@@ -181,6 +187,11 @@ export default function ScanScreen() {
               <ActionBtn icon={Sparkles} label="Explain" onClick={() => setExplainOpen(true)} />
             </div>
 
+            {/* Ask AI about this photo */}
+            <button onClick={() => setChatOpen(true)} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-bold active:scale-[0.98] transition" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
+              <MessageCircle size={16} /> Ask AI about this
+            </button>
+
             <button onClick={() => fileRef.current?.click()} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold active:scale-[0.98]">
               <RotateCcw size={15} /> Scan another
             </button>
@@ -227,9 +238,92 @@ export default function ScanScreen() {
         <>
           <TranslateSheet open={translateOpen} onClose={() => setTranslateOpen(false)} source={result.detectedText?.trim() || result.summary} hasText={!!result.detectedText?.trim()} />
           <ExplainSheet open={explainOpen} onClose={() => setExplainOpen(false)} topic={result.title} />
+          <ChatSheet open={chatOpen} onClose={() => setChatOpen(false)} image={imgB64} mediaType={mediaType} subject={result.title} />
         </>
       )}
     </div>
+  );
+}
+
+function ChatSheet({ open, onClose, image, mediaType, subject }: { open: boolean; onClose: () => void; image: string | null; mediaType: string; subject: string }) {
+  const [messages, setMessages] = useState<ChatTurn[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) { setMessages([]); setInput(""); setErr(null); }
+  }, [open]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
+
+  const suggestions = ["Where can I buy this?", "Tell me more", "Is it worth it?", "Translate any text"];
+
+  async function send(text: string) {
+    const t = text.trim();
+    if (!t || sending) return;
+    setInput("");
+    setErr(null);
+    const next = [...messages, { role: "user" as const, text: t }];
+    setMessages(next);
+    setSending(true);
+    try {
+      const r = await aiChat(image, mediaType, next);
+      if (r.ok && r.reply) setMessages((m) => [...m, { role: "assistant", text: r.reply! }]);
+      else setErr(r.needCode ? "Enter your access code first." : r.error || "Couldn't get a reply.");
+    } catch {
+      setErr("Couldn't get a reply.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title={`Ask about ${subject}`}>
+      <div className="space-y-3">
+        <div className="space-y-2.5 max-h-[46vh] overflow-y-auto no-scrollbar pr-0.5">
+          {messages.length === 0 && (
+            <p className="text-[13px] text-slate-500 dark:text-slate-400 py-2">Ask anything about the photo — identify details, find where to buy it, translate text on it, or give a task.</p>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${m.role === "user" ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium" : "glass-subtle text-slate-800 dark:text-slate-100"}`}>
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {sending && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl px-3.5 py-2 glass-subtle text-slate-500 dark:text-slate-400"><Loader2 size={15} className="animate-spin" /></div>
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+
+        {err && <p className="text-[12px] text-rose-600 dark:text-rose-400">{err}</p>}
+
+        {messages.length === 0 && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {suggestions.map((sug) => (
+              <button key={sug} onClick={() => send(sug)} className="shrink-0 px-3 py-1.5 rounded-full glass-subtle text-xs font-semibold text-slate-600 dark:text-slate-300 active:scale-95">{sug}</button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") send(input); }}
+            placeholder="Ask a question…"
+            className="flex-1 min-w-0 rounded-full glass-subtle px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none"
+          />
+          <button onClick={() => send(input)} disabled={!input.trim() || sending} className="grid place-items-center w-10 h-10 shrink-0 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 active:scale-90 disabled:opacity-40">
+            <Send size={16} />
+          </button>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 
