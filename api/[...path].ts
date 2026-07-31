@@ -820,10 +820,11 @@ async function getSportsStandings(sport: string, league: string) {
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const AI_KEY = process.env.ANTHROPIC_API_KEY;
 const AI_MODEL = process.env.AI_MODEL || "claude-haiku-4-5";
-// Vision (food photos, scanner) uses a stronger model by default — meal
-// recognition is far more accurate on Sonnet than on Haiku. Override with
-// AI_VISION_MODEL; falls back to AI_MODEL automatically if it's unavailable.
-const AI_VISION_MODEL = process.env.AI_VISION_MODEL || "claude-sonnet-5";
+// Vision (food photos, scanner) and Studio both run on the strongest model by
+// default — no env var needed. AI_STUDIO_MODEL falls through to this, so this
+// one default powers both. Override with AI_VISION_MODEL / AI_STUDIO_MODEL to
+// dial back cost; falls back to AI_MODEL automatically if it's unavailable.
+const AI_VISION_MODEL = process.env.AI_VISION_MODEL || "claude-opus-5";
 // Optional shared access code that gates the paid AI features. When set, every
 // AI request must include the matching code or it is rejected BEFORE any
 // Anthropic call is made — so a stranger with the URL can never spend credit.
