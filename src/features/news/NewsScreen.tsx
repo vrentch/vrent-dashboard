@@ -10,6 +10,7 @@ import ArticleReader from "./ArticleReader";
 import SearchSheet from "./SearchSheet";
 import StoriesViewer from "./StoriesViewer";
 import { isSeen } from "../../lib/seen";
+import { usePoll } from "../../lib/usePoll";
 
 type GroupBy = "country" | "topic";
 type Focus = { type: GroupBy; value: string } | null;
@@ -58,6 +59,7 @@ export default function NewsScreen() {
     load();
   }, [load]);
   useEffect(() => setFocus(null), [key]);
+  usePoll(() => load(true), 60_000);
 
   // Build ordered groups following the user's own selection order.
   const groups = useMemo(() => {

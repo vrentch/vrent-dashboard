@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, ChevronRight } from "lucide-react";
 import { fetchQuotes, type Quote } from "../../lib/api";
 import { usePrefs, activeWatchlist } from "../../lib/store";
+import { usePoll } from "../../lib/usePoll";
 import { fmtPct, displayPrice } from "../../lib/format";
 import { REGIONS, primaryIndex, NO_SIGNAL_REGIONS, type MarketRegion } from "../../data/markets";
 import RegionView from "./RegionView";
@@ -38,6 +39,7 @@ export default function MarketsScreen() {
   useEffect(() => {
     loadIndexes();
   }, [loadIndexes]);
+  usePoll(() => loadIndexes(true), 60_000);
 
   return (
     <div>

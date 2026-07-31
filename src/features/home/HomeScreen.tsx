@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, RefreshCw, Settings } from "lucide-react";
 import { fetchQuotes, fetchSignals, fetchNews, type Quote, type Signal, type NewsItem } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
+import { usePoll } from "../../lib/usePoll";
 import { greeting } from "../../lib/marketStatus";
 import { useEvents, eventsOn, upcoming, todayKey, categoryOf } from "../../lib/calendar";
 import { fmtPct } from "../../lib/format";
@@ -58,6 +59,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   useEffect(() => {
     load();
   }, [load]);
+  usePoll(load, 60_000);
 
   const movers = useMemo(
     () =>
