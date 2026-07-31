@@ -6,6 +6,16 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: str
 // Precache the built app shell (list injected at build time).
 precacheAndRoute(self.__WB_MANIFEST);
 
+// Apply new versions as soon as they're available: skip the waiting phase and
+// take control of open pages, so a fresh deploy activates without needing the
+// app to be fully closed first.
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event: ExtendableEvent) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event: PushEvent) => {
   let data: { title?: string; body?: string; url?: string; tag?: string } = {};
   try {

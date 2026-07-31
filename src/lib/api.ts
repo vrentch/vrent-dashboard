@@ -44,7 +44,9 @@ export interface History {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  // Never serve API data from the browser/PWA cache — always fetch fresh so the
+  // 1-minute polling actually reflects the latest news & prices.
+  const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as any)?.error || `Request failed (${res.status})`);
