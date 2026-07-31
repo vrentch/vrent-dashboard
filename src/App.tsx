@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { LayoutGrid, Newspaper, CandlestickChart, Trophy, HeartPulse, ScanLine } from "lucide-react";
+import { LayoutGrid, Newspaper, CandlestickChart, Trophy, HeartPulse, ScanLine, Instagram } from "lucide-react";
 import HomeScreen from "./features/home/HomeScreen";
 import NewsScreen from "./features/news/NewsScreen";
 import MarketsScreen from "./features/markets/MarketsScreen";
 import SportsScreen from "./features/sports/SportsScreen";
 import HealthScreen from "./features/health/HealthScreen";
 import ScanScreen from "./features/scan/ScanScreen";
+import StudioScreen from "./features/studio/StudioScreen";
 import CalendarScreen from "./features/calendar/CalendarScreen";
 import BriefingScreen from "./features/briefing/BriefingScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
@@ -17,9 +18,9 @@ import { fetchHealthStatus, pullHealth } from "./lib/api";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
-export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing";
+export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "studio" | "calendar" | "settings" | "briefing";
 
-// Six primary destinations in the bottom bar. Calendar and Settings are
+// Primary destinations in the bottom bar. Calendar and Settings are
 // reachable from the Home screen (calendar widget + header gear) to keep the
 // bar uncluttered.
 const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
@@ -29,6 +30,7 @@ const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { key: "sports", label: "Sports", icon: Trophy },
   { key: "health", label: "Health", icon: HeartPulse },
   { key: "scan", label: "Scan", icon: ScanLine },
+  { key: "studio", label: "Studio", icon: Instagram },
 ];
 
 export default function App() {
@@ -96,6 +98,7 @@ export default function App() {
           {tab === "sports" && <SportsScreen />}
           {tab === "health" && <HealthScreen />}
           {tab === "scan" && <ScanScreen />}
+          {tab === "studio" && <StudioScreen />}
           {tab === "calendar" && <CalendarScreen />}
           {tab === "briefing" && <BriefingScreen onBack={() => setTab("home")} />}
           {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
@@ -103,7 +106,7 @@ export default function App() {
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 glass-nav border-t border-white/40 dark:border-white/10 safe-bottom">
-        <div className="max-w-lg mx-auto grid grid-cols-6">
+        <div className="max-w-lg mx-auto grid grid-cols-7">
           {TABS.map(({ key, label, icon: Icon }) => {
             const active = tab === key;
             return (

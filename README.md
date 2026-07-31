@@ -64,6 +64,23 @@ It launches full-screen like a native app called **AC App**.
   FX like `EURUSD=X`, crypto like `BTC-USD`). Tap any row for a full chart and
   analytics across 1D → 5Y ranges.
 
+## Studio (AI Instagram content)
+
+The **Studio** tab turns your photos into ready-to-publish Instagram content:
+
+1. Set up your **brand kit** once (logo, name, handle, colors, caption
+   language) — it's stamped onto every design.
+2. Upload up to 4 photos, describe the post, and pick formats (post / story /
+   reel). Optionally tap **AI brief** — the AI looks at your photos and asks
+   3 multiple-choice questions to sharpen the result.
+3. The AI (strongest configured Claude model, `AI_STUDIO_MODEL` env override)
+   returns a caption + hashtags, art-directed layouts rendered on-device at
+   Instagram-native sizes, an engagement-sticker idea, and a scene-by-scene
+   reel plan you can export as an animated video.
+4. Everything is saved to the **Library**, auto-organized into categories the
+   AI assigns. Download anything, or use **Share** on your phone to send a
+   design straight into the Instagram app.
+
 ## Project structure
 
 ```
