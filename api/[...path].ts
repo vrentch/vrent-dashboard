@@ -464,6 +464,9 @@ const REGION_META: Record<string, { region: string; flag: string }> = {
 function regionOf(cnbcSymbol: string, exchange: string): { region: string; flag: string } {
   const c = cnbcSymbol.toUpperCase();
   if (c.includes(".CM=")) return { region: "Crypto", flag: "🪙" };
+  // Precious-metal spot (XAU=/XAG=/XPT=/XPD=) must be caught before the generic
+  // 3-letter currency check below.
+  if (/^X(AU|AG|PT|PD)=$/.test(c)) return { region: "Metals", flag: "🥇" };
   if (/^@(GC|SI|PL|PA|HG)\./.test(c)) return { region: "Metals", flag: "🥇" };
   if (c.startsWith("@")) return { region: "Raw materials", flag: "🛢️" };
   if (/^[A-Z]{3}=$/.test(c)) return { region: "Currencies", flag: "💱" };

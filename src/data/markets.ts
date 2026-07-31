@@ -97,7 +97,7 @@ export const REGIONS: MarketRegion[] = [
     name: "Metals",
     flag: "🥇",
     indices: [
-      { key: "metals", symbol: "@GC.1", label: "Gold", constituents: ["@GC.1", "@SI.1", "@PL.1", "@PA.1", "@HG.1"] },
+      { key: "metals", symbol: "XAU=", label: "Gold", constituents: ["XAU=", "XAG=", "XPT=", "XPD=", "@HG.1"] },
     ],
   },
   {
