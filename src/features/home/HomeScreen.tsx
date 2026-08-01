@@ -113,7 +113,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
         <button
           onClick={() => onNavigate("briefing")}
           className="w-full text-left relative overflow-hidden rounded-3xl p-5 text-white active:scale-[0.99] transition"
-          style={{ background: "linear-gradient(135deg, #27272a 0%, #18181b 55%, #09090b 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
+          style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
         >
           <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
           <div className="relative">

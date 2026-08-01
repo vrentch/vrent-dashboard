@@ -205,7 +205,7 @@ export default function HealthScreen() {
             onClick={() => fileRef.current?.click()}
             disabled={!aiReady}
             className="relative overflow-hidden rounded-2xl p-4 text-white text-left active:scale-[0.98] transition disabled:opacity-60"
-            style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)", boxShadow: "0 10px 30px rgba(0,0,0,0.28)" }}
+            style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)", boxShadow: "0 10px 30px rgba(0,0,0,0.28)" }}
           >
             <Camera size={22} />
             <p className="mt-2 text-sm font-bold">Snap a meal</p>
@@ -242,7 +242,7 @@ export default function HealthScreen() {
             )}
           </div>
           {s.plan ? (
-            <button onClick={() => setPlanOpen(true)} className="w-full text-left rounded-2xl p-4 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
+            <button onClick={() => setPlanOpen(true)} className="w-full text-left rounded-2xl p-4 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold">{s.plan.headline}</p>
                 <ChevronRight size={16} className="text-white/70" />

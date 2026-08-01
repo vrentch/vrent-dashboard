@@ -173,7 +173,7 @@ export default function BriefingScreen({ onBack }: { onBack: () => void }) {
           )}
 
           {data?.health && (
-            <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
+            <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>
               <div className="flex items-center gap-1.5 mb-1">
                 <Sparkles size={14} className="text-white/80" />
                 <p className="text-sm font-bold">{data.health.headline || "Your recommendation"}</p>

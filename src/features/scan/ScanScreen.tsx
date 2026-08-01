@@ -113,7 +113,7 @@ export default function ScanScreen() {
             onClick={() => fileRef.current?.click()}
             disabled={status === "loading"}
             className="w-full relative overflow-hidden rounded-3xl p-8 text-white active:scale-[0.99] transition disabled:opacity-60"
-            style={{ background: "linear-gradient(135deg, #27272a 0%, #18181b 55%, #09090b 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
+            style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
           >
             <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
             <div className="relative flex flex-col items-center gap-3">
@@ -188,7 +188,7 @@ export default function ScanScreen() {
             </div>
 
             {/* Ask AI about this photo */}
-            <button onClick={() => setChatOpen(true)} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-bold active:scale-[0.98] transition" style={{ background: "linear-gradient(135deg, #27272a 0%, #09090b 100%)" }}>
+            <button onClick={() => setChatOpen(true)} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-bold active:scale-[0.98] transition" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>
               <MessageCircle size={16} /> Ask AI about this
             </button>
 

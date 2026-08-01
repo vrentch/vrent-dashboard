@@ -155,7 +155,7 @@ export default function BusinessScreen() {
               onClick={() => fileRef.current?.click()}
               disabled={adding}
               className="w-full relative overflow-hidden rounded-3xl p-5 text-white active:scale-[0.99] transition disabled:opacity-70"
-              style={{ background: "linear-gradient(135deg, #27272a 0%, #18181b 55%, #09090b 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
+              style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}
             >
               <div className="flex items-center gap-3">
                 <span className="grid place-items-center w-12 h-12 rounded-2xl bg-white/15 backdrop-blur">
