@@ -861,6 +861,19 @@ const nnum = (v: unknown): number => {
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
 function normalizeVision(task: string, d: any) {
+  if (task === "receipt") {
+    return {
+      vendor: str(d?.vendor),
+      date: str(d?.date).slice(0, 10),
+      currency: (str(d?.currency) || "CHF").toUpperCase().slice(0, 5),
+      total: nnum(d?.total),
+      vatAmount: nnum(d?.vatAmount),
+      vatRate: nnum(d?.vatRate),
+      category: str(d?.category),
+      description: str(d?.description),
+      confidence: str(d?.confidence) || "medium",
+    };
+  }
   if (task === "food") {
     const t = d?.total && typeof d.total === "object" ? d.total : {};
     return {
@@ -966,11 +979,25 @@ Respond with ONLY a JSON object, no prose, matching exactly:
 }
 Round to whole numbers. "total" MUST equal the sum of the items. If the image is not food, return empty items, a zeroed total, confidence "low", and explain in the note.`;
 
+const RECEIPT_PROMPT = `You are a Swiss bookkeeping assistant reading a receipt or invoice image (it may be a photo of a paper receipt OR a screenshot of an email invoice). Extract the fields an accountant needs. Respond with ONLY a JSON object, no prose, matching exactly:
+{
+  "vendor": "supplier / merchant name",
+  "date": "YYYY-MM-DD of the receipt or invoice (best guess from the document)",
+  "currency": "ISO code, e.g. CHF, EUR, USD",
+  "total": 0,
+  "vatAmount": 0,
+  "vatRate": 0,
+  "category": "short expense category, e.g. Office supplies, Software, Travel, Meals, Fuel, Telecom, Hardware",
+  "description": "one concise line describing the purchase for bookkeeping",
+  "confidence": "low | medium | high"
+}
+"total" is the gross amount payable including VAT. "vatAmount" is the total VAT/MwSt shown (0 if none), "vatRate" the main rate as a number (e.g. 8.1, 2.6, 3.8, 0). Numbers must be plain numbers with no currency symbols or thousands separators. If a field isn't visible, use "" or 0.`;
+
 async function aiVision(task: string, image: string, mediaType: string, code?: unknown) {
   if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
   if (!codeMatches(code)) return NEED_CODE;
-  const prompt = task === "food" ? FOOD_PROMPT : IDENTIFY_PROMPT;
-  const maxTokens = task === "food" ? 1400 : 1000;
+  const prompt = task === "receipt" ? RECEIPT_PROMPT : task === "food" ? FOOD_PROMPT : IDENTIFY_PROMPT;
+  const maxTokens = task === "food" ? 1400 : task === "receipt" ? 700 : 1000;
   const content = [
     { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
     { type: "text", text: prompt },

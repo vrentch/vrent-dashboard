@@ -277,6 +277,21 @@ export interface FoodEstimate {
   note: string;
 }
 
+export interface ReceiptExtract {
+  vendor: string;
+  date: string;
+  currency: string;
+  total: number;
+  vatAmount: number;
+  vatRate: number;
+  category: string;
+  description: string;
+  confidence: string;
+}
+export function analyzeReceipt(image: string, mediaType = "image/jpeg"): Promise<AiResult<ReceiptExtract>> {
+  return postJson(`/api/ai-vision`, { task: "receipt", image, mediaType, code: getAiCode() });
+}
+
 /** Send a base64 JPEG (no data-URL prefix) for identification or food analysis. */
 export function analyzeImage<T = Identified>(task: "identify" | "food", image: string, mediaType = "image/jpeg"): Promise<AiResult<T>> {
   return postJson<AiResult<T>>(`/api/ai-vision`, { task, image, mediaType, code: getAiCode() });
@@ -307,76 +322,6 @@ export function aiPlan(profile: unknown, recent: unknown): Promise<AiResult<Heal
 export interface NutritionItem { name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }
 export function aiNutrition(items: { name: string; grams: number }[]): Promise<AiResult<{ items: NutritionItem[] }>> {
   return postJson(`/api/ai-text`, { task: "nutrition", items, code: getAiCode() });
-}
-
-// ── AI Studio (Instagram content generator) ──────────────────────────────────
-
-export interface StudioPhoto {
-  data: string; // base64, no data-URL prefix
-  mediaType: string;
-}
-export interface StudioBrandInfo {
-  name: string;
-  handle: string;
-  tagline: string;
-  about: string;
-  primary: string;
-  secondary: string;
-  language: string;
-}
-export interface StudioQuestion {
-  id: string;
-  question: string;
-  options: { key: string; label: string }[];
-}
-export interface StudioAnswer {
-  question: string;
-  answer: string;
-}
-export interface StudioLayout {
-  template: "clean" | "bold" | "frame";
-  headline: string;
-  subline: string;
-  cta: string;
-  textPosition: "top" | "center" | "bottom";
-  accentColor: string;
-  textColor: string;
-  logoPosition: "top-left" | "top-right" | "bottom-left" | "bottom-right";
-  photoIndex: number;
-}
-export interface StudioScene {
-  text: string;
-  photoIndex: number;
-  seconds: number;
-}
-export interface StudioPackage {
-  category: string;
-  concept: string;
-  post: { caption: string; hashtags: string[]; altText: string; layout: StudioLayout };
-  story: { layout: StudioLayout; sticker: string };
-  reel: { hook: string; caption: string; audio: string; cover: StudioLayout; scenes: StudioScene[] };
-  tips: string[];
-  alternatives: string[];
-}
-
-export function aiStudioQuestions(
-  photos: StudioPhoto[],
-  prompt: string,
-  brand: StudioBrandInfo,
-  formats: string[]
-): Promise<AiResult<{ questions: StudioQuestion[] }>> {
-  return postJson(`/api/ai-studio`, { task: "questions", photos, prompt, brand, formats, code: getAiCode() });
-}
-
-export function aiStudioGenerate(
-  photos: StudioPhoto[],
-  prompt: string,
-  brand: StudioBrandInfo,
-  formats: string[],
-  answers: StudioAnswer[],
-  revision?: string
-): Promise<AiResult<StudioPackage>> {
-  return postJson(`/api/ai-studio`, { task: "generate", photos, prompt, brand, formats, answers, revision, code: getAiCode() });
 }
 
 // Multi-turn chat about a scanned photo. `image` (base64, no prefix) is only
