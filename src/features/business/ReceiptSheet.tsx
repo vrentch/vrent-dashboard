@@ -3,6 +3,7 @@ import { Trash2, Check } from "lucide-react";
 import Sheet from "../../components/Sheet";
 import { useBusiness, updateReceipt, removeReceipt, rememberVendorCode, type Receipt } from "../../lib/business/store";
 import { getImage } from "../../lib/business/images";
+import CodePicker from "./CodePicker";
 
 const CURRENCIES = ["CHF", "EUR", "USD", "GBP"];
 
@@ -68,16 +69,7 @@ export default function ReceiptSheet({ id, onClose }: { id: string | null; onClo
         </div>
 
         <Field label="Bexio account code">
-          <input
-            list="bexio-codes"
-            value={d.bexioCode}
-            onChange={(e) => field({ bexioCode: e.target.value })}
-            placeholder="Type or pick a code…"
-            className={inputCls}
-          />
-          <datalist id="bexio-codes">
-            {s.bexioCodes.map((b) => <option key={b.code} value={b.code}>{b.code} — {b.label}</option>)}
-          </datalist>
+          <CodePicker value={d.bexioCode} codes={s.bexioCodes} onChange={(code) => field({ bexioCode: code })} />
         </Field>
 
         <Field label="Category"><input value={d.category} onChange={(e) => field({ category: e.target.value })} placeholder="e.g. Software" className={inputCls} /></Field>
