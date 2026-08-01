@@ -1,20 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Receipt as ReceiptIcon, Camera, Settings, Loader2, Share2, FileText, Plus, ChevronDown } from "lucide-react";
 import { prepareImage } from "../../lib/image";
 import { analyzeReceipt } from "../../lib/api";
 import { useAiAccess } from "../../lib/aiAccess";
 import AiUnlock from "../ai/AiUnlock";
 import {
-  useBusiness, addCompany, setActiveCompany, addReceipt, receiptsFor, totalsFor,
-  suggestCodeForVendor,
+  useBusiness, addCompany, setActiveCompany, addReceipt, receiptsFor,
+  suggestCodeForVendor, monthsWith, receiptsInMonth,
 } from "../../lib/business/store";
+import { chf, monthChip, monthLabel } from "../../lib/business/format";
 import { putImage, getImage } from "../../lib/business/images";
 import { buildReceiptsPdf, shareOrDownloadPdf } from "../../lib/business/export";
 import ReceiptSheet from "./ReceiptSheet";
 import SetupSheet from "./SetupSheet";
 import ImageCropper from "./ImageCropper";
+import Stats from "./Stats";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => todayISO().slice(0, 7);
 
 export default function BusinessScreen() {
   const s = useBusiness();
@@ -26,11 +29,14 @@ export default function BusinessScreen() {
   const [companyMenu, setCompanyMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null); // shown in the crop editor
+  const [scope, setScope] = useState<string>(thisMonth()); // "all" or "YYYY-MM"
 
   const activeId = s.activeCompanyId;
   const company = s.companies.find((c) => c.id === activeId) || null;
-  const receipts = receiptsFor(s, activeId);
-  const totals = totalsFor(receipts);
+  const allReceipts = receiptsFor(s, activeId);
+  const months = useMemo(() => monthsWith(allReceipts), [allReceipts]);
+  // The receipts shown/exported/analysed for the selected month (or all).
+  const receipts = useMemo(() => receiptsInMonth(allReceipts, scope), [allReceipts, scope]);
 
   // Step 1: turn the picked file (photo, screenshot, or PDF invoice) into a
   // data URL and hand it to the crop editor.
@@ -97,7 +103,8 @@ export default function BusinessScreen() {
     setExporting(true);
     try {
       const blob = await buildReceiptsPdf(company, receipts);
-      await shareOrDownloadPdf(blob, `${company.name.replace(/\s+/g, "_")}_receipts_${todayISO()}.pdf`);
+      const tag = scope === "all" ? "all" : scope;
+      await shareOrDownloadPdf(blob, `${company.name.replace(/\s+/g, "_")}_receipts_${tag}.pdf`);
     } finally {
       setExporting(false);
     }
@@ -161,22 +168,40 @@ export default function BusinessScreen() {
               </div>
             </button>
 
-            {/* Totals */}
-            <div className="grid grid-cols-3 gap-2">
-              <Tile label="Receipts" value={String(totals.count)} />
-              <Tile label="Total" value={totals.gross ? totals.gross.toFixed(0) : "—"} />
-              <Tile label="VAT" value={totals.vat ? totals.vat.toFixed(0) : "—"} />
+            {/* Month selector */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-0.5">
+              {[thisMonth(), ...months.filter((m) => m !== thisMonth())].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setScope(m)}
+                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${scope === m ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-600 dark:text-slate-300"}`}
+                >
+                  {m === thisMonth() ? "This month" : monthChip(m)}
+                </button>
+              ))}
+              <button
+                onClick={() => setScope("all")}
+                className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${scope === "all" ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-600 dark:text-slate-300"}`}
+              >
+                All time
+              </button>
             </div>
+
+            {/* Statistics */}
+            <Stats receipts={receipts} all={allReceipts} codes={s.bexioCodes} scope={scope} onPickMonth={setScope} />
 
             {/* Export */}
             <button onClick={doExport} disabled={exporting || receipts.length === 0} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98] disabled:opacity-50">
-              {exporting ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />} Export all as one PDF → email
+              {exporting ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
+              {scope === "all" ? " Export all as one PDF → email" : ` Export ${monthLabel(scope)} → email`}
             </button>
 
             {/* List */}
             {receipts.length > 0 ? (
               <section>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Receipts</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+                  {scope === "all" ? "All receipts" : monthLabel(scope)} · {receipts.length}
+                </h2>
                 <div className="space-y-2">
                   {receipts.map((r) => (
                     <button key={r.id} onClick={() => setEditId(r.id)} className="w-full flex items-center gap-3 rounded-2xl glass-subtle p-2.5 text-left active:scale-[0.99] transition">
@@ -186,7 +211,7 @@ export default function BusinessScreen() {
                         <p className="text-[11px] text-slate-400 dark:text-slate-500">{r.date || "—"}{r.category ? ` · ${r.category}` : ""}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{r.amount ? `${r.currency} ${r.amount.toFixed(2)}` : "—"}</p>
+                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{r.amount ? chf(r.amount, r.currency || "CHF") : "—"}</p>
                         <span className={`text-[10px] font-semibold ${r.bexioCode ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>{r.bexioCode ? `Bexio ${r.bexioCode}` : "needs code"}</span>
                       </div>
                     </button>
@@ -196,7 +221,9 @@ export default function BusinessScreen() {
             ) : (
               <div className="rounded-2xl glass-subtle p-5 text-center text-sm text-slate-500 dark:text-slate-400">
                 <FileText size={22} className="mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-                No receipts yet. Tap <b>Add a receipt</b> to scan one or add a screenshot.
+                {allReceipts.length === 0
+                  ? <>No receipts yet. Tap <b>Add a receipt</b> to scan one or add a screenshot.</>
+                  : <>No receipts in {monthLabel(scope)}. Pick another month above.</>}
               </div>
             )}
           </>
@@ -213,15 +240,6 @@ export default function BusinessScreen() {
       )}
       <ReceiptSheet id={editId} onClose={() => setEditId(null)} />
       <SetupSheet open={setupOpen} onClose={() => setSetupOpen(false)} />
-    </div>
-  );
-}
-
-function Tile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl glass p-3 text-center">
-      <p className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums leading-tight">{value}</p>
-      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{label}</p>
     </div>
   );
 }

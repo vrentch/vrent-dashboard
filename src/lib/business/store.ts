@@ -195,3 +195,88 @@ export function totalsFor(list: Receipt[]) {
     { count: 0, gross: 0, vat: 0 }
   );
 }
+
+// Statistics ------------------------------------------------------------------
+export function monthOf(r: Receipt): string { return (r.date || "").slice(0, 7); } // YYYY-MM
+
+// Distinct months present in a receipt set, newest first.
+export function monthsWith(list: Receipt[]): string[] {
+  const set = new Set<string>();
+  for (const r of list) { const m = monthOf(r); if (/^\d{4}-\d{2}$/.test(m)) set.add(m); }
+  return [...set].sort().reverse();
+}
+
+export function receiptsInMonth(list: Receipt[], ym: string): Receipt[] {
+  if (ym === "all") return list;
+  return list.filter((r) => monthOf(r) === ym);
+}
+
+export interface CodeStat { code: string; label: string; amount: number; count: number; share: number; }
+export interface MonthStats {
+  count: number;
+  gross: number;
+  vat: number;
+  net: number;          // gross − vat
+  avg: number;          // gross / count
+  currency: string;     // dominant currency
+  mixedCurrency: boolean;
+  unassigned: number;   // receipts with no Bexio code yet
+  byCode: CodeStat[];   // sorted by amount desc
+}
+
+// Aggregate a receipt set into descriptive stats grouped by Bexio code.
+export function statsFor(list: Receipt[], codes: BexioCode[]): MonthStats {
+  const byCur: Record<string, number> = {};
+  for (const r of list) { const c = r.currency || "CHF"; byCur[c] = (byCur[c] || 0) + (r.amount || 0); }
+  const currency = Object.keys(byCur).sort((a, b) => byCur[b] - byCur[a])[0] || "CHF";
+  const mixedCurrency = Object.keys(byCur).length > 1;
+
+  const gross = list.reduce((s, r) => s + (r.amount || 0), 0);
+  const vat = list.reduce((s, r) => s + (r.vatAmount || 0), 0);
+
+  const map: Record<string, { amount: number; count: number }> = {};
+  let unassigned = 0;
+  for (const r of list) {
+    const k = r.bexioCode?.trim() || "__none__";
+    if (k === "__none__") unassigned++;
+    map[k] = map[k] || { amount: 0, count: 0 };
+    map[k].amount += r.amount || 0;
+    map[k].count += 1;
+  }
+  const labelOf = (code: string) =>
+    code === "__none__" ? "Unassigned" : codes.find((c) => c.code === code)?.label || "—";
+  const byCode: CodeStat[] = Object.entries(map)
+    .map(([code, v]) => ({
+      code: code === "__none__" ? "" : code,
+      label: labelOf(code),
+      amount: v.amount,
+      count: v.count,
+      share: gross ? v.amount / gross : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return {
+    count: list.length,
+    gross,
+    vat,
+    net: gross - vat,
+    avg: list.length ? gross / list.length : 0,
+    currency,
+    mixedCurrency,
+    unassigned,
+    byCode,
+  };
+}
+
+// Monthly gross totals across the last `n` months for a trend chart.
+export function monthlyTotals(list: Receipt[], n = 6): { ym: string; gross: number }[] {
+  const now = new Date();
+  const out: { ym: string; gross: number }[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const gross = list.filter((r) => monthOf(r) === ym).reduce((s, r) => s + (r.amount || 0), 0);
+    out.push({ ym, gross });
+  }
+  return out;
+}
