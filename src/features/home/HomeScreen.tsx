@@ -11,7 +11,7 @@ import StockRow from "../markets/StockRow";
 import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
-import { ChevronRight as Chev, CalendarDays, Plus } from "lucide-react";
+import { ChevronRight as Chev, CalendarDays, Plus, Sparkles, ScanLine, HeartPulse, CalendarPlus } from "lucide-react";
 
 type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing";
 
@@ -86,8 +86,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
-            <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{greeting()}</h1>
-            <p className="text-xs text-slate-400 dark:text-slate-500">{today}</p>
+            <h1 className="text-[26px] font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">{greeting()}</h1>
+            <p className="text-[13px] font-medium text-slate-400 dark:text-slate-500">{today}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -109,6 +109,23 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+        {/* Quick actions — one tap to the things used most */}
+        <div className="grid grid-cols-4 gap-2.5">
+          {([
+            { label: "Briefing", icon: Sparkles, tab: "briefing" as Tab },
+            { label: "Scan", icon: ScanLine, tab: "scan" as Tab },
+            { label: "Health", icon: HeartPulse, tab: "health" as Tab },
+            { label: "Add event", icon: CalendarPlus, tab: "calendar" as Tab },
+          ]).map(({ label, icon: Icon, tab }) => (
+            <button key={label} onClick={() => onNavigate(tab)} className="flex flex-col items-center gap-1.5 rounded-2xl glass py-3 active:scale-95 transition">
+              <span className="grid place-items-center w-9 h-9 rounded-xl accent-gradient-soft text-brand-600 dark:text-brand-300">
+                <Icon size={18} />
+              </span>
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Daily briefing — tap to expand into the full one-pager */}
         <button
           onClick={() => onNavigate("briefing")}

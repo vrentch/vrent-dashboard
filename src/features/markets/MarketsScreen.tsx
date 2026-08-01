@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, ChevronRight } from "lucide-react";
-import { fetchQuotes, type Quote } from "../../lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCw, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { fetchQuotes, fetchHistory, type Quote } from "../../lib/api";
 import { usePrefs, activeWatchlist } from "../../lib/store";
 import { usePoll } from "../../lib/usePoll";
 import { fmtPct, displayPrice } from "../../lib/format";
 import { REGIONS, primaryIndex, NO_SIGNAL_REGIONS, type MarketRegion } from "../../data/markets";
+import Sparkline from "../../components/Sparkline";
 import RegionView from "./RegionView";
 import StockDetail from "./StockDetail";
 import WatchlistEditor from "./WatchlistEditor";
@@ -13,6 +14,7 @@ import WatchlistCard from "./WatchlistCard";
 export default function MarketsScreen() {
   const prefs = usePrefs();
   const [indexQuotes, setIndexQuotes] = useState<Record<string, Quote>>({});
+  const [histories, setHistories] = useState<Record<string, number[]>>({});
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [openRegion, setOpenRegion] = useState<MarketRegion | null>(null);
@@ -36,10 +38,31 @@ export default function MarketsScreen() {
     }
   }, []);
 
+  // One-off sparkline history for each region's primary index (1-month trend).
+  const loadHistories = useCallback(async () => {
+    const symbols = REGIONS.map((r) => primaryIndex(r).symbol);
+    const results = await Promise.allSettled(symbols.map((s) => fetchHistory(s, "1mo")));
+    const map: Record<string, number[]> = {};
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") map[symbols[i].toUpperCase()] = (r.value.closes || []).filter((n) => n != null);
+    });
+    setHistories(map);
+  }, []);
+
   useEffect(() => {
     loadIndexes();
-  }, [loadIndexes]);
+    loadHistories();
+  }, [loadIndexes, loadHistories]);
   usePoll(() => loadIndexes(true), 60_000);
+
+  // Overall sentiment across the tracked markets.
+  const sentiment = useMemo(() => {
+    const qs = REGIONS.map((r) => indexQuotes[primaryIndex(r).symbol.toUpperCase()]).filter((q) => q?.changePercent != null);
+    const up = qs.filter((q) => (q!.changePercent ?? 0) >= 0).length;
+    const down = qs.length - up;
+    const avg = qs.length ? qs.reduce((a, q) => a + (q!.changePercent ?? 0), 0) / qs.length : null;
+    return { up, down, avg, total: qs.length };
+  }, [indexQuotes]);
 
   return (
     <div>
@@ -60,6 +83,24 @@ export default function MarketsScreen() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+        {/* Market sentiment hero */}
+        {sentiment.total > 0 && (
+          <div className="rounded-3xl p-5 text-white relative overflow-hidden accent-gradient shadow-accent">
+            <div className="absolute -right-6 -top-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" />
+            <div className="relative flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">Markets today</p>
+                <p className="mt-1 text-[30px] font-extrabold display-num tabular-nums">{sentiment.avg != null ? fmtPct(sentiment.avg) : "—"}</p>
+                <p className="text-xs text-white/80 mt-0.5">average across {sentiment.total} markets</p>
+              </div>
+              <div className="flex flex-col gap-2 text-sm font-semibold">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15"><TrendingUp size={14} /> {sentiment.up} up</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15"><TrendingDown size={14} /> {sentiment.down} down</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Personal watchlist — teaser preview */}
         <WatchlistCard
           onOpenList={() => setOpenWatchlist(true)}
@@ -77,6 +118,8 @@ export default function MarketsScreen() {
             const idx = primaryIndex(r);
             const q = indexQuotes[idx.symbol.toUpperCase()];
             const up = (q?.changePercent ?? 0) >= 0;
+            const hist = histories[idx.symbol.toUpperCase()] || [];
+            const sparkUp = hist.length > 1 && hist[hist.length - 1] >= hist[0];
             return (
               <button
                 key={r.key}
@@ -107,6 +150,11 @@ export default function MarketsScreen() {
                     </span>
                   )}
                 </div>
+                {hist.length > 2 && (
+                  <div className="mt-2 h-8">
+                    <Sparkline values={hist} width={150} height={32} className="w-full h-8" color={sparkUp ? "#10b981" : "#f43f5e"} fill />
+                  </div>
+                )}
               </button>
             );
           })}

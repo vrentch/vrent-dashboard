@@ -219,18 +219,29 @@ export default function NewsScreen({ mode = "news", onMode }: { mode?: NewsMode;
                     See all <ChevronRight size={14} />
                   </button>
                 </div>
-                <div className="flex gap-3 overflow-x-auto no-scrollbar snap-row -mx-4 px-4 pb-1">
-                  {g.items.slice(0, 10).map((it, i) => (
-                    <NewsCard
-                      key={it.id}
-                      item={it}
-                      index={i}
-                      variant="compact"
-                      showCountry={groupBy !== "country"}
-                      onOpen={setReading}
-                    />
-                  ))}
-                </div>
+                {/* Lead story */}
+                <NewsCard
+                  item={g.items[0]}
+                  index={0}
+                  variant="lead"
+                  showCountry={groupBy !== "country"}
+                  onOpen={setReading}
+                />
+                {/* The rest, in a swipe carousel */}
+                {g.items.length > 1 && (
+                  <div className="mt-3 flex gap-3 overflow-x-auto no-scrollbar snap-row -mx-4 px-4 pb-1">
+                    {g.items.slice(1, 10).map((it, i) => (
+                      <NewsCard
+                        key={it.id}
+                        item={it}
+                        index={i}
+                        variant="compact"
+                        showCountry={groupBy !== "country"}
+                        onOpen={setReading}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}

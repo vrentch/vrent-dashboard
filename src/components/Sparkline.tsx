@@ -5,6 +5,7 @@ interface Props {
   color?: string;
   fill?: boolean;
   strokeWidth?: number;
+  className?: string; // when set (e.g. "w-full"), the SVG scales to its container
 }
 
 /** Dependency-free SVG sparkline / area chart. */
@@ -15,9 +16,10 @@ export default function Sparkline({
   color,
   fill = false,
   strokeWidth = 1.75,
+  className,
 }: Props) {
   if (!values || values.length < 2) {
-    return <svg width={width} height={height} aria-hidden />;
+    return <svg width={width} height={height} className={className} aria-hidden />;
   }
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -38,7 +40,7 @@ export default function Sparkline({
   const gid = `sg-${Math.round(pts[0][1])}-${values.length}-${up ? "u" : "d"}`;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+    <svg width={width} height={height} className={className} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       {fill && (
         <>
           <defs>

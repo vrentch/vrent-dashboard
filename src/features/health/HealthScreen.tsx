@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
@@ -184,9 +184,9 @@ export default function HealthScreen() {
             </div>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <Macro label="Protein" val={Math.round(eaten.protein_g)} tgt={targets.protein_g} color="#3f3f46" />
-            <Macro label="Carbs" val={Math.round(eaten.carbs_g)} tgt={targets.carbs_g} color="#71717a" />
-            <Macro label="Fat" val={Math.round(eaten.fat_g)} tgt={targets.fat_g} color="#a1a1aa" />
+            <Macro label="Protein" val={Math.round(eaten.protein_g)} tgt={targets.protein_g} color="#6366f1" />
+            <Macro label="Carbs" val={Math.round(eaten.carbs_g)} tgt={targets.carbs_g} color="#14b8a6" />
+            <Macro label="Fat" val={Math.round(eaten.fat_g)} tgt={targets.fat_g} color="#f59e0b" />
           </div>
         </section>
 
@@ -359,11 +359,29 @@ function Ring({ pct }: { pct: number }) {
   const r = 34;
   const c = 2 * Math.PI * r;
   const over = pct >= 1;
+  // Animate the arc from empty → target on mount and whenever the value changes.
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setShown(Math.min(1, pct)), 60);
+    return () => clearTimeout(t);
+  }, [pct]);
   return (
     <div className="relative w-24 h-24 shrink-0">
       <svg viewBox="0 0 80 80" className="w-24 h-24 -rotate-90">
+        <defs>
+          <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#818cf8" />
+            <stop offset="1" stopColor="#4f46e5" />
+          </linearGradient>
+        </defs>
         <circle cx="40" cy="40" r={r} fill="none" strokeWidth="8" className="stroke-slate-200/70 dark:stroke-slate-700" />
-        <circle cx="40" cy="40" r={r} fill="none" strokeWidth="8" strokeLinecap="round" className={over ? "stroke-rose-500" : "stroke-zinc-900 dark:stroke-zinc-100"} strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, pct))} />
+        <circle
+          cx="40" cy="40" r={r} fill="none" strokeWidth="8" strokeLinecap="round"
+          stroke={over ? "#f43f5e" : "url(#ring-grad)"}
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - shown)}
+          style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.22, 1, 0.36, 1)" }}
+        />
       </svg>
       <div className="absolute inset-0 grid place-items-center">
         <span className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums">{Math.round(pct * 100)}%</span>
@@ -381,7 +399,7 @@ function Macro({ label, val, tgt, color }: { label: string; val: number; tgt: nu
         <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{val}/{tgt}g</span>
       </div>
       <div className="mt-1.5 h-1.5 rounded-full bg-slate-200/70 dark:bg-slate-700 overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full transition-[width] duration-700 ease-out" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
       </div>
     </div>
   );

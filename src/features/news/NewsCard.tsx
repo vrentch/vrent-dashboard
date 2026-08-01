@@ -7,7 +7,7 @@ import HeadlineImage from "./HeadlineImage";
 interface Props {
   item: NewsItem;
   index: number;
-  variant?: "full" | "compact";
+  variant?: "full" | "compact" | "lead";
   showCountry?: boolean;
   onOpen: (item: NewsItem) => void;
 }
@@ -33,6 +33,30 @@ export default function NewsCard({ item, index, variant = "full", showCountry = 
       )}
     </div>
   );
+
+  if (variant === "lead") {
+    return (
+      <button
+        onClick={() => onOpen(item)}
+        className="block w-full text-left rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 card-shadow active:scale-[0.99] transition animate-in"
+        style={delay}
+      >
+        <div className="relative">
+          <HeadlineImage item={item} size="lg" className="h-52 w-full" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+          <div className="absolute left-3 top-3">{tags}</div>
+          <div className="absolute inset-x-0 bottom-0 p-4">
+            <h3 className="text-[19px] font-bold leading-tight text-white line-clamp-3">{item.title}</h3>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-white/85">
+              <span className="font-semibold truncate max-w-[60%]">{item.source || host}</span>
+              <span>·</span>
+              <span>{timeAgo(item.publishedAt)}</span>
+            </div>
+          </div>
+        </div>
+      </button>
+    );
+  }
 
   if (variant === "compact") {
     return (
