@@ -4,11 +4,12 @@ import { fetchScores, type Game, type ScoresResponse } from "../../lib/api";
 import { SPORTS, type League, type Sport } from "../../data/sports";
 import GameRow from "./GameRow";
 import LeagueView from "./LeagueView";
+import NewsSportSegment, { type NewsMode } from "../../components/NewsSportSegment";
 
 // How many of a sport's leagues to aggregate for the top overview.
 const FEATURED = 5;
 
-export default function SportsScreen() {
+export default function SportsScreen({ mode = "sport", onMode }: { mode?: NewsMode; onMode?: (m: NewsMode) => void }) {
   const [sport, setSport] = useState<Sport>(SPORTS[0]);
   const [scoresByLeague, setScoresByLeague] = useState<Record<string, ScoresResponse>>({});
   const [loading, setLoading] = useState(true);
@@ -66,10 +67,14 @@ export default function SportsScreen() {
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Sports</h1>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Scores, fixtures & tables</p>
-          </div>
+          {onMode ? (
+            <NewsSportSegment mode={mode} onMode={onMode} />
+          ) : (
+            <div>
+              <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Sports</h1>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Scores, fixtures & tables</p>
+            </div>
+          )}
           <button
             onClick={() => load(true)}
             className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95"

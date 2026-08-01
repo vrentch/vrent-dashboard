@@ -53,7 +53,41 @@ function Row({ side, g }: { side: GameSide | null; g: Game }) {
   );
 }
 
+// Formula 1 race card — a single event (no two sides) with an optional podium.
+function RaceCard({ g }: { g: Game }) {
+  const podium = g.podium || [];
+  const medal = ["🥇", "🥈", "🥉"];
+  return (
+    <div className="rounded-2xl glass-subtle p-3">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{g.tournament || "Grand Prix"}</p>
+          {g.round && <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">🏁 {g.round}</p>}
+        </div>
+        <StatusPill g={g} />
+      </div>
+      {podium.length > 0 ? (
+        <div className="space-y-1">
+          {podium.map((p, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-sm w-5 text-center shrink-0">{medal[i] || `P${p.pos ?? i + 1}`}</span>
+              {p.flag && <img src={p.flag} alt="" className="w-4 h-3 object-cover rounded-[2px] shrink-0" loading="lazy" />}
+              <span className={`flex-1 min-w-0 truncate text-sm ${i === 0 ? "font-bold text-slate-900 dark:text-slate-100" : "text-slate-600 dark:text-slate-300"}`}>
+                {p.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[12px] text-slate-400 dark:text-slate-500">{g.state === "pre" ? "Race weekend upcoming" : "Results pending"}</p>
+      )}
+    </div>
+  );
+}
+
 export default function GameRow({ g, showTournament }: { g: Game; showTournament?: boolean }) {
+  // Formula 1 (and any single-competitor event) has no home/away → race card.
+  if (!g.home && !g.away) return <RaceCard g={g} />;
   return (
     <div className="rounded-2xl glass-subtle p-3">
       <div className="flex items-center justify-between mb-2">

@@ -5,15 +5,18 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Monochrome accent scale (zinc). The accent is near-black in light mode
-     (brand-600) and near-white in dark mode (brand-400), so the same
-     `text-brand-600 dark:text-brand-400` pattern reads correctly in both. */
-  --color-brand-50: #f4f4f5;
-  --color-brand-100: #e4e4e7;
-  --color-brand-400: #d4d4d8;
-  --color-brand-500: #52525b;
-  --color-brand-600: #18181b;
-  --color-brand-700: #09090b;
+  /* Signature accent — electric indigo. Full 50→700 scale so the app has one
+     confident, premium accent used for active states, links, toggles, key CTAs
+     and icon chips. `text-brand-600 dark:text-brand-400` reads well in both
+     themes (indigo-600 on light, indigo-400 on dark). */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
 }
 
 :root {
@@ -33,10 +36,13 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
-  /* Clean monochrome backdrop the glass panels sit on. */
+  letter-spacing: -0.011em;
+  /* Refined backdrop with a whisper of indigo up top so the accent feels part
+     of the environment, not bolted on. */
   background:
-    radial-gradient(1200px 820px at 50% -18%, #ffffff 0%, transparent 60%),
-    linear-gradient(180deg, #f4f4f5 0%, #e7e7ea 100%);
+    radial-gradient(1100px 720px at 50% -20%, #ffffff 0%, transparent 58%),
+    radial-gradient(900px 600px at 92% 4%, rgba(99, 102, 241, 0.10) 0%, transparent 55%),
+    linear-gradient(180deg, #f5f6fb 0%, #e8e9f1 100%);
   background-attachment: fixed;
 }
 
@@ -46,8 +52,9 @@ body {
 :root.dark body {
   color: #ededf0;
   background:
-    radial-gradient(1200px 820px at 50% -18%, rgba(255, 255, 255, 0.06) 0%, transparent 60%),
-    linear-gradient(180deg, #09090b 0%, #101013 100%);
+    radial-gradient(1100px 720px at 50% -20%, rgba(129, 140, 248, 0.10) 0%, transparent 58%),
+    radial-gradient(900px 600px at 92% 4%, rgba(79, 70, 229, 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, #0a0a0f 0%, #101016 100%);
   background-attachment: fixed;
 }
 
@@ -160,6 +167,56 @@ body {
 .card-shadow {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
 }
+
+/* ── Premium redesign utilities ────────────────────────────────────────── */
+
+/* Signature accent gradient — for hero tiles & primary CTAs. */
+.accent-gradient {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 48%, #4338ca 100%);
+}
+.accent-gradient-soft {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(79, 70, 229, 0.06) 100%);
+}
+/* A near-black premium hero (used where black reads better than indigo). */
+.hero-ink {
+  background: linear-gradient(150deg, #1e1e2a 0%, #14141c 55%, #0b0b10 100%);
+}
+/* Accent glow ring for focused/active elements. */
+.ring-accent {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 8px 30px rgba(79, 70, 229, 0.28);
+}
+/* Elevated accent CTA shadow. */
+.shadow-accent {
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.32);
+}
+
+/* Segmented control (News/Sport, etc.) */
+.segment {
+  background: rgba(120, 120, 140, 0.1);
+  border-radius: 12px;
+  padding: 3px;
+}
+:root.dark .segment {
+  background: rgba(255, 255, 255, 0.06);
+}
+.segment-pill {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+:root.dark .segment-pill {
+  background: rgba(60, 60, 75, 0.9);
+}
+
+/* Numeric displays — tighten tracking on big figures. */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.display-num { letter-spacing: -0.03em; }
+
+/* Subtle rise-in for staggered lists. */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-pop { animation: pop-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 button {
   -webkit-tap-highlight-color: transparent;

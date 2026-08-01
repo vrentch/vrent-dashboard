@@ -138,6 +138,7 @@ export interface GameSide {
   score: string;
   winner: boolean;
 }
+export interface PodiumEntry { pos: number | null; name: string; flag: string | null; }
 export interface Game {
   id: string;
   date: string | null;
@@ -149,6 +150,7 @@ export interface Game {
   note?: string;
   tournament?: string;
   round?: string;
+  podium?: PodiumEntry[]; // Formula 1 race results (no home/away)
 }
 export interface ScoresResponse {
   league: string;

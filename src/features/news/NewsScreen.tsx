@@ -11,11 +11,12 @@ import SearchSheet from "./SearchSheet";
 import StoriesViewer from "./StoriesViewer";
 import { isSeen } from "../../lib/seen";
 import { usePoll } from "../../lib/usePoll";
+import NewsSportSegment, { type NewsMode } from "../../components/NewsSportSegment";
 
 type GroupBy = "country" | "topic";
 type Focus = { type: GroupBy; value: string } | null;
 
-export default function NewsScreen() {
+export default function NewsScreen({ mode = "news", onMode }: { mode?: NewsMode; onMode?: (m: NewsMode) => void }) {
   const prefs = usePrefs();
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,13 +112,17 @@ export default function NewsScreen() {
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-2.5">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">News</h1>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                {prefs.countries.length || "all"} countries · {prefs.topics.length || "all"} topics
-                {prefs.newsQuery ? ` · "${prefs.newsQuery}"` : ""}
-              </p>
-            </div>
+            {onMode ? (
+              <NewsSportSegment mode={mode} onMode={onMode} />
+            ) : (
+              <div>
+                <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">News</h1>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {prefs.countries.length || "all"} countries · {prefs.topics.length || "all"} topics
+                  {prefs.newsQuery ? ` · "${prefs.newsQuery}"` : ""}
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setStoriesOpen(true)}
@@ -143,9 +148,10 @@ export default function NewsScreen() {
               </button>
               <button
                 onClick={() => setFiltersOpen(true)}
-                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold active:scale-95"
+                className="grid place-items-center w-10 h-10 rounded-full accent-gradient text-white shadow-accent active:scale-95"
+                aria-label="Adjust filters"
               >
-                <SlidersHorizontal size={16} /> Adjust
+                <SlidersHorizontal size={16} />
               </button>
             </div>
           </div>

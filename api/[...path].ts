@@ -662,10 +662,10 @@ async function getSignals(symbols: string[]) {
 
 // ── Sports (ESPN public site API — keyless, reachable from data centres) ─────
 //
-// Football (soccer), tennis and basketball scores/fixtures and league tables
-// come from ESPN's public `site.api.espn.com` JSON, the same feed their apps
-// use. No key, and — unlike Yahoo Finance — it answers cloud IPs. The client
-// owns the league catalogue and sends `sport` + `league` slugs.
+// Football (soccer), tennis and Formula 1 (racing) scores/fixtures and league
+// tables come from ESPN's public `site.api.espn.com` JSON, the same feed their
+// apps use. No key, and — unlike Yahoo Finance — it answers cloud IPs. The
+// client owns the league catalogue and sends `sport` + `league` slugs.
 
 const ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports";
 const ESPN_CORE = "https://site.api.espn.com/apis/v2/sports";
@@ -722,13 +722,74 @@ function normalizeGame(e: any, comp: any) {
 }
 
 async function getSportsScores(sport: string, league: string) {
-  const data = await espn(`${ESPN_SITE}/${sport}/${league}/scoreboard`);
+  // Formula 1's plain scoreboard returns only the next race; scoping by year
+  // yields the whole ~24-race calendar (past results + upcoming). If the
+  // year-scoped call fails, fall back to the plain scoreboard.
+  let data: any;
+  if (sport === "racing") {
+    const base = `${ESPN_SITE}/${sport}/${league}/scoreboard`;
+    try {
+      data = await espn(`${base}?dates=${new Date().getFullYear()}`);
+    } catch {
+      data = await espn(base);
+    }
+  } else {
+    data = await espn(`${ESPN_SITE}/${sport}/${league}/scoreboard`);
+  }
   const leagueMeta = data?.leagues?.[0] || {};
   const events: any[] = data?.events || [];
 
   // Tennis events are tournaments that contain many matches (in `groupings`);
   // everything else is one game per event.
   const games: any[] = [];
+
+  // Formula 1: each event is a Grand Prix weekend, not a two-sided game. Render
+  // it as a race card — GP name, circuit, status, and the podium when finished.
+  if (sport === "racing") {
+    for (const e of events) {
+      const type = e?.status?.type || {};
+      // Race results live in whichever session competition carries drivers.
+      let field: any[] = [];
+      for (const c of e.competitions || []) {
+        const cs = c?.competitors || [];
+        if (cs.length > field.length) field = cs;
+      }
+      const podium = field
+        .slice()
+        .sort((a, b) => (Number(a?.order) || 99) - (Number(b?.order) || 99))
+        .slice(0, 3)
+        .map((c) => ({
+          pos: Number(c?.order) || null,
+          name: c?.athlete?.displayName || c?.athlete?.shortName || c?.athlete?.name || "",
+          flag: c?.athlete?.flag?.href || null,
+        }))
+        .filter((p) => p.name);
+      const circuit = e?.circuit?.fullName || e?.circuit?.address?.city || "";
+      games.push({
+        id: String(e?.id || ""),
+        date: e?.date || null,
+        state: (type.state || "pre") as "pre" | "in" | "post",
+        detail: type.shortDetail || type.description || "",
+        clock: "",
+        home: null,
+        away: null,
+        tournament: e?.name || e?.shortName || "Grand Prix",
+        round: circuit,
+        note: podium[0] ? `🏆 ${podium[0].name}` : "",
+        podium,
+      });
+    }
+    // Live first, then upcoming (soonest first), then finished (most recent).
+    const rank = { in: 0, pre: 1, post: 2 } as Record<string, number>;
+    games.sort((a, b) => {
+      const r = (rank[a.state] ?? 3) - (rank[b.state] ?? 3);
+      if (r) return r;
+      const ta = a.date ? Date.parse(a.date) : 0;
+      const tb = b.date ? Date.parse(b.date) : 0;
+      return a.state === "post" ? tb - ta : ta - tb;
+    });
+    return { league: leagueMeta.name || "Formula 1", season: leagueMeta.season?.displayName || String(new Date().getFullYear()), games };
+  }
   if (sport === "tennis") {
     for (const e of events) {
       const tournament = e.name || e.shortName || "";

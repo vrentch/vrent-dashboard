@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { LayoutGrid, Newspaper, CandlestickChart, Trophy, HeartPulse, ScanLine, Receipt } from "lucide-react";
+import { Home, Newspaper, CandlestickChart, HeartPulse, ScanLine, Receipt, CalendarDays } from "lucide-react";
+import type { NewsMode } from "./components/NewsSportSegment";
 import HomeScreen from "./features/home/HomeScreen";
 import NewsScreen from "./features/news/NewsScreen";
 import MarketsScreen from "./features/markets/MarketsScreen";
@@ -20,21 +21,24 @@ import { useLocked } from "./lib/lock";
 
 export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "business" | "calendar" | "settings" | "briefing";
 
-// Primary destinations in the bottom bar. Calendar and Settings are
-// reachable from the Home screen (calendar widget + header gear) to keep the
-// bar uncluttered.
-const TABS: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
-  { key: "home", label: "Home", icon: LayoutGrid },
+// Bottom bar: three tabs each side of the raised center Scan (AI) button.
+// News hosts both News & Sport via an in-header switch; Settings & Briefing are
+// reached from Home.
+type NavItem = { key: Tab; label: string; icon: typeof Home };
+const LEFT_TABS: NavItem[] = [
+  { key: "home", label: "Home", icon: Home },
   { key: "news", label: "News", icon: Newspaper },
   { key: "markets", label: "Markets", icon: CandlestickChart },
-  { key: "sports", label: "Sports", icon: Trophy },
+];
+const RIGHT_TABS: NavItem[] = [
   { key: "health", label: "Health", icon: HeartPulse },
-  { key: "scan", label: "Scan", icon: ScanLine },
   { key: "business", label: "Business", icon: Receipt },
+  { key: "calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
+  const [newsMode, setNewsMode] = useState<NewsMode>("news");
   const { theme } = usePrefs();
   const locked = useLocked();
 
@@ -91,9 +95,11 @@ export default function App() {
   return (
     <div className="min-h-full flex flex-col">
       <main className="flex-1 pb-20">
-        <ErrorBoundary resetKey={tab}>
+        <ErrorBoundary resetKey={tab === "news" ? `news-${newsMode}` : tab}>
           {tab === "home" && <HomeScreen onNavigate={setTab} />}
-          {tab === "news" && <NewsScreen />}
+          {tab === "news" && (newsMode === "sport"
+            ? <SportsScreen mode={newsMode} onMode={setNewsMode} />
+            : <NewsScreen mode={newsMode} onMode={setNewsMode} />)}
           {tab === "markets" && <MarketsScreen />}
           {tab === "sports" && <SportsScreen />}
           {tab === "health" && <HealthScreen />}
@@ -106,28 +112,40 @@ export default function App() {
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 glass-nav border-t border-white/40 dark:border-white/10 safe-bottom">
-        <div className="max-w-lg mx-auto grid grid-cols-7">
-          {TABS.map(({ key, label, icon: Icon }) => {
-            const active = tab === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className="flex flex-col items-center gap-1 py-2.5 active:scale-95 transition"
-              >
-                <Icon
-                  size={21}
-                  className={active ? "text-brand-600 dark:text-brand-400" : "text-slate-400 dark:text-slate-500"}
-                  strokeWidth={active ? 2.4 : 2}
-                />
-                <span className={`text-[10px] font-medium ${active ? "text-brand-600 dark:text-brand-400" : "text-slate-400 dark:text-slate-500"}`}>
-                  {label}
-                </span>
-              </button>
-            );
-          })}
+        <div className="max-w-lg mx-auto relative flex items-end px-1">
+          <div className="flex-1 grid grid-cols-3">
+            {LEFT_TABS.map((t) => <TabButton key={t.key} item={t} active={tab === t.key} onClick={() => setTab(t.key)} />)}
+          </div>
+          <div className="w-16 shrink-0" aria-hidden />
+          <div className="flex-1 grid grid-cols-3">
+            {RIGHT_TABS.map((t) => <TabButton key={t.key} item={t} active={tab === t.key} onClick={() => setTab(t.key)} />)}
+          </div>
+          {/* Raised center Scan (AI) button */}
+          <button
+            onClick={() => setTab("scan")}
+            aria-label="AI Scan"
+            className={`absolute left-1/2 -translate-x-1/2 -top-5 w-16 h-16 rounded-full accent-gradient text-white grid place-items-center shadow-accent active:scale-95 transition border-4 border-[#eef0f7] dark:border-[#0d0d12] ${tab === "scan" ? "ring-accent" : ""}`}
+          >
+            <ScanLine size={26} strokeWidth={2.4} />
+          </button>
         </div>
       </nav>
     </div>
+  );
+}
+
+function TabButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+  const { label, icon: Icon } = item;
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-1 py-2.5 active:scale-95 transition">
+      <Icon
+        size={21}
+        className={active ? "text-brand-600 dark:text-brand-400" : "text-slate-400 dark:text-slate-500"}
+        strokeWidth={active ? 2.5 : 2}
+      />
+      <span className={`text-[10px] font-medium ${active ? "text-brand-600 dark:text-brand-400" : "text-slate-400 dark:text-slate-500"}`}>
+        {label}
+      </span>
+    </button>
   );
 }

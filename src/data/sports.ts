@@ -1,8 +1,8 @@
 // Curated sports → leagues/competitions, keyed to ESPN's public slugs. The
-// focus is football and tennis, with basketball and the marquee global events
-// (World Cup, Euros, Olympics) alongside. Every slug is verified against
-// site.api.espn.com. `standings: false` marks knockout/tour competitions that
-// have no meaningful league table (tennis tours, cup finals).
+// focus is football, tennis and Formula 1, plus the marquee global events
+// (World Cup, Euros). Every slug is verified against site.api.espn.com.
+// `standings: false` marks knockout/tour/championship competitions that have no
+// meaningful league table (tennis tours, cup finals, F1 race calendar).
 
 export interface League {
   key: string; // ESPN league slug, e.g. "eng.1"
@@ -13,7 +13,7 @@ export interface League {
 }
 
 export interface Sport {
-  key: string; // ESPN sport slug: "soccer" | "tennis" | "basketball"
+  key: string; // ESPN sport slug: "soccer" | "tennis" | "racing"
   name: string;
   icon: string; // emoji
   leagues: League[];
@@ -47,12 +47,11 @@ export const SPORTS: Sport[] = [
     ],
   },
   {
-    key: "basketball",
-    name: "Basketball",
-    icon: "🏀",
+    key: "racing",
+    name: "Formula 1",
+    icon: "🏎️",
     leagues: [
-      { key: "nba", name: "NBA", short: "NBA", flag: "🇺🇸", standings: true },
-      { key: "wnba", name: "WNBA", short: "WNBA", flag: "🇺🇸", standings: true },
+      { key: "f1", name: "Formula 1", short: "F1", flag: "🏁", standings: false },
     ],
   },
 ];
