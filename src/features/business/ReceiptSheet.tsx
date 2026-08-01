@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Trash2, Check } from "lucide-react";
 import Sheet from "../../components/Sheet";
-import { useBusiness, updateReceipt, removeReceipt, type Receipt } from "../../lib/business/store";
+import { useBusiness, updateReceipt, removeReceipt, rememberVendorCode, type Receipt } from "../../lib/business/store";
 import { getImage } from "../../lib/business/images";
 
 const CURRENCIES = ["CHF", "EUR", "USD", "GBP"];
@@ -30,6 +30,8 @@ export default function ReceiptSheet({ id, onClose }: { id: string | null; onClo
       vatAmount: Number(d.vatAmount) || 0, vatRate: Number(d.vatRate) || 0,
       category: d.category.trim(), description: d.description.trim(), bexioCode: d.bexioCode.trim(),
     });
+    // Learn this vendor → code so it auto-fills next time.
+    rememberVendorCode(d.vendor, d.bexioCode);
     onClose();
   }
   function del() {

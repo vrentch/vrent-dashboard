@@ -6,11 +6,13 @@ import { useAiAccess } from "../../lib/aiAccess";
 import AiUnlock from "../ai/AiUnlock";
 import {
   useBusiness, addCompany, setActiveCompany, addReceipt, receiptsFor, totalsFor,
+  suggestCodeForVendor,
 } from "../../lib/business/store";
 import { putImage, getImage } from "../../lib/business/images";
 import { buildReceiptsPdf, shareOrDownloadPdf } from "../../lib/business/export";
 import ReceiptSheet from "./ReceiptSheet";
 import SetupSheet from "./SetupSheet";
+import ImageCropper from "./ImageCropper";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -23,19 +25,44 @@ export default function BusinessScreen() {
   const [setupOpen, setSetupOpen] = useState(false);
   const [companyMenu, setCompanyMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null); // shown in the crop editor
 
   const activeId = s.activeCompanyId;
   const company = s.companies.find((c) => c.id === activeId) || null;
   const receipts = receiptsFor(s, activeId);
   const totals = totalsFor(receipts);
 
+  // Step 1: turn the picked file (photo, screenshot, or PDF invoice) into a
+  // data URL and hand it to the crop editor.
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !activeId) return;
     setAdding(true);
     try {
-      const img = await prepareImage(file, 1700, 0.85);
+      const { isPdf } = await import("../../lib/business/pdf");
+      let src: string;
+      if (isPdf(file)) {
+        const { renderPdfFirstPage } = await import("../../lib/business/pdf");
+        src = await renderPdfFirstPage(file, 1900);
+      } else {
+        // Load at a generous size so cropping stays sharp; final capped later.
+        src = (await prepareImage(file, 2200, 0.92)).dataUrl;
+      }
+      setCropSrc(src);
+    } catch {
+      /* ignore unreadable file */
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  // Step 2: user confirmed the crop → downscale, run AI, store, open the sheet.
+  async function onCropDone(dataUrl: string) {
+    if (!activeId) { setCropSrc(null); return; }
+    setAdding(true);
+    try {
+      const img = await prepareImage(dataUrl, 1700, 0.85);
       let ex: Awaited<ReturnType<typeof analyzeReceipt>>["data"] | null = null;
       if (aiStatus === "ready") {
         const res = await analyzeReceipt(img.base64, img.mediaType);
@@ -51,13 +78,15 @@ export default function BusinessScreen() {
         vatRate: ex?.vatRate || 0,
         category: ex?.category || "",
         description: ex?.description || "",
-        bexioCode: "",
+        // Auto-fill the code the user has used for this vendor before.
+        bexioCode: suggestCodeForVendor(ex?.vendor || ""),
         hasImage: true,
       });
       await putImage(id, img.dataUrl);
+      setCropSrc(null);
       setEditId(id);
     } catch {
-      /* ignore */
+      setCropSrc(null);
     } finally {
       setAdding(false);
     }
@@ -100,7 +129,7 @@ export default function BusinessScreen() {
         )}
       </header>
 
-      <input ref={fileRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
+      <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onPick} className="hidden" />
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
         {aiStatus === "locked" && <AiUnlock onSubmit={unlock} compact />}
@@ -127,7 +156,7 @@ export default function BusinessScreen() {
                 </span>
                 <div className="text-left">
                   <p className="text-base font-bold">{adding ? "Reading receipt…" : "Add a receipt"}</p>
-                  <p className="text-[12px] text-white/80">Photo or screenshot — AI fills in the details</p>
+                  <p className="text-[12px] text-white/80">Photo, screenshot or PDF invoice — crop, then AI fills it in</p>
                 </div>
               </div>
             </button>
@@ -174,6 +203,14 @@ export default function BusinessScreen() {
         )}
       </div>
 
+      {cropSrc && (
+        <ImageCropper
+          src={cropSrc}
+          busy={adding}
+          onCancel={() => setCropSrc(null)}
+          onDone={onCropDone}
+        />
+      )}
       <ReceiptSheet id={editId} onClose={() => setEditId(null)} />
       <SetupSheet open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>

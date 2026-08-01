@@ -11,8 +11,8 @@ export interface PreparedImage {
 // Default to a larger long-edge (1536px) and higher quality so the vision model
 // can read fine detail — critical for accurate meal recognition. Modern Claude
 // vision models accept up to 2576px, so this is well within range.
-export async function prepareImage(file: File, maxDim = 1536, quality = 0.82): Promise<PreparedImage> {
-  const bitmap = await loadBitmap(file);
+export async function prepareImage(src: File | Blob | string, maxDim = 1536, quality = 0.82): Promise<PreparedImage> {
+  const bitmap = await loadBitmap(src);
   const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -30,15 +30,26 @@ export async function prepareImage(file: File, maxDim = 1536, quality = 0.82): P
   return { base64, dataUrl, mediaType: "image/jpeg" };
 }
 
-async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
+async function loadBitmap(src: File | Blob | string): Promise<ImageBitmap | HTMLImageElement> {
+  // A data-URL / URL string is loaded straight into an <img> (already oriented).
+  if (typeof src === "string") {
+    const img = new Image();
+    img.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Could not load image"));
+      img.src = src;
+    });
+    return img;
+  }
   if (typeof createImageBitmap === "function") {
     try {
-      return await createImageBitmap(file, { imageOrientation: "from-image" } as ImageBitmapOptions);
+      return await createImageBitmap(src, { imageOrientation: "from-image" } as ImageBitmapOptions);
     } catch {
       /* fall back to <img> */
     }
   }
-  const url = URL.createObjectURL(file);
+  const url = URL.createObjectURL(src);
   try {
     const img = new Image();
     img.decoding = "async";

@@ -30,6 +30,9 @@ export interface BusinessState {
   activeCompanyId: string | null;
   receipts: Receipt[];
   bexioCodes: BexioCode[];
+  // Learned vendor → Bexio code memory. Keyed by a normalized vendor token so
+  // e.g. "Meta Platforms Ireland" and "Meta" both map to the same code.
+  vendorCodes: Record<string, string>;
 }
 
 const KEY = "vrent.business.v1";
@@ -43,7 +46,7 @@ function uid(): string {
 }
 
 function load(): BusinessState {
-  const empty: BusinessState = { companies: [], activeCompanyId: null, receipts: [], bexioCodes: [] };
+  const empty: BusinessState = { companies: [], activeCompanyId: null, receipts: [], bexioCodes: [], vendorCodes: {} };
   try {
     const p = JSON.parse(localStorage.getItem(KEY) || "null");
     if (!p) return empty;
@@ -52,6 +55,7 @@ function load(): BusinessState {
       activeCompanyId: p.activeCompanyId ?? null,
       receipts: Array.isArray(p.receipts) ? p.receipts : [],
       bexioCodes: Array.isArray(p.bexioCodes) ? p.bexioCodes : [],
+      vendorCodes: p.vendorCodes && typeof p.vendorCodes === "object" ? p.vendorCodes : {},
     };
   } catch {
     return empty;
@@ -151,6 +155,33 @@ export function removeReceipt(id: string) {
   const r = state.receipts.find((x) => x.id === id);
   if (r?.hasImage) deleteImage(id);
   set({ receipts: state.receipts.filter((x) => x.id !== id) });
+}
+
+// Vendor learning ------------------------------------------------------------
+// Reduce a vendor name to a stable key: lowercase, strip company suffixes &
+// punctuation, keep the first meaningful word. "Meta Platforms Ireland Ltd" and
+// "META*ADS" both collapse to "meta".
+const STOP = new Set(["the", "gmbh", "ag", "sa", "ltd", "inc", "llc", "co", "kg", "plc", "srl", "bv", "platforms", "group"]);
+export function vendorKey(vendor: string): string {
+  const words = (vendor || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 2 && !STOP.has(w));
+  return words[0] || "";
+}
+// Remember which code the user files a vendor under, so it auto-fills next time.
+export function rememberVendorCode(vendor: string, code: string) {
+  const k = vendorKey(vendor);
+  const c = (code || "").trim();
+  if (!k || !c) return;
+  if (state.vendorCodes[k] === c) return;
+  set({ vendorCodes: { ...state.vendorCodes, [k]: c } });
+}
+// Suggest a code for a vendor from what was learned before (empty if unknown).
+export function suggestCodeForVendor(vendor: string): string {
+  const k = vendorKey(vendor);
+  return (k && state.vendorCodes[k]) || "";
 }
 
 // Derived --------------------------------------------------------------------
