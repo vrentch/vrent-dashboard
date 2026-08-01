@@ -1,24 +1,32 @@
-import type { Company, Receipt } from "./store";
+import { statsFor, type Company, type Receipt, type BexioCode } from "./store";
 import { getImage } from "./images";
 
 function money(n: number, cur: string): string {
   return `${cur ? cur + " " : ""}${(n || 0).toFixed(2)}`.trim();
 }
 
-function imgSize(dataUrl: string): Promise<{ w: number; h: number }> {
-  return new Promise((resolve) => {
-    const im = new Image();
-    im.onload = () => resolve({ w: im.naturalWidth || 1, h: im.naturalHeight || 1 });
-    im.onerror = () => resolve({ w: 1, h: 1 });
-    im.src = dataUrl;
-  });
+// Filesystem-safe slug for filenames.
+function slug(s: string): string {
+  return (s || "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "receipt";
 }
 
-// Build a single PDF: a summary table (date, vendor, amount, VAT, bexio code,
-// description) followed by one page per receipt image. This is the file the
-// user shares to their email to finish matching in Bexio on their computer.
-export async function buildReceiptsPdf(company: Company, receipts: Receipt[]): Promise<Blob> {
-  // Lazy-load jsPDF so it's only fetched when the user exports, not on app start.
+// Decode a stored data-URL into raw bytes + a file extension.
+function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; ext: string } {
+  const comma = dataUrl.indexOf(",");
+  const head = dataUrl.slice(0, comma);
+  const b64 = dataUrl.slice(comma + 1);
+  const mime = /data:([^;]+)/.exec(head)?.[1] || "image/jpeg";
+  const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("pdf") ? "pdf" : "jpg";
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { bytes, ext };
+}
+
+// ── Summary breakdown PDF ────────────────────────────────────────────────────
+// A single file listing the totals, the per-Bexio-code breakdown, and an
+// itemised table of every receipt. No receipt images (those ship separately).
+export async function buildSummaryPdf(company: Company, receipts: Receipt[], codes: BexioCode[]): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = 210, H = 297, M = 14;
@@ -33,9 +41,10 @@ export async function buildReceiptsPdf(company: Company, receipts: Receipt[]): P
   doc.setFont("helvetica", "normal");
   const dates = receipts.map((r) => r.date).filter(Boolean).sort();
   const range = dates.length ? ` · ${dates[0]} → ${dates[dates.length - 1]}` : "";
-  doc.text(`Receipts export${range} · ${receipts.length} item${receipts.length === 1 ? "" : "s"}`, M, y);
+  doc.text(`Receipts summary${range} · ${receipts.length} item${receipts.length === 1 ? "" : "s"}`, M, y);
   y += 6;
 
+  // Totals per currency.
   const byCur: Record<string, { gross: number; vat: number }> = {};
   receipts.forEach((r) => {
     const c = r.currency || "CHF";
@@ -48,8 +57,28 @@ export async function buildReceiptsPdf(company: Company, receipts: Receipt[]): P
     doc.text(`Total ${c} ${t.gross.toFixed(2)}   (VAT ${t.vat.toFixed(2)})`, M, y);
     y += 5;
   });
-  y += 3;
+  y += 2;
 
+  // Per-Bexio-code breakdown.
+  const stats = statsFor(receipts, codes);
+  if (stats.byCode.length) {
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("By Bexio code", M, y);
+    y += 5;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    stats.byCode.forEach((c) => {
+      if (y > H - 20) { doc.addPage(); y = M; }
+      const label = `${c.code ? c.code + "  " : ""}${c.label || ""}`.trim() || "Unassigned";
+      doc.text(label.slice(0, 52), M, y);
+      doc.text(`${stats.currency} ${c.amount.toFixed(2)}   ·   ${c.count}x`, W - M, y, { align: "right" });
+      y += 4.6;
+    });
+    y += 4;
+  }
+
+  // Itemised table.
   const cols = [
     { x: M, t: "Date" },
     { x: M + 20, t: "Vendor" },
@@ -69,8 +98,8 @@ export async function buildReceiptsPdf(company: Company, receipts: Receipt[]): P
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
   };
+  if (y > H - 30) { doc.addPage(); y = M; }
   drawHead();
-
   receipts.forEach((r) => {
     if (y > H - 18) { doc.addPage(); y = M; drawHead(); }
     const cells = [
@@ -85,38 +114,57 @@ export async function buildReceiptsPdf(company: Company, receipts: Receipt[]): P
     y += 5;
   });
 
-  // One page per receipt image.
-  for (const r of receipts) {
-    if (!r.hasImage) continue;
-    const data = await getImage(r.id);
-    if (!data) continue;
-    doc.addPage();
-    let iy = M;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text((`${r.date || ""}  ${r.vendor || ""}`).trim() || "Receipt", M, iy);
-    iy += 6;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`${money(r.amount, r.currency || "")}   ·   VAT ${(r.vatAmount || 0).toFixed(2)}   ·   Bexio ${r.bexioCode || "—"}`, M, iy);
-    iy += 4;
-    if (r.description) { doc.text(r.description.slice(0, 95), M, iy); iy += 4; }
-    iy += 2;
-    const { w, h } = await imgSize(data);
-    const scale = Math.min((W - 2 * M) / w, (H - iy - M) / h);
-    const fmt = data.startsWith("data:image/png") ? "PNG" : "JPEG";
-    try { doc.addImage(data, fmt, M, iy, w * scale, h * scale); } catch { /* skip unreadable image */ }
-  }
-
   return doc.output("blob");
 }
 
-// Share the PDF via the native sheet (→ Mail on iOS) or download it.
-export async function shareOrDownloadPdf(blob: Blob, filename: string): Promise<"shared" | "downloaded"> {
-  const file = new File([blob], filename, { type: "application/pdf" });
+// ── Export ZIP ───────────────────────────────────────────────────────────────
+// One archive = the summary PDF + a `receipts/` folder with every receipt as its
+// own file, so the user can attach them one by one after extracting.
+export async function buildReceiptsZip(
+  company: Company,
+  receipts: Receipt[],
+  codes: BexioCode[],
+  tag: string
+): Promise<Blob> {
+  const { zipSync } = await import("fflate");
+  const files: Record<string, Uint8Array> = {};
+
+  const summary = await buildSummaryPdf(company, receipts, codes);
+  files[`Summary_${slug(company.name)}_${tag}.pdf`] = new Uint8Array(await summary.arrayBuffer());
+
+  // Number receipts chronologically so filenames sort naturally.
+  const ordered = [...receipts].sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.at - b.at);
+  let idx = 0;
+  for (const r of ordered) {
+    idx++;
+    if (!r.hasImage) continue;
+    const data = await getImage(r.id);
+    if (!data) continue;
+    try {
+      const { bytes, ext } = dataUrlToBytes(data);
+      const name = `${String(idx).padStart(2, "0")}_${r.date || "nodate"}_${slug(r.vendor)}.${ext}`;
+      files[`receipts/${name}`] = bytes;
+    } catch {
+      /* skip unreadable image */
+    }
+  }
+
+  // level 0 (store) — images/PDFs are already compressed, so don't waste time.
+  const zipped = zipSync(files, { level: 0 });
+  return new Blob([zipped.slice().buffer], { type: "application/zip" });
+}
+
+// Share via the native sheet (→ Mail / Files on iOS) or download.
+export async function shareOrDownloadFile(blob: Blob, filename: string): Promise<"shared" | "downloaded"> {
+  const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
   const nav = navigator as Navigator & { canShare?: (d: any) => boolean; share?: (d: any) => Promise<void> };
   if (nav.canShare && nav.canShare({ files: [file] }) && nav.share) {
-    try { await nav.share({ files: [file], title: filename }); return "shared"; } catch { /* fall through to download */ }
+    try {
+      await nav.share({ files: [file], title: filename });
+      return "shared";
+    } catch {
+      /* user cancelled or unsupported — fall through to download */
+    }
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

@@ -10,7 +10,7 @@ import {
 } from "../../lib/business/store";
 import { chf, monthChip, monthLabel } from "../../lib/business/format";
 import { putImage, getImage } from "../../lib/business/images";
-import { buildReceiptsPdf, shareOrDownloadPdf } from "../../lib/business/export";
+import { buildReceiptsZip, shareOrDownloadFile } from "../../lib/business/export";
 import ReceiptSheet from "./ReceiptSheet";
 import SetupSheet from "./SetupSheet";
 import ImageCropper from "./ImageCropper";
@@ -102,9 +102,9 @@ export default function BusinessScreen() {
     if (!company || receipts.length === 0) return;
     setExporting(true);
     try {
-      const blob = await buildReceiptsPdf(company, receipts);
       const tag = scope === "all" ? "all" : scope;
-      await shareOrDownloadPdf(blob, `${company.name.replace(/\s+/g, "_")}_receipts_${tag}.pdf`);
+      const blob = await buildReceiptsZip(company, receipts, s.bexioCodes, tag);
+      await shareOrDownloadFile(blob, `${company.name.replace(/\s+/g, "_")}_receipts_${tag}.zip`);
     } finally {
       setExporting(false);
     }
@@ -193,7 +193,7 @@ export default function BusinessScreen() {
             {/* Export */}
             <button onClick={doExport} disabled={exporting || receipts.length === 0} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98] disabled:opacity-50">
               {exporting ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
-              {scope === "all" ? " Export all as one PDF → email" : ` Export ${monthLabel(scope)} → email`}
+              {scope === "all" ? " Export all — summary + files (zip)" : ` Export ${monthLabel(scope)} — summary + files (zip)`}
             </button>
 
             {/* List */}
