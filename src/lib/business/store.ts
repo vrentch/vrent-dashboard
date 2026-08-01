@@ -70,6 +70,35 @@ function set(patch: Partial<BusinessState>) {
   emit();
 }
 
+// The user's real Bexio account codes — seeded once so they're ready in the
+// per-receipt dropdown without any typing. Seeding is one-time (guarded by a
+// separate flag), so deleting a code in Setup makes it stick.
+const DEFAULT_BEXIO_CODES: BexioCode[] = [
+  { code: "1550", label: "Rental equipment (Meta Quest, XR glasses, etc.)" },
+  { code: "4200", label: "Material costs (tissues, masks, headset cases, etc.)" },
+  { code: "4270", label: "Post / transport expenses" },
+  { code: "4650", label: "Packaging expense" },
+  { code: "6200", label: "Car expenses" },
+  { code: "6570", label: "IT costs" },
+  { code: "6600", label: "Advertising" },
+  { code: "6640", label: "Travel expenses" },
+  { code: "6641", label: "Restaurant with client" },
+];
+const SEED_KEY = "vrent.business.seeded.v1";
+
+function seedDefaultCodes() {
+  try {
+    if (localStorage.getItem(SEED_KEY)) return;
+    localStorage.setItem(SEED_KEY, "1");
+    const existing = new Set(state.bexioCodes.map((c) => c.code));
+    const add = DEFAULT_BEXIO_CODES.filter((c) => !existing.has(c.code));
+    if (add.length) {
+      set({ bexioCodes: [...state.bexioCodes, ...add].sort((a, b) => a.code.localeCompare(b.code)) });
+    }
+  } catch { /* ignore */ }
+}
+seedDefaultCodes();
+
 export function getBusiness(): BusinessState { return state; }
 export function useBusiness(): BusinessState {
   return useSyncExternalStore(
