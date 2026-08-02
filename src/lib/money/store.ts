@@ -15,6 +15,22 @@ export interface Expense {
   note?: string;
 }
 
+// One-time income (bonus, 13th salary, side gig) allocated across the month's
+// buckets. Everything allocated to tax / fixed / spending frees or adds money
+// this month → raises the month's spendable pool and the daily/hourly rates.
+// Only the savings share stays out of the meter.
+export interface ExtraIncome {
+  id: string;
+  at: number;
+  month: string;     // YYYY-MM the income applies to
+  label: string;
+  amount: number;
+  toTax: number;     // covers (part of) the month's tax reserve
+  toFixed: number;   // covers (part of) fixed costs, e.g. this month's rent
+  toSavings: number; // straight to savings — not spendable
+  toSpend: number;   // directly into the daily budget
+}
+
 export type Canton =
   | "ZH" | "BE" | "LU" | "UR" | "SZ" | "OW" | "NW" | "GL" | "ZG" | "FR" | "SO" | "BS" | "BL"
   | "SH" | "AR" | "AI" | "SG" | "GR" | "AG" | "TG" | "TI" | "VD" | "VS" | "NE" | "GE" | "JU" | "OTHER";
@@ -94,7 +110,7 @@ export const CANTONS: { key: Canton; label: string }[] = [
 
 const KEY = "vrent.money.v1";
 // Fixed expenses live in settings so they persist with the config.
-interface Persisted extends MoneyState { fixed: FixedExpense[] }
+interface Persisted extends MoneyState { fixed: FixedExpense[]; extras: ExtraIncome[] }
 
 function uid(): string {
   try { return crypto.randomUUID(); } catch { return `m_${Date.now()}_${Math.floor(Math.random() * 1e6)}`; }
@@ -111,6 +127,7 @@ function defaults(): Persisted {
     },
     expenses: [],
     fixed: [],
+    extras: [],
   };
 }
 
@@ -141,6 +158,7 @@ function load(): Persisted {
       settings,
       expenses,
       fixed: Array.isArray(p.fixed) ? p.fixed : [],
+      extras: Array.isArray(p.extras) ? p.extras : [],
     };
   } catch { return d; }
 }
@@ -175,6 +193,27 @@ export function addFixed(label: string, amount: number) {
   set({ fixed: [...state.fixed, { id: uid(), label: label.trim(), amount }] });
 }
 export function removeFixed(id: string) { set({ fixed: state.fixed.filter((f) => f.id !== id) }); }
+
+// Extra income (bonus / one-time) -------------------------------------------
+export function addExtra(e: { month: string; label: string; amount: number; toTax: number; toFixed: number; toSavings: number; toSpend: number }): string {
+  const id = uid();
+  const nz = (n: number) => Math.max(0, Math.round((n || 0) * 100) / 100);
+  set({
+    extras: [
+      { id, at: Date.now(), month: e.month, label: (e.label || "Extra income").trim(), amount: nz(e.amount), toTax: nz(e.toTax), toFixed: nz(e.toFixed), toSavings: nz(e.toSavings), toSpend: nz(e.toSpend) },
+      ...state.extras,
+    ],
+  });
+  return id;
+}
+export function removeExtra(id: string) { set({ extras: state.extras.filter((x) => x.id !== id) }); }
+export function extrasFor(s: Persisted, ym: string): ExtraIncome[] {
+  return (s.extras || []).filter((x) => x.month === ym).sort((a, b) => b.at - a.at);
+}
+// How much a month's extras add to its spendable pool (all but the savings cut).
+export function boostFor(s: Persisted, ym: string): number {
+  return extrasFor(s, ym).reduce((a, x) => a + (x.toTax || 0) + (x.toFixed || 0) + (x.toSpend || 0), 0);
+}
 export function fixedList(s: Persisted): FixedExpense[] { return s.fixed; }
 
 export function addExpense(e: { amount: number; category: string; note?: string; date?: string }): string {
@@ -257,11 +296,20 @@ export function savingsMonthly(s: Persisted): number {
   return s.settings.savingsMode === "percent" ? (net * v) / 100 : v;
 }
 export function fixedMonthly(s: Persisted): number { return s.fixed.reduce((a, f) => a + (f.amount || 0), 0); }
-export function spendableMonthly(s: Persisted): number {
+// The recurring monthly pool from salary alone (no one-time income).
+export function baseSpendableMonthly(s: Persisted): number {
   return Math.max(0, afterTaxMonthly(s.settings) - fixedMonthly(s) - savingsMonthly(s));
 }
+// A specific month's pool: recurring base + that month's extra-income boost.
+export function spendableForMonth(s: Persisted, ym: string): number {
+  return baseSpendableMonthly(s) + boostFor(s, ym);
+}
+export function spendableMonthly(s: Persisted, now = new Date()): number {
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return spendableForMonth(s, ym);
+}
 export function dailyAllowance(s: Persisted, now = new Date()): number {
-  return spendableMonthly(s) / daysInMonth(now);
+  return spendableMonthly(s, now) / daysInMonth(now);
 }
 export function hourlyAllowance(s: Persisted, now = new Date()): number {
   const wh = s.settings.wakingHours || 18;

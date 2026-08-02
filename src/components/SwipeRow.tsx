@@ -49,10 +49,12 @@ export default function SwipeRow({ children, onDelete }: { children: React.React
 
   return (
     <div className="relative overflow-hidden rounded-2xl" style={{ touchAction: "pan-y" }}>
-      {/* Delete action behind the row */}
+      {/* Delete action behind the row — invisible until the row is swiped, so
+          it can't bleed through translucent (glass) row backgrounds. */}
       <button
         onClick={onDelete}
         className="absolute inset-y-0 right-0 w-20 flex items-center justify-center gap-1 bg-rose-500 text-white active:bg-rose-600"
+        style={{ opacity: tx <= -2 ? 1 : 0, pointerEvents: tx <= -8 ? "auto" : "none" }}
         aria-label="Delete"
         tabIndex={tx < -8 ? 0 : -1}
       >

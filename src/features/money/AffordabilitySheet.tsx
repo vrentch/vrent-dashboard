@@ -8,6 +8,7 @@ import {
 } from "../../lib/money/store";
 import { aiTaxLookup } from "../../lib/api";
 import { chf } from "../../lib/business/format";
+import { GEMEINDEN } from "../../data/gemeinden";
 
 const inputCls = "mt-1 w-full rounded-xl glass-subtle px-3 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none";
 
@@ -110,7 +111,7 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <label className="block">
                   <span className="text-[11px] text-slate-400 dark:text-slate-500">Canton</span>
-                  <select value={st.canton} onChange={(e) => setSettings({ canton: e.target.value as any, taxPct: null })} className={inputCls}>
+                  <select value={st.canton} onChange={(e) => setSettings({ canton: e.target.value as any, gemeinde: "", taxPct: null })} className={inputCls}>
                     {CANTONS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                   </select>
                 </label>
@@ -124,21 +125,41 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
                 </label>
               </div>
 
-              {/* Gemeinde — AI-refined precision */}
+              {/* Gemeinde — full official register per canton, AI-refined rate */}
               <div className="mt-3 rounded-2xl glass-subtle p-3">
                 <span className="text-[11px] text-slate-400 dark:text-slate-500">Gemeinde (for a precise rate)</span>
-                <div className="mt-1 flex gap-2">
-                  <input
-                    value={st.gemeinde}
-                    onChange={(e) => setSettings({ gemeinde: e.target.value })}
-                    onKeyDown={(e) => { if (e.key === "Enter") lookupGemeinde(); }}
-                    placeholder="e.g. Küsnacht, Wollerau, Zug"
-                    className="flex-1 min-w-0 rounded-xl bg-white/60 dark:bg-white/5 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none"
-                  />
-                  <button onClick={lookupGemeinde} disabled={looking} className="inline-flex items-center gap-1 px-3 rounded-xl accent-gradient text-white text-xs font-semibold shadow-accent active:scale-95 disabled:opacity-50 shrink-0">
-                    {looking ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} AI rate
-                  </button>
-                </div>
+                {(() => {
+                  const list = GEMEINDEN[st.canton] || [];
+                  const known = !st.gemeinde || list.includes(st.gemeinde);
+                  return (
+                    <div className="mt-1 flex gap-2">
+                      {list.length > 0 && known ? (
+                        <select
+                          value={st.gemeinde}
+                          onChange={(e) => setSettings({ gemeinde: e.target.value === "__other__" ? " " : e.target.value })}
+                          className="flex-1 min-w-0 rounded-xl bg-white/60 dark:bg-white/5 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none"
+                        >
+                          <option value="">— select your Gemeinde —</option>
+                          {list.map((g) => <option key={g} value={g}>{g}</option>)}
+                          <option value="__other__">Other…</option>
+                        </select>
+                      ) : (
+                        <input
+                          value={st.gemeinde.trim()}
+                          onChange={(e) => setSettings({ gemeinde: e.target.value || " " })}
+                          onBlur={(e) => { if (!e.target.value.trim()) setSettings({ gemeinde: "" }); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") lookupGemeinde(); }}
+                          autoFocus={st.gemeinde === " "}
+                          placeholder="Type your Gemeinde"
+                          className="flex-1 min-w-0 rounded-xl bg-white/60 dark:bg-white/5 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none"
+                        />
+                      )}
+                      <button onClick={lookupGemeinde} disabled={looking} className="inline-flex items-center gap-1 px-3 rounded-xl accent-gradient text-white text-xs font-semibold shadow-accent active:scale-95 disabled:opacity-50 shrink-0">
+                        {looking ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} AI rate
+                      </button>
+                    </div>
+                  );
+                })()}
                 {lookupMsg && <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">{lookupMsg}</p>}
                 {lookupErr && <p className="mt-1.5 text-[11px] text-rose-600 dark:text-rose-400">{lookupErr}</p>}
               </div>

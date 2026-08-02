@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, Settings2, Plus, Wallet, TrendingDown, PiggyBank, Clock } from "lucide-react";
+import { ChevronLeft, Settings2, Plus, Wallet, TrendingDown, PiggyBank, Clock, Gift } from "lucide-react";
 import {
   useMoney, addExpense, removeExpense, isConfigured, afterTaxMonthly, estimatedTaxPct,
   spendableMonthly, dailyAllowance, hourlyAllowance, liveBalance, meterBreakdown, spentOnDay, spentInMonth,
   savingsMonthly, fixedMonthly, todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, expensesInMonth, categoryOf,
+  extrasFor, removeExtra, boostFor,
 } from "../../lib/money/store";
 import { chf } from "../../lib/business/format";
 import SwipeRow from "../../components/SwipeRow";
 import AffordabilitySheet from "./AffordabilitySheet";
+import ExtraIncomeSheet from "./ExtraIncomeSheet";
 
 export default function MoneyScreen({ onBack }: { onBack: () => void }) {
   const s = useMoney();
   const [setupOpen, setSetupOpen] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("food");
   const [note, setNote] = useState("");
@@ -140,6 +143,11 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               </div>
             </section>
 
+            {/* Bonus / one-time income */}
+            <button onClick={() => setExtraOpen(true)} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98]">
+              <Gift size={16} className="text-brand-600 dark:text-brand-400" /> Add bonus / extra income
+            </button>
+
             {/* Month stats */}
             <section className="rounded-3xl glass p-5 space-y-4">
               <div className="flex items-baseline justify-between">
@@ -151,6 +159,29 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               <div className="h-2 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
                 <div className={`h-full rounded-full ${monthSpent > spendableMonthly(s) ? "bg-rose-500" : "accent-gradient"}`} style={{ width: `${Math.min(100, spendableMonthly(s) ? (monthSpent / spendableMonthly(s)) * 100 : 0)}%` }} />
               </div>
+
+              {/* This month's extra income */}
+              {extrasFor(s, ym).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Extra income · +{fmt(boostFor(s, ym))} to budget
+                  </p>
+                  {extrasFor(s, ym).map((x) => (
+                    <SwipeRow key={x.id} onDelete={() => removeExtra(x.id)}>
+                      <div className="flex items-center gap-3 glass-subtle p-3">
+                        <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><Gift size={15} /></span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{x.label}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                            {[x.toTax > 0 && `tax ${fmt(x.toTax)}`, x.toFixed > 0 && `fixed ${fmt(x.toFixed)}`, x.toSavings > 0 && `savings ${fmt(x.toSavings)}`, x.toSpend > 0 && `budget ${fmt(x.toSpend)}`].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        <span className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">+{fmt(x.amount)}</span>
+                      </div>
+                    </SwipeRow>
+                  ))}
+                </div>
+              )}
 
               {/* 7-day trend vs daily allowance */}
               <div>
@@ -223,6 +254,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
       </div>
 
       <AffordabilitySheet open={setupOpen} onClose={() => setSetupOpen(false)} />
+      <ExtraIncomeSheet open={extraOpen} onClose={() => setExtraOpen(false)} month={ym} />
     </div>
   );
 }
