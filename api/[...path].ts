@@ -1180,17 +1180,56 @@ Base calorie/macro targets on the profile (goal, activity). Provide a 7-day work
     prompt = `Give accurate nutrition for each food at the EXACT amount specified as quantity + unit (e.g. "2 piece" = two whole items, "1 cup", "1 slice", "200 g", "330 ml"). Use the corrected food name (it may differ from what a photo suggested — e.g. beef vs chicken). Respond with ONLY a JSON object:
 {"items":[{"name":"...","quantity":0,"unit":"...","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}]}
 Keep each item's quantity and unit exactly as given. Round to whole numbers. Foods: ${JSON.stringify(items)}`;
+  } else if (task === "food-lookup") {
+    // Look up a manually-described food from brand/restaurant knowledge + the web.
+    const desc = String(body?.desc || body?.text || "").slice(0, 300);
+    if (!desc.trim()) return { status: 200, body: { ok: false, error: "Describe the food" } };
+    maxTokens = 1000;
+    prompt = `You are a nutrition database assistant. The user describes a food or meal — often a specific restaurant, cafe, brand, or packaged product (e.g. "McDonald's Big Mac", "Starbucks grande oat latte", "Coop Betty Bossi lasagne", "Migros chicken sandwich", "Gipfeli from a Swiss bakery"). Identify the exact product and give its nutrition using the brand/restaurant's known published values when you know them, or the web search tool to find them; otherwise give a careful estimate from a typical recipe. If the description is a combo/meal, split it into its components. Respond with ONLY a JSON object:
+{"items":[{"name":"clear food name","quantity":0,"unit":"g | piece | slice | cup | ml | serving | …","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}],"source":"where the numbers came from, e.g. 'McDonald's official', 'brand label', 'typical recipe estimate'","note":"one short caveat"}
+Use realistic values for the ACTUAL portion/product size (not per 100 g unless that is the unit). Pick the most natural unit per item. Round to whole numbers. Food: """${desc}"""`;
   } else {
     return { status: 400, body: { ok: false, error: "unknown task" } };
   }
 
-  const json = await anthropic({
-    model: AI_MODEL,
-    max_tokens: maxTokens,
-    messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
-  });
+  // food-lookup runs on the strong model with web search (with graceful
+  // fallbacks); everything else uses the fast text model.
+  let usedModel = AI_MODEL;
+  let json: any;
+  if (task === "food-lookup") {
+    usedModel = AI_VISION_MODEL;
+    const msgs = [{ role: "user", content: [{ type: "text", text: prompt }] }];
+    try {
+      json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, messages: msgs, tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] });
+    } catch {
+      try {
+        json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, messages: msgs });
+      } catch {
+        usedModel = AI_MODEL;
+        json = await anthropic({ model: AI_MODEL, max_tokens: maxTokens, messages: msgs });
+      }
+    }
+  } else {
+    json = await anthropic({
+      model: AI_MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
+    });
+  }
   const data = parseModelJson(aiText(json));
   if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
+  if (task === "food-lookup") {
+    const items = arr<any>(data?.items).map((i) => ({
+      name: str(i?.name),
+      quantity: nnum(i?.quantity) || 0,
+      unit: str(i?.unit) || "g",
+      calories: nnum(i?.calories) || 0,
+      protein_g: nnum(i?.protein_g) || 0,
+      carbs_g: nnum(i?.carbs_g) || 0,
+      fat_g: nnum(i?.fat_g) || 0,
+    })).filter((i) => i.name);
+    return { status: 200, body: { ok: true, data: { items, source: str(data?.source), note: str(data?.note) }, model: usedModel } };
+  }
   if (task === "nutrition") {
     const items = arr<any>(data?.items).map((i) => ({
       name: str(i?.name),

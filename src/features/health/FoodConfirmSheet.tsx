@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Loader2, Check, Sparkles, X, Plus } from "lucide-react";
+import { Loader2, Check, Sparkles, X, Plus, Search, Globe } from "lucide-react";
 import Sheet from "../../components/Sheet";
 import { addFood, rememberFood, frequentFoods, useHealth, type LearnedFood } from "../../lib/health";
-import { aiNutrition, type FoodEstimate } from "../../lib/api";
+import { aiNutrition, aiFoodLookup, type FoodEstimate } from "../../lib/api";
 
 // Units the user can pick — grams, countable pieces, and common household units.
 const UNITS = ["g", "piece", "slice", "cup", "tbsp", "tsp", "ml", "serving", "handful", "bowl", "plate", "oz"];
@@ -44,6 +44,10 @@ export default function FoodConfirmSheet({
   const [items, setItems] = useState<EditItem[]>([]);
   const [recalcing, setRecalcing] = useState(false);
   const [recalcErr, setRecalcErr] = useState<string | null>(null);
+  const [lookupText, setLookupText] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupErr, setLookupErr] = useState<string | null>(null);
+  const [lookupNote, setLookupNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!estimate) return;
@@ -110,6 +114,42 @@ export default function FoodConfirmSheet({
 
   function addBlank() {
     setItems((arr) => [...arr, { name: "", quantity: 100, unit: "g", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }]);
+  }
+
+  // Look a typed food up online (restaurant / brand / packaged) and add it with
+  // real nutrition — no photo needed.
+  async function doLookup() {
+    const q = lookupText.trim();
+    if (!q) return;
+    setLookingUp(true);
+    setLookupErr(null);
+    setLookupNote(null);
+    try {
+      const r = await aiFoodLookup(q);
+      if (r.ok && r.data?.items?.length) {
+        setItems((arr) => [
+          ...arr,
+          ...r.data!.items.map((i) => ({
+            name: i.name || q,
+            quantity: Math.round(i.quantity || 0) || 1,
+            unit: i.unit || "g",
+            calories: Math.round(i.calories || 0),
+            protein_g: Math.round(i.protein_g || 0),
+            carbs_g: Math.round(i.carbs_g || 0),
+            fat_g: Math.round(i.fat_g || 0),
+          })),
+        ]);
+        if (!name || name === "Meal") setName(r.data.items[0].name || q);
+        setLookupText("");
+        setLookupNote(r.data.source ? `Found · ${r.data.source}` : r.data.note || "Added.");
+      } else {
+        setLookupErr(r.needCode ? "Enter your access code first." : r.error || "Couldn't find that food.");
+      }
+    } catch {
+      setLookupErr("Couldn't look that up.");
+    } finally {
+      setLookingUp(false);
+    }
   }
 
   // Add a food the app has already learned — one tap, no AI needed.
@@ -188,12 +228,12 @@ export default function FoodConfirmSheet({
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500 dark:text-slate-400">
           <Loader2 size={18} className="animate-spin" /> Estimating calories…
         </div>
-      ) : error ? (
-        <p className="text-sm text-rose-600 dark:text-rose-400 py-6 text-center">{error}</p>
-      ) : !hasFood && !learned.length ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">{estimate?.note || "That doesn't look like food."}</p>
       ) : (
         <div className="space-y-4">
+          {error && <p className="rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[13px] px-3 py-2">{error}</p>}
+          {!error && !hasFood && (
+            <p className="text-[13px] text-slate-500 dark:text-slate-400">{estimate?.note || "No food detected — type it below and I'll look it up."}</p>
+          )}
           <div>
             <label className="text-[11px] text-slate-400 dark:text-slate-500">Meal name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meal" className="mt-1 w-full rounded-xl glass-subtle px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none" />
@@ -277,9 +317,27 @@ export default function FoodConfirmSheet({
                 </div>
               </div>
             ))}
-            <button onClick={addBlank} className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-2xl glass-subtle text-sm font-semibold text-slate-600 dark:text-slate-300 active:scale-[0.98]">
-              <Plus size={15} /> Add food manually
-            </button>
+            {/* Add a food by name — the AI finds it online (restaurant / brand / packaged) */}
+            <div className="rounded-2xl glass-subtle p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="grid place-items-center w-8 h-8 rounded-lg accent-gradient-soft text-brand-600 dark:text-brand-300 shrink-0"><Globe size={15} /></span>
+                <input
+                  value={lookupText}
+                  onChange={(e) => setLookupText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") doLookup(); }}
+                  placeholder="Add food — e.g. 'Big Mac', 'Starbucks latte'"
+                  className="flex-1 min-w-0 bg-transparent text-sm text-slate-900 dark:text-slate-100 outline-none"
+                />
+                <button onClick={doLookup} disabled={lookingUp || !lookupText.trim()} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg accent-gradient text-white text-xs font-semibold shadow-accent disabled:opacity-50 active:scale-95 shrink-0">
+                  {lookingUp ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Look up
+                </button>
+              </div>
+              {lookupErr && <p className="text-[12px] text-rose-600 dark:text-rose-400">{lookupErr}</p>}
+              {lookupNote && !lookupErr && <p className="text-[11px] text-emerald-600 dark:text-emerald-400">{lookupNote}</p>}
+              <button onClick={addBlank} className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 dark:text-slate-500 active:text-slate-600 dark:active:text-slate-300">
+                <Plus size={11} /> or enter it manually
+              </button>
+            </div>
           </div>
 
           {recalcErr && <p className="text-[12px] text-rose-600 dark:text-rose-400">{recalcErr}</p>}

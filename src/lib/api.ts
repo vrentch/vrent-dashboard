@@ -328,6 +328,13 @@ export function aiNutrition(items: { name: string; quantity: number; unit: strin
   return postJson(`/api/ai-text`, { task: "nutrition", items, code: getAiCode() });
 }
 
+// Look up a manually-typed food from brand/restaurant/packaged-product data
+// (uses the strong model + web search on the server). Returns one or more items.
+export interface FoodLookup { items: NutritionItem[]; source: string; note: string }
+export function aiFoodLookup(desc: string): Promise<AiResult<FoodLookup>> {
+  return postJson(`/api/ai-text`, { task: "food-lookup", desc, code: getAiCode() });
+}
+
 // Multi-turn chat about a scanned photo. `image` (base64, no prefix) is only
 // needed on the first message; the server keeps it in context via the history.
 export interface ChatTurn { role: "user" | "assistant"; text: string }
