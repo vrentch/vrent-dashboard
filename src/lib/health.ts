@@ -28,6 +28,20 @@ export interface FoodEntry {
   at: number;
 }
 
+// A food the user has confirmed before — the app "learns" these so it can bias
+// photo recognition toward their real diet and offer one-tap corrections.
+export interface LearnedFood {
+  name: string;
+  unit: string;        // g | piece | slice | cup | …
+  quantity: number;    // the amount these macros are for
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  count: number;       // how many times logged (frequency)
+  at: number;          // last used
+}
+
 export interface ActivityEntry {
   id: string;
   date: string;
@@ -68,6 +82,7 @@ export interface HealthState {
   weights: WeightEntry[];
   waters: WaterEntry[];
   sleeps: SleepEntry[];
+  learnedFoods: LearnedFood[];
   plan: HealthPlan | null;
   planAt: number | null;
 }
@@ -97,6 +112,7 @@ function defaults(): HealthState {
     weights: [],
     waters: [],
     sleeps: [],
+    learnedFoods: [],
     plan: null,
     planAt: null,
   };
@@ -115,6 +131,7 @@ function load(): HealthState {
       weights: Array.isArray(p.weights) ? p.weights : [],
       waters: Array.isArray(p.waters) ? p.waters : [],
       sleeps: Array.isArray(p.sleeps) ? p.sleeps : [],
+      learnedFoods: Array.isArray(p.learnedFoods) ? p.learnedFoods : [],
       plan: p.plan ?? null,
       planAt: p.planAt ?? null,
     };
@@ -156,6 +173,57 @@ export function setProfile(patch: Partial<Profile>) {
 export function addFood(e: Omit<FoodEntry, "id" | "at" | "date"> & { date?: string }) {
   const entry: FoodEntry = { id: uid(), at: Date.now(), date: e.date || todayKey(), ...e };
   set({ foods: [entry, ...state.foods] });
+}
+
+// ── Food learning ────────────────────────────────────────────────────────────
+function foodKey(name: string): string {
+  return (name || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Remember a confirmed food so the app learns the user's diet: biases future
+// photo recognition and powers one-tap corrections. Upserts by name.
+export function rememberFood(f: Omit<LearnedFood, "count" | "at">) {
+  const key = foodKey(f.name);
+  if (!key || !(f.calories > 0)) return;
+  const existing = state.learnedFoods.find((x) => foodKey(x.name) === key);
+  const merged: LearnedFood = {
+    name: f.name.trim(),
+    unit: f.unit || "g",
+    quantity: f.quantity || 0,
+    calories: Math.round(f.calories),
+    protein_g: Math.round(f.protein_g),
+    carbs_g: Math.round(f.carbs_g),
+    fat_g: Math.round(f.fat_g),
+    count: (existing?.count || 0) + 1,
+    at: Date.now(),
+  };
+  const rest = state.learnedFoods.filter((x) => foodKey(x.name) !== key);
+  // Keep the list bounded (most useful = frequent + recent).
+  const next = [merged, ...rest]
+    .sort((a, b) => b.count - a.count || b.at - a.at)
+    .slice(0, 100);
+  set({ learnedFoods: next });
+}
+
+export function removeLearnedFood(name: string) {
+  const key = foodKey(name);
+  set({ learnedFoods: state.learnedFoods.filter((x) => foodKey(x.name) !== key) });
+}
+
+// Top foods for quick-pick chips (frequent first, then recent).
+export function frequentFoods(s: HealthState, n = 12): LearnedFood[] {
+  return [...s.learnedFoods].sort((a, b) => b.count - a.count || b.at - a.at).slice(0, n);
+}
+
+// Names sent to the vision model as recognition hints.
+export function foodHints(n = 16): string[] {
+  return frequentFoods(state, n).map((f) => f.name);
+}
+
+// Exact-name lookup for instant correction (no AI call).
+export function matchLearnedFood(name: string): LearnedFood | undefined {
+  const key = foodKey(name);
+  return state.learnedFoods.find((x) => foodKey(x.name) === key);
 }
 
 export function addActivity(e: Omit<ActivityEntry, "id" | "at" | "date"> & { date?: string }) {

@@ -941,6 +941,8 @@ function normalizeVision(task: string, d: any) {
       items: arr<any>(d?.items).map((it) => ({
         name: str(it?.name) || "Item",
         portion: str(it?.portion),
+        quantity: nnum(it?.quantity),
+        unit: str(it?.unit) || "g",
         calories: nnum(it?.calories),
         protein_g: nnum(it?.protein_g),
         carbs_g: nnum(it?.carbs_g),
@@ -1033,12 +1035,12 @@ const FOOD_PROMPT = `You are an expert nutritionist estimating a meal's nutritio
 3. Give realistic calorie and macro values for the portion actually shown — not generic averages. A large restaurant portion is not a "standard" serving.
 Respond with ONLY a JSON object, no prose, matching exactly:
 {
-  "items": [{"name": "specific food name", "portion": "estimated portion e.g. '1 cup' or '200g'", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
+  "items": [{"name": "specific food name", "quantity": 0, "unit": "g | piece | slice | cup | tbsp | tsp | ml | serving | handful | bowl | plate | oz", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
   "total": {"calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0},
   "confidence": "low | medium | high",
   "note": "one short caveat or assumption you made"
 }
-Round to whole numbers. "total" MUST equal the sum of the items. If the image is not food, return empty items, a zeroed total, confidence "low", and explain in the note.`;
+For each item pick the MOST NATURAL unit a person would use: countable foods use "piece" (eggs, sausages, cookies) or "slice" (bread, pizza, cake); liquids use "ml"; loose/plated foods use "g", "cup" or "serving". "quantity" is how many of that unit is actually shown. The calories/macros must be for that whole quantity. Round to whole numbers. "total" MUST equal the sum of the items. If the image is not food, return empty items, a zeroed total, confidence "low", and explain in the note.`;
 
 const RECEIPT_PROMPT = `You are a Swiss bookkeeping assistant reading a receipt or invoice image (it may be a photo of a paper receipt OR a screenshot of an email invoice). Extract the fields an accountant needs. Respond with ONLY a JSON object, no prose, matching exactly:
 {
@@ -1054,10 +1056,15 @@ const RECEIPT_PROMPT = `You are a Swiss bookkeeping assistant reading a receipt 
 }
 "total" is the gross amount payable including VAT. "vatAmount" is the total VAT/MwSt shown (0 if none), "vatRate" the main rate as a number (e.g. 8.1, 2.6, 3.8, 0). Numbers must be plain numbers with no currency symbols or thousands separators. If a field isn't visible, use "" or 0.`;
 
-async function aiVision(task: string, image: string, mediaType: string, code?: unknown) {
+async function aiVision(task: string, image: string, mediaType: string, code?: unknown, hints?: string[]) {
   if (!aiConfigured()) return { status: 200, body: { ok: false, configured: false, error: "AI not configured" } };
   if (!codeMatches(code)) return NEED_CODE;
-  const prompt = task === "receipt" ? RECEIPT_PROMPT : task === "food" ? FOOD_PROMPT : IDENTIFY_PROMPT;
+  // The user's frequent foods bias recognition toward what they actually eat.
+  const foodPrompt =
+    task === "food" && hints && hints.length
+      ? `${FOOD_PROMPT}\n\nThe user frequently eats these foods — when an item in the photo closely matches one, prefer that exact name and its natural unit: ${hints.slice(0, 20).join(", ")}.`
+      : FOOD_PROMPT;
+  const prompt = task === "receipt" ? RECEIPT_PROMPT : task === "food" ? foodPrompt : IDENTIFY_PROMPT;
   const maxTokens = task === "food" ? 1400 : task === "receipt" ? 700 : 1000;
   const content = [
     { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
@@ -1162,16 +1169,17 @@ Respond with ONLY a JSON object matching exactly:
 }
 Base calorie/macro targets on the profile (goal, activity). Provide a 7-day workout array. Keep everything practical and safe; this is general guidance, not medical advice.`;
   } else if (task === "nutrition") {
-    // Re-estimate nutrition for user-corrected items (fixed name and/or grams).
+    // Re-estimate nutrition for user-corrected items (fixed name and/or amount,
+    // where amount is a quantity + unit like "2 piece", "1 cup", "200 g").
     const items = arr<any>(body?.items)
-      .map((i) => ({ name: str(i?.name).slice(0, 80), grams: nnum(i?.grams) || 0 }))
+      .map((i) => ({ name: str(i?.name).slice(0, 80), quantity: nnum(i?.quantity) || 0, unit: str(i?.unit).slice(0, 16) || "g" }))
       .filter((i) => i.name)
       .slice(0, 20);
     if (!items.length) return { status: 200, body: { ok: false, error: "No items" } };
     maxTokens = 800;
-    prompt = `Give accurate nutrition for each food at the exact gram amount specified. Use the corrected food name (it may differ from what a photo suggested — e.g. beef vs chicken). Respond with ONLY a JSON object:
-{"items":[{"name":"...","grams":0,"calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}]}
-Round to whole numbers. Foods (name @ grams): ${JSON.stringify(items)}`;
+    prompt = `Give accurate nutrition for each food at the EXACT amount specified as quantity + unit (e.g. "2 piece" = two whole items, "1 cup", "1 slice", "200 g", "330 ml"). Use the corrected food name (it may differ from what a photo suggested — e.g. beef vs chicken). Respond with ONLY a JSON object:
+{"items":[{"name":"...","quantity":0,"unit":"...","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}]}
+Keep each item's quantity and unit exactly as given. Round to whole numbers. Foods: ${JSON.stringify(items)}`;
   } else {
     return { status: 400, body: { ok: false, error: "unknown task" } };
   }
@@ -1186,7 +1194,8 @@ Round to whole numbers. Foods (name @ grams): ${JSON.stringify(items)}`;
   if (task === "nutrition") {
     const items = arr<any>(data?.items).map((i) => ({
       name: str(i?.name),
-      grams: nnum(i?.grams) || 0,
+      quantity: nnum(i?.quantity) || 0,
+      unit: str(i?.unit) || "g",
       calories: nnum(i?.calories) || 0,
       protein_g: nnum(i?.protein_g) || 0,
       carbs_g: nnum(i?.carbs_g) || 0,
@@ -1848,7 +1857,7 @@ export async function handleApi(
     if (route === "ai-vision") {
       const b = ctx.body || {};
       if (!b.image) return { status: 400, body: { ok: false, error: "image required" } };
-      return await aiVision(b.task || "identify", String(b.image), b.mediaType || "image/jpeg", b.code);
+      return await aiVision(b.task || "identify", String(b.image), b.mediaType || "image/jpeg", b.code, arr<any>(b.hints).map(str).filter(Boolean));
     }
 
     if (route === "ai-text") {

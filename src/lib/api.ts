@@ -273,7 +273,7 @@ export interface Identified {
 }
 
 export interface FoodEstimate {
-  items: { name: string; portion: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }[];
+  items: { name: string; portion?: string; quantity?: number; unit?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }[];
   total: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
   confidence: string;
   note: string;
@@ -294,9 +294,10 @@ export function analyzeReceipt(image: string, mediaType = "image/jpeg"): Promise
   return postJson(`/api/ai-vision`, { task: "receipt", image, mediaType, code: getAiCode() });
 }
 
-/** Send a base64 JPEG (no data-URL prefix) for identification or food analysis. */
-export function analyzeImage<T = Identified>(task: "identify" | "food", image: string, mediaType = "image/jpeg"): Promise<AiResult<T>> {
-  return postJson<AiResult<T>>(`/api/ai-vision`, { task, image, mediaType, code: getAiCode() });
+/** Send a base64 JPEG (no data-URL prefix) for identification or food analysis.
+ * `hints` (the user's frequent foods) bias food recognition toward their diet. */
+export function analyzeImage<T = Identified>(task: "identify" | "food", image: string, mediaType = "image/jpeg", hints?: string[]): Promise<AiResult<T>> {
+  return postJson<AiResult<T>>(`/api/ai-vision`, { task, image, mediaType, hints, code: getAiCode() });
 }
 
 export function aiTranslate(text: string, target: string): Promise<AiResult<{ translation: string; sourceLang: string }>> {
@@ -320,9 +321,10 @@ export function aiPlan(profile: unknown, recent: unknown): Promise<AiResult<Heal
   return postJson(`/api/ai-text`, { task: "plan", profile, recent, code: getAiCode() });
 }
 
-// Re-estimate nutrition after the user corrects a food's name and/or grams.
-export interface NutritionItem { name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }
-export function aiNutrition(items: { name: string; grams: number }[]): Promise<AiResult<{ items: NutritionItem[] }>> {
+// Re-estimate nutrition after the user corrects a food's name and/or amount
+// (amount = quantity + unit, e.g. 2 "piece", 1 "cup", 200 "g").
+export interface NutritionItem { name: string; quantity: number; unit: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }
+export function aiNutrition(items: { name: string; quantity: number; unit: string }[]): Promise<AiResult<{ items: NutritionItem[] }>> {
   return postJson(`/api/ai-text`, { task: "nutrition", items, code: getAiCode() });
 }
 

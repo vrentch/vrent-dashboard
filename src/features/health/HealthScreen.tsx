@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
-  waterOn, sleepOn, latestWeight, removeActivity, savePlan, recentSummary, toKey, weeklyStats, type FoodEntry,
+  waterOn, sleepOn, latestWeight, removeActivity, savePlan, recentSummary, toKey, weeklyStats, foodHints, type FoodEntry,
 } from "../../lib/health";
 import { analyzeImage, aiPlan, type FoodEstimate } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
@@ -97,7 +97,7 @@ export default function HealthScreen() {
     try {
       const img = await prepareImage(file);
       setFoodPreview(img.dataUrl);
-      const res = await analyzeImage<FoodEstimate>("food", img.base64, img.mediaType);
+      const res = await analyzeImage<FoodEstimate>("food", img.base64, img.mediaType, foodHints());
       if (!res.ok || !res.data) setFoodErr(res.configured === false ? "AI isn't set up yet." : res.error || "Couldn't analyze that photo.");
       else setFoodEstimate(res.data);
     } catch (err) {
