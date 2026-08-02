@@ -1125,6 +1125,33 @@ async function aiChat(body: any) {
   return { status: 200, body: { ok: true, reply } };
 }
 
+// Validate & coerce one assistant action; returns null for anything unknown.
+function normalizeAction(a: any): any | null {
+  const type = str(a?.type);
+  switch (type) {
+    case "navigate": {
+      const tab = str(a?.tab);
+      return ["home", "news", "sport", "markets", "health", "scan", "business", "calendar", "briefing"].includes(tab)
+        ? { type, tab }
+        : null;
+    }
+    case "log_food":
+      return { type, name: str(a?.name) || "Food", quantity: nnum(a?.quantity) || 1, unit: str(a?.unit) || "g", calories: nnum(a?.calories), protein_g: nnum(a?.protein_g), carbs_g: nnum(a?.carbs_g), fat_g: nnum(a?.fat_g) };
+    case "log_water":
+      return { type, ml: nnum(a?.ml) };
+    case "log_steps":
+      return { type, steps: nnum(a?.steps) };
+    case "log_weight":
+      return { type, kg: nnum(a?.kg) };
+    case "log_activity":
+      return { type, label: str(a?.label) || "Workout", minutes: nnum(a?.minutes), calories: nnum(a?.calories) };
+    case "add_event":
+      return { type, title: str(a?.title) || "Event", date: str(a?.date).slice(0, 10), time: str(a?.time).slice(0, 5), category: str(a?.category) || "other" };
+    default:
+      return null;
+  }
+}
+
 function normalizePlan(d: any) {
   const t = d?.targets && typeof d.targets === "object" ? d.targets : {};
   return {
@@ -1188,19 +1215,48 @@ Keep each item's quantity and unit exactly as given. Round to whole numbers. Foo
     prompt = `You are a nutrition database assistant. The user describes a food or meal — often a specific restaurant, cafe, brand, or packaged product (e.g. "McDonald's Big Mac", "Starbucks grande oat latte", "Coop Betty Bossi lasagne", "Migros chicken sandwich", "Gipfeli from a Swiss bakery"). Identify the exact product and give its nutrition using the brand/restaurant's known published values when you know them, or the web search tool to find them; otherwise give a careful estimate from a typical recipe. If the description is a combo/meal, split it into its components. Respond with ONLY a JSON object:
 {"items":[{"name":"clear food name","quantity":0,"unit":"g | piece | slice | cup | ml | serving | …","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}],"source":"where the numbers came from, e.g. 'McDonald's official', 'brand label', 'typical recipe estimate'","note":"one short caveat"}
 Use realistic values for the ACTUAL portion/product size (not per 100 g unless that is the unit). Pick the most natural unit per item. Round to whole numbers. Food: """${desc}"""`;
+  } else if (task === "assistant") {
+    // In-app voice/text assistant: answers from context and emits actions the
+    // client executes (navigate, log health, add events).
+    const message = String(body?.message || body?.text || "").slice(0, 600);
+    if (!message.trim()) return { status: 200, body: { ok: false, error: "Say or type something" } };
+    const ctx = body?.context && typeof body.context === "object" ? body.context : {};
+    const today = str(ctx?.date) || "";
+    maxTokens = 900;
+    prompt = `You are the built-in voice assistant for a personal mobile app called "AC App". The user speaks or types a request. You can ANSWER using the provided context, and you can perform ACTIONS the app will carry out. Respond with ONLY a JSON object:
+{"reply":"a short, friendly, spoken-style response (1-2 sentences, no JSON, no markdown)","actions":[ ...zero or more action objects... ]}
+
+Allowed actions (include ONLY when clearly intended):
+- {"type":"navigate","tab":"home|news|sport|markets|health|scan|business|calendar|briefing"} — open a section (for "show/open/go to ...").
+- {"type":"log_food","name":"","quantity":0,"unit":"g|piece|slice|cup|ml|serving|bowl|plate|tbsp|tsp|oz","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0} — log something the user ate/drank. Give accurate nutrition for that amount, using known brand/restaurant values when named.
+- {"type":"log_water","ml":0}
+- {"type":"log_steps","steps":0}
+- {"type":"log_weight","kg":0}
+- {"type":"log_activity","label":"","minutes":0,"calories":0} — a workout.
+- {"type":"add_event","title":"","date":"YYYY-MM-DD","time":"HH:MM or empty for all-day","category":"work|meeting|deadline|finance|personal|other"}
+
+Rules:
+- For questions about stats/data (calories left, spend this month, upcoming events, watchlist), ANSWER from context in "reply"; you may also navigate to that section.
+- Resolve relative dates ("today", "tomorrow", "next Monday") using today's date. Today is ${today}.
+- Keep "reply" natural and concise, as if spoken aloud. Confirm actions you took ("Logged 2 eggs — 180 calories.").
+- Emit an empty actions array for a pure question. Never invent data not in context.
+Context: ${JSON.stringify(ctx).slice(0, 3000)}
+User said: """${message}"""`;
   } else {
     return { status: 400, body: { ok: false, error: "unknown task" } };
   }
 
-  // food-lookup runs on the strong model with web search (with graceful
-  // fallbacks); everything else uses the fast text model.
+  // food-lookup + assistant run on the strong model (food-lookup also with web
+  // search), with graceful fallbacks; everything else uses the fast text model.
+  const strong = task === "food-lookup" || task === "assistant";
   let usedModel = AI_MODEL;
   let json: any;
-  if (task === "food-lookup") {
+  if (strong) {
     usedModel = AI_VISION_MODEL;
     const msgs = [{ role: "user", content: [{ type: "text", text: prompt }] }];
+    const tools = task === "food-lookup" ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {};
     try {
-      json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, messages: msgs, tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] });
+      json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, messages: msgs, ...tools });
     } catch {
       try {
         json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, messages: msgs });
@@ -1218,6 +1274,10 @@ Use realistic values for the ACTUAL portion/product size (not per 100 g unless t
   }
   const data = parseModelJson(aiText(json));
   if (!data) return { status: 200, body: { ok: false, error: "Could not read the AI response" } };
+  if (task === "assistant") {
+    const actions = arr<any>(data?.actions).map(normalizeAction).filter(Boolean).slice(0, 8);
+    return { status: 200, body: { ok: true, data: { reply: str(data?.reply), actions }, model: usedModel } };
+  }
   if (task === "food-lookup") {
     const items = arr<any>(data?.items).map((i) => ({
       name: str(i?.name),

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
-  waterOn, sleepOn, latestWeight, removeActivity, savePlan, recentSummary, toKey, weeklyStats, foodHints, type FoodEntry,
+  waterOn, sleepOn, latestWeight, removeActivity, removeFood, savePlan, recentSummary, toKey, weeklyStats, foodHints, type FoodEntry,
 } from "../../lib/health";
+import SwipeRow from "../../components/SwipeRow";
 import { analyzeImage, aiPlan, type FoodEstimate } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
 import { useAiAccess } from "../../lib/aiAccess";
@@ -263,15 +264,17 @@ export default function HealthScreen() {
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">{isToday ? "Today's meals" : "Meals"}</h2>
             <div className="space-y-2">
               {meals.map((m) => (
-                <button key={m.id} onClick={() => setEditMeal(m)} className="w-full flex items-center gap-3 rounded-2xl glass-subtle p-3 text-left active:scale-[0.99] transition">
-                  <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-slate-500/15 text-slate-600 dark:text-slate-300 text-base">🍽️</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">P {m.protein_g} · C {m.carbs_g} · F {m.fat_g} g</p>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{m.calories}</span>
-                  <Pencil size={14} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                </button>
+                <SwipeRow key={m.id} onDelete={() => removeFood(m.id)}>
+                  <button onClick={() => setEditMeal(m)} className="w-full flex items-center gap-3 glass-subtle p-3 text-left active:scale-[0.99] transition">
+                    <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-slate-500/15 text-slate-600 dark:text-slate-300 text-base">🍽️</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">P {m.protein_g} · C {m.carbs_g} · F {m.fat_g} g</p>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{m.calories}</span>
+                    <Pencil size={14} className="text-slate-300 dark:text-slate-600 shrink-0" />
+                  </button>
+                </SwipeRow>
               ))}
             </div>
           </section>

@@ -5,9 +5,10 @@ import { analyzeReceipt } from "../../lib/api";
 import { useAiAccess } from "../../lib/aiAccess";
 import AiUnlock from "../ai/AiUnlock";
 import {
-  useBusiness, addCompany, setActiveCompany, addReceipt, receiptsFor,
+  useBusiness, addCompany, setActiveCompany, addReceipt, receiptsFor, removeReceipt,
   suggestCodeForVendor, monthsWith, receiptsInMonth,
 } from "../../lib/business/store";
+import SwipeRow from "../../components/SwipeRow";
 import { chf, monthChip, monthLabel } from "../../lib/business/format";
 import { putImage, getImage } from "../../lib/business/images";
 import { buildReceiptsZip, shareOrDownloadFile } from "../../lib/business/export";
@@ -204,17 +205,19 @@ export default function BusinessScreen() {
                 </h2>
                 <div className="space-y-2">
                   {receipts.map((r) => (
-                    <button key={r.id} onClick={() => setEditId(r.id)} className="w-full flex items-center gap-3 rounded-2xl glass-subtle p-2.5 text-left active:scale-[0.99] transition">
-                      <Thumb id={r.id} hasImage={r.hasImage} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{r.vendor || "Untitled receipt"}</p>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500">{r.date || "—"}{r.category ? ` · ${r.category}` : ""}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{r.amount ? chf(r.amount, r.currency || "CHF") : "—"}</p>
-                        <span className={`text-[10px] font-semibold ${r.bexioCode ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>{r.bexioCode ? `Bexio ${r.bexioCode}` : "needs code"}</span>
-                      </div>
-                    </button>
+                    <SwipeRow key={r.id} onDelete={() => removeReceipt(r.id)}>
+                      <button onClick={() => setEditId(r.id)} className="w-full flex items-center gap-3 glass-subtle p-2.5 text-left active:scale-[0.99] transition">
+                        <Thumb id={r.id} hasImage={r.hasImage} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{r.vendor || "Untitled receipt"}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500">{r.date || "—"}{r.category ? ` · ${r.category}` : ""}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{r.amount ? chf(r.amount, r.currency || "CHF") : "—"}</p>
+                          <span className={`text-[10px] font-semibold ${r.bexioCode ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>{r.bexioCode ? `Bexio ${r.bexioCode}` : "needs code"}</span>
+                        </div>
+                      </button>
+                    </SwipeRow>
                   ))}
                 </div>
               </section>

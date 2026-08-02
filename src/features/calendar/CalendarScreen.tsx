@@ -6,10 +6,12 @@ import {
   upcoming,
   categoryOf,
   toggleDone,
+  deleteEvent,
   todayKey,
   toKey,
   type CalEvent,
 } from "../../lib/calendar";
+import SwipeRow from "../../components/SwipeRow";
 import MonthGrid from "./MonthGrid";
 import EventEditor from "./EventEditor";
 
@@ -148,7 +150,8 @@ function EventRow({ ev, onEdit }: { ev: CalEvent; onEdit: () => void }) {
   const cat = categoryOf(ev.category);
   const time = ev.allDay ? "All day" : `${ev.start ?? ""}${ev.end ? " – " + ev.end : ""}`;
   return (
-    <div className="flex items-stretch gap-3 p-3 rounded-2xl glass">
+    <SwipeRow onDelete={() => deleteEvent(ev.id)}>
+    <div className="flex items-stretch gap-3 p-3 glass">
       <span className="w-1 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
       <button
         onClick={(e) => {
@@ -179,6 +182,7 @@ function EventRow({ ev, onEdit }: { ev: CalEvent; onEdit: () => void }) {
         {ev.notes && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 line-clamp-1">{ev.notes}</p>}
       </button>
     </div>
+    </SwipeRow>
   );
 }
 

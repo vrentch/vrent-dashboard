@@ -335,6 +335,14 @@ export function aiFoodLookup(desc: string): Promise<AiResult<FoodLookup>> {
   return postJson(`/api/ai-text`, { task: "food-lookup", desc, code: getAiCode() });
 }
 
+// In-app assistant: a natural-language request + a snapshot of app state returns
+// a spoken reply plus actions the client executes (navigate, log, add event).
+export interface AssistantAction { type: string; [k: string]: any }
+export interface AssistantResult { reply: string; actions: AssistantAction[] }
+export function aiAssistant(message: string, context: unknown): Promise<AiResult<AssistantResult>> {
+  return postJson(`/api/ai-text`, { task: "assistant", message, context, code: getAiCode() });
+}
+
 // Multi-turn chat about a scanned photo. `image` (base64, no prefix) is only
 // needed on the first message; the server keeps it in context via the history.
 export interface ChatTurn { role: "user" | "assistant"; text: string }

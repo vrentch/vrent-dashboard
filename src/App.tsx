@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Home, Newspaper, CandlestickChart, HeartPulse, ScanLine, Receipt, CalendarDays } from "lucide-react";
+import { Home, Newspaper, CandlestickChart, HeartPulse, ScanLine, Receipt, CalendarDays, Mic } from "lucide-react";
 import type { NewsMode } from "./components/NewsSportSegment";
+import AssistantSheet from "./features/assistant/AssistantSheet";
 import HomeScreen from "./features/home/HomeScreen";
 import NewsScreen from "./features/news/NewsScreen";
 import MarketsScreen from "./features/markets/MarketsScreen";
@@ -39,8 +40,16 @@ const RIGHT_TABS: NavItem[] = [
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [newsMode, setNewsMode] = useState<NewsMode>("news");
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const { theme } = usePrefs();
   const locked = useLocked();
+
+  // The assistant navigates by tab name (with News/Sport handled together).
+  const assistantNavigate = (t: string) => {
+    if (t === "sport") { setNewsMode("sport"); setTab("news"); }
+    else if (t === "news") { setNewsMode("news"); setTab("news"); }
+    else setTab(t as Tab);
+  };
 
   useEffect(() => {
     applyTheme(theme);
@@ -130,6 +139,17 @@ export default function App() {
           </button>
         </div>
       </nav>
+
+      {/* Global Ask-AI (voice + text) launcher */}
+      <button
+        onClick={() => setAssistantOpen(true)}
+        aria-label="Ask AI"
+        className="fixed right-4 bottom-24 z-30 inline-flex items-center gap-1.5 h-11 pl-3.5 pr-4 rounded-full accent-gradient text-white text-sm font-semibold shadow-accent active:scale-95"
+      >
+        <Mic size={17} /> Ask AI
+      </button>
+
+      <AssistantSheet open={assistantOpen} onClose={() => setAssistantOpen(false)} onNavigate={assistantNavigate} />
     </div>
   );
 }
