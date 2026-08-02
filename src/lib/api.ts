@@ -335,6 +335,12 @@ export function aiFoodLookup(desc: string): Promise<AiResult<FoodLookup>> {
   return postJson(`/api/ai-text`, { task: "food-lookup", desc, code: getAiCode() });
 }
 
+// Estimate the effective Swiss income-tax % for a specific Gemeinde (strong
+// model + web search finds the current Steuerfuss).
+export function aiTaxLookup(p: { canton: string; gemeinde: string; status: string; incomeMonthly: number }): Promise<AiResult<{ taxPct: number; note: string; source: string }>> {
+  return postJson(`/api/ai-text`, { task: "tax-lookup", ...p, code: getAiCode() });
+}
+
 // In-app assistant: a natural-language request + a snapshot of app state returns
 // a spoken reply plus actions the client executes (navigate, log, add event).
 export interface AssistantAction { type: string; [k: string]: any }

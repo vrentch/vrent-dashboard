@@ -140,9 +140,9 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
               <>
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">You can spend right now</p>
-                  <p className="text-[30px] leading-tight font-extrabold display-num tabular-nums">{chf(liveBalance(money))}</p>
+                  <p className="text-[30px] leading-tight font-extrabold display-num tabular-nums">{chf(liveBalance(money), money.settings.currency || "CHF")}</p>
                   <p className="text-xs text-white/80">
-                    {chf(dailyAllowance(money))}/day · spent today {chf(spentOnDay(money, moneyToday()))}
+                    {chf(dailyAllowance(money), money.settings.currency || "CHF")}/day · spent today {chf(spentOnDay(money, moneyToday()), money.settings.currency || "CHF")}
                   </p>
                 </div>
                 <span className="grid place-items-center w-11 h-11 rounded-2xl bg-white/15 shrink-0"><Wallet size={20} /></span>

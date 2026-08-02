@@ -81,11 +81,12 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
       business: company ? { company: company.name, month, receipts: bt.count, spend_chf: Math.round(bt.gross), vat_chf: Math.round(bt.vat) } : null,
       money: moneyConfigured(money)
         ? {
-            can_spend_now_chf: Math.round(liveBalance(money)),
-            daily_allowance_chf: Math.round(dailyAllowance(money)),
-            spent_today_chf: Math.round(moneySpentOn(money, moneyToday())),
-            spent_this_month_chf: Math.round(moneySpentInMonth(money, month)),
-            spendable_per_month_chf: Math.round(spendableMonthly(money)),
+            currency: money.settings.currency || "CHF",
+            can_spend_now: Math.round(liveBalance(money)),
+            daily_allowance: Math.round(dailyAllowance(money)),
+            spent_today: Math.round(moneySpentOn(money, moneyToday())),
+            spent_this_month: Math.round(moneySpentInMonth(money, month)),
+            spendable_per_month: Math.round(spendableMonthly(money)),
           }
         : null,
       upcoming_events: upcoming(events, today).slice(0, 6).map((e) => ({ title: e.title, date: e.date, time: e.start || "", done: !!e.done })),

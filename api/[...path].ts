@@ -1217,6 +1217,19 @@ Keep each item's quantity and unit exactly as given. Round to whole numbers. Foo
     prompt = `You are a nutrition database assistant. The user describes a food or meal — often a specific restaurant, cafe, brand, or packaged product (e.g. "McDonald's Big Mac", "Starbucks grande oat latte", "Coop Betty Bossi lasagne", "Migros chicken sandwich", "Gipfeli from a Swiss bakery"). Identify the exact product and give its nutrition using the brand/restaurant's known published values when you know them, or the web search tool to find them; otherwise give a careful estimate from a typical recipe. If the description is a combo/meal, split it into its components. Respond with ONLY a JSON object:
 {"items":[{"name":"clear food name","quantity":0,"unit":"g | piece | slice | cup | ml | serving | …","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}],"source":"where the numbers came from, e.g. 'McDonald's official', 'brand label', 'typical recipe estimate'","note":"one short caveat"}
 Use realistic values for the ACTUAL portion/product size (not per 100 g unless that is the unit). Pick the most natural unit per item. Round to whole numbers. Food: """${desc}"""`;
+  } else if (task === "tax-lookup") {
+    // Estimate the effective Swiss income-tax rate for a specific Gemeinde.
+    const canton = str(body?.canton).slice(0, 30);
+    const gemeinde = str(body?.gemeinde).slice(0, 60);
+    const status = str(body?.status) === "married" ? "married" : "single";
+    const incomeMonthly = nnum(body?.incomeMonthly);
+    if (!gemeinde.trim() || !(incomeMonthly > 0)) return { status: 200, body: { ok: false, error: "Enter your Gemeinde and income first" } };
+    maxTokens = 700;
+    prompt = `You are a Swiss tax expert. Estimate the EFFECTIVE total income-tax rate (Bundessteuer + Kantonssteuer + Gemeindesteuer, incl. church tax excluded) as a percentage of gross annual income for this person. Use the web search tool if needed to find the Gemeinde's current Steuerfuss.
+Person: ${status}, no children, resident of ${gemeinde}, canton ${canton}, annual gross income CHF ${Math.round(incomeMonthly * 12)}.
+Respond with ONLY a JSON object:
+{"taxPct": 0.0, "note": "one short line explaining the basis (e.g. Steuerfuss used)", "source": "where the figures came from"}
+"taxPct" is the effective rate in percent (e.g. 9.8), realistic for that income level and municipality — low-tax Gemeinden like Küsnacht, Zug, Wollerau, Freienbach are well below the cantonal average.`;
   } else if (task === "assistant") {
     // In-app voice/text assistant: answers from context and emits actions the
     // client executes (navigate, log health, add events).
@@ -1249,15 +1262,16 @@ User said: """${message}"""`;
     return { status: 400, body: { ok: false, error: "unknown task" } };
   }
 
-  // food-lookup + assistant run on the strong model (food-lookup also with web
-  // search), with graceful fallbacks; everything else uses the fast text model.
-  const strong = task === "food-lookup" || task === "assistant";
+  // food-lookup, tax-lookup + assistant run on the strong model (the lookups
+  // also with web search), with graceful fallbacks; everything else uses the
+  // fast text model.
+  const strong = task === "food-lookup" || task === "tax-lookup" || task === "assistant";
   let usedModel = AI_MODEL;
   let json: any;
   if (strong) {
     usedModel = AI_VISION_MODEL;
     const msgs = [{ role: "user", content: [{ type: "text", text: prompt }] }];
-    const tools = task === "food-lookup" ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {};
+    const tools = task === "food-lookup" || task === "tax-lookup" ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {};
     try {
       json = await anthropic({ model: AI_VISION_MODEL, max_tokens: maxTokens, messages: msgs, ...tools });
     } catch {
@@ -1280,6 +1294,12 @@ User said: """${message}"""`;
   if (task === "assistant") {
     const actions = arr<any>(data?.actions).map(normalizeAction).filter(Boolean).slice(0, 8);
     return { status: 200, body: { ok: true, data: { reply: str(data?.reply), actions }, model: usedModel } };
+  }
+  if (task === "tax-lookup") {
+    const pct = nnum(data?.taxPct);
+    // Sanity-clamp: an effective Swiss income-tax rate outside 0–45% is noise.
+    const taxPct = Math.max(0, Math.min(45, pct));
+    return { status: 200, body: { ok: true, data: { taxPct, note: str(data?.note), source: str(data?.source) }, model: usedModel } };
   }
   if (task === "food-lookup") {
     const items = arr<any>(data?.items).map((i) => ({

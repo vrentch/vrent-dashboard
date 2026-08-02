@@ -15,19 +15,28 @@ export interface Expense {
   note?: string;
 }
 
-export type Canton = "ZH" | "SZ" | "ZG" | "OTHER";
+export type Canton =
+  | "ZH" | "BE" | "LU" | "UR" | "SZ" | "OW" | "NW" | "GL" | "ZG" | "FR" | "SO" | "BS" | "BL"
+  | "SH" | "AR" | "AI" | "SG" | "GR" | "AG" | "TG" | "TI" | "VD" | "VS" | "NE" | "GE" | "JU" | "OTHER";
 export type MaritalStatus = "single" | "married" | "divorced";
+export type TaxSystem = "CH" | "UK" | "none";
 
 export interface MoneySettings {
-  // What actually lands on the bank account each month (social insurances are
-  // already deducted by the employer). Income tax is NOT withheld in
-  // Switzerland — it's owed later — so the app reserves it from this amount.
+  // The monthly income figure. Its meaning depends on the tax system:
+  //  CH   — what lands on the bank account (social insurances already deducted;
+  //         income tax is NOT withheld in Switzerland, so it's reserved here).
+  //  UK   — gross salary; PAYE (Income Tax + National Insurance) is estimated
+  //         and deducted to get take-home.
+  //  none — taken as-is, no tax deduction at all.
   bankMonthly: number;
-  canton: Canton;
+  taxSystem: TaxSystem;
+  canton: Canton;                  // CH only
+  gemeinde: string;                // CH only — free text, refined via AI lookup
   status: MaritalStatus;
-  taxPct: number | null;           // manual effective income-tax % (null = estimate)
+  taxPct: number | null;           // manual effective tax % (null = estimate)
+  currency: string;                // display currency (CHF, GBP, …)
   savingsMode: "amount" | "percent";
-  savingsValue: number;            // CHF/month or % of after-tax income
+  savingsValue: number;            // amount/month or % of after-tax income
   wakeTime: string;                // "HH:MM" when the waking window starts
   wakingHours: number;             // hours awake per day (spending window)
   trackingSince: string;           // YYYY-MM-DD — accrual never starts earlier
@@ -54,9 +63,32 @@ export function categoryOf(key: string) {
 }
 
 export const CANTONS: { key: Canton; label: string }[] = [
-  { key: "ZH", label: "Zürich" },
+  { key: "AG", label: "Aargau" },
+  { key: "AR", label: "Appenzell A.Rh." },
+  { key: "AI", label: "Appenzell I.Rh." },
+  { key: "BL", label: "Basel-Landschaft" },
+  { key: "BS", label: "Basel-Stadt" },
+  { key: "BE", label: "Bern" },
+  { key: "FR", label: "Fribourg" },
+  { key: "GE", label: "Genève" },
+  { key: "GL", label: "Glarus" },
+  { key: "GR", label: "Graubünden" },
+  { key: "JU", label: "Jura" },
+  { key: "LU", label: "Luzern" },
+  { key: "NE", label: "Neuchâtel" },
+  { key: "NW", label: "Nidwalden" },
+  { key: "OW", label: "Obwalden" },
+  { key: "SH", label: "Schaffhausen" },
   { key: "SZ", label: "Schwyz" },
+  { key: "SO", label: "Solothurn" },
+  { key: "SG", label: "St. Gallen" },
+  { key: "TI", label: "Ticino" },
+  { key: "TG", label: "Thurgau" },
+  { key: "UR", label: "Uri" },
+  { key: "VD", label: "Vaud" },
+  { key: "VS", label: "Valais" },
   { key: "ZG", label: "Zug" },
+  { key: "ZH", label: "Zürich" },
   { key: "OTHER", label: "Other" },
 ];
 
@@ -71,7 +103,8 @@ function uid(): string {
 function defaults(): Persisted {
   return {
     settings: {
-      bankMonthly: 0, canton: "ZH", status: "single", taxPct: null,
+      bankMonthly: 0, taxSystem: "CH", canton: "ZH", gemeinde: "", status: "single", taxPct: null,
+      currency: "CHF",
       savingsMode: "amount", savingsValue: 0,
       wakeTime: "06:00", wakingHours: 18,
       trackingSince: "",
@@ -129,6 +162,12 @@ export function setSettings(patch: Partial<MoneySettings>) {
   // the meter never credits days that were never tracked. Only auto-stamp when
   // the patch didn't touch trackingSince — an explicit user value must win.
   if (!("trackingSince" in patch) && !next.trackingSince && next.bankMonthly > 0) next.trackingSince = todayKey();
+  // Switching tax system implies the natural currency (unless set explicitly);
+  // the manual tax % also resets since it belonged to the previous system.
+  if ("taxSystem" in patch && patch.taxSystem !== state.settings.taxSystem) {
+    if (!("currency" in patch)) next.currency = patch.taxSystem === "UK" ? "GBP" : patch.taxSystem === "CH" ? "CHF" : next.currency;
+    if (!("taxPct" in patch)) next.taxPct = null;
+  }
   set({ settings: next });
 }
 export function addFixed(label: string, amount: number) {
@@ -160,26 +199,48 @@ function parseHM(s: string): number {
   return (h || 0) + (m || 0) / 60;
 }
 
-// ── Swiss income-tax estimate (tax only — approximate, user can tweak) ────────
-// The bank amount already excludes social insurances (employer withholds AHV/
-// ALV/BVG/NBU). What still has to be paid out of it is income tax: Kantons- +
-// Gemeinde- + Bundessteuer. Rough effective rates by canton & income band for a
-// single filer; married gets a splitting discount.
-function incomeTaxPct(canton: Canton, status: MaritalStatus, annualIncome: number): number {
-  const bands: { upto: number; ZH: number; SZ: number; ZG: number; OTHER: number }[] = [
-    { upto: 55000, ZH: 6, SZ: 4, ZG: 3, OTHER: 7 },
-    { upto: 90000, ZH: 11, SZ: 7, ZG: 5, OTHER: 12 },
-    { upto: 135000, ZH: 15, SZ: 9, ZG: 8, OTHER: 16 },
-    { upto: Infinity, ZH: 19, SZ: 12, ZG: 10, OTHER: 20 },
-  ];
-  const b = bands.find((x) => annualIncome <= x.upto) || bands[bands.length - 1];
-  let pct = b[canton] ?? b.OTHER;
+// ── Tax estimates (approximate — the slider / AI lookup refine them) ──────────
+
+// Switzerland: the bank amount already excludes social insurances (employer
+// withholds AHV/ALV/BVG/NBU). What still has to be paid out of it is income
+// tax: Kantons- + Gemeinde- + Bundessteuer, which varies strongly by canton
+// (and Gemeinde — refined via the AI lookup). Base effective bands scaled by a
+// per-canton factor; married gets a rough splitting discount.
+const CANTON_FACTOR: Record<string, number> = {
+  ZG: 0.45, NW: 0.5, SZ: 0.55, UR: 0.6, OW: 0.6, AI: 0.6,
+  AR: 0.75, GL: 0.75, TG: 0.75, LU: 0.8,
+  SG: 0.85, GR: 0.85, AG: 0.85, SH: 0.85, ZH: 0.9, BL: 0.95,
+  SO: 1.0, VS: 1.0, TI: 1.0, FR: 1.05, BS: 1.05, BE: 1.1,
+  GE: 1.15, VD: 1.15, NE: 1.2, JU: 1.2, OTHER: 1.0,
+};
+function swissTaxPct(canton: Canton, status: MaritalStatus, annualIncome: number): number {
+  const base = annualIncome <= 55000 ? 7 : annualIncome <= 90000 ? 12 : annualIncome <= 135000 ? 16 : 20;
+  let pct = base * (CANTON_FACTOR[canton] ?? 1.0);
   if (status === "married") pct *= 0.8; // rough splitting benefit
   return pct;
 }
+
+// United Kingdom: PAYE — Income Tax (personal allowance £12,570, tapered above
+// £100k) + employee National Insurance (8% / 2%). 2024/25 rates; the input is
+// gross salary, so the estimate IS the deduction at source.
+function ukPayePct(annualGross: number): number {
+  if (annualGross <= 0) return 0;
+  const allowance = Math.max(0, 12570 - Math.max(0, annualGross - 100000) / 2);
+  const taxable = Math.max(0, annualGross - allowance);
+  const it =
+    0.2 * Math.min(taxable, 37700) +
+    0.4 * Math.min(Math.max(taxable - 37700, 0), 112570 - 37700) +
+    0.45 * Math.max(taxable - 112570, 0);
+  const ni = 0.08 * Math.min(Math.max(annualGross - 12570, 0), 50270 - 12570) + 0.02 * Math.max(annualGross - 50270, 0);
+  return ((it + ni) / annualGross) * 100;
+}
+
 export function estimatedTaxPct(s: MoneySettings): number {
   if (s.taxPct != null) return s.taxPct;
-  return Math.round(incomeTaxPct(s.canton, s.status, s.bankMonthly * 12) * 10) / 10;
+  const annual = s.bankMonthly * 12;
+  const sys = s.taxSystem || "CH";
+  const pct = sys === "none" ? 0 : sys === "UK" ? ukPayePct(annual) : swissTaxPct(s.canton, s.status, annual);
+  return Math.round(pct * 10) / 10;
 }
 // What's actually yours to allocate: bank amount minus the tax reserve.
 export function afterTaxMonthly(s: MoneySettings): number {

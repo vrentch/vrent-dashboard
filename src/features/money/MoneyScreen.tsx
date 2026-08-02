@@ -22,6 +22,8 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
     return () => clearInterval(id);
   }, []);
 
+  const cur = s.settings.currency || "CHF";
+  const fmt = (n: number) => chf(n, cur);
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const configured = isConfigured(s);
@@ -74,17 +76,17 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               <div className="relative">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">You can spend right now</p>
                 <p className={`mt-1 text-[38px] leading-none font-extrabold display-num tabular-nums ${balance <= -0.005 ? "text-rose-200" : ""}`}>
-                  {chf(balance)}
+                  {fmt(balance)}
                 </p>
                 {(() => {
                   const bd = meterBreakdown(s, now);
                   return (
                     <p className="text-xs text-white/80 mt-1.5 tabular-nums">
-                      {chf(bd.todayAccrued)} flowed in today − {chf(bd.todaySpent)} spent
+                      {fmt(bd.todayAccrued)} flowed in today − {fmt(bd.todaySpent)} spent
                       {Math.abs(bd.carryover) >= 0.5 && (
                         bd.carryover > 0
-                          ? <> + {chf(bd.carryover)} carried over</>
-                          : <> − {chf(-bd.carryover)} earlier overspend</>
+                          ? <> + {fmt(bd.carryover)} carried over</>
+                          : <> − {fmt(-bd.carryover)} earlier overspend</>
                       )}
                     </p>
                   );
@@ -92,15 +94,15 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                 {balance <= -0.005 && <p className="text-[11px] text-rose-200/90 mt-1">over budget — the meter refills as waking hours pass</p>}
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-xl bg-white/12 px-2 py-2">
-                    <p className="text-[15px] font-bold tabular-nums">{chf(daily)}</p>
+                    <p className="text-[15px] font-bold tabular-nums">{fmt(daily)}</p>
                     <p className="text-[10px] text-white/75">per day</p>
                   </div>
                   <div className="rounded-xl bg-white/12 px-2 py-2">
-                    <p className="text-[15px] font-bold tabular-nums">{chf(hourly)}</p>
+                    <p className="text-[15px] font-bold tabular-nums">{fmt(hourly)}</p>
                     <p className="text-[10px] text-white/75">per waking hour</p>
                   </div>
                   <div className="rounded-xl bg-white/12 px-2 py-2">
-                    <p className="text-[15px] font-bold tabular-nums">{chf(todaySpent)}</p>
+                    <p className="text-[15px] font-bold tabular-nums">{fmt(todaySpent)}</p>
                     <p className="text-[10px] text-white/75">spent today</p>
                   </div>
                 </div>
@@ -144,7 +146,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">This month</p>
                 {/* "monthly budget", not "spendable" — the live meter above draws
                     on a smaller, tracking-prorated pool and must not be conflated */}
-                <p className="text-xs text-slate-400 dark:text-slate-500">{chf(monthSpent)} spent · budget {chf(spendableMonthly(s))}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">{fmt(monthSpent)} spent · budget {fmt(spendableMonthly(s))}</p>
               </div>
               <div className="h-2 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
                 <div className={`h-full rounded-full ${monthSpent > spendableMonthly(s) ? "bg-rose-500" : "accent-gradient"}`} style={{ width: `${Math.min(100, spendableMonthly(s) ? (monthSpent / spendableMonthly(s)) * 100 : 0)}%` }} />
@@ -158,7 +160,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                   {trend.map((t) => {
                     const over = t.amount > daily && daily > 0;
                     return (
-                      <div key={t.date} className="flex-1 flex flex-col items-center gap-1" title={`${t.date} · ${chf(t.amount)}`}>
+                      <div key={t.date} className="flex-1 flex flex-col items-center gap-1" title={`${t.date} · ${fmt(t.amount)}`}>
                         <span className="text-[9px] tabular-nums text-slate-400 dark:text-slate-500">{t.amount ? Math.round(t.amount) : ""}</span>
                         <span className={`w-full rounded-md ${over ? "bg-rose-500" : "bg-slate-800 dark:bg-slate-200"}`} style={{ height: Math.max(3, Math.round((t.amount / maxTrend) * 64)) }} />
                         <span className="text-[9px] text-slate-400 dark:text-slate-500">{new Date(t.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2)}</span>
@@ -175,7 +177,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                     <div key={c.key}>
                       <div className="flex items-baseline justify-between">
                         <span className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{c.emoji} {c.label}</span>
-                        <span className="text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">{chf(c.amount)}</span>
+                        <span className="text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">{fmt(c.amount)}</span>
                       </div>
                       <div className="mt-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
                         <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200" style={{ width: `${Math.max(2, monthSpent ? (c.amount / monthSpent) * 100 : 0)}%` }} />
@@ -187,9 +189,9 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
 
               {/* Budget summary */}
               <div className="grid grid-cols-3 gap-2 pt-1">
-                <Mini icon={Wallet} label="After tax" value={chf(afterTaxMonthly(s.settings))} sub={`tax −${estimatedTaxPct(s.settings)}%`} />
-                <Mini icon={TrendingDown} label="Fixed costs" value={chf(fixedMonthly(s))} sub={`${s.fixed.length} items`} />
-                <Mini icon={PiggyBank} label="Savings" value={chf(savingsMonthly(s))} sub="reserved first" />
+                <Mini icon={Wallet} label="After tax" value={fmt(afterTaxMonthly(s.settings))} sub={`tax −${estimatedTaxPct(s.settings)}%`} />
+                <Mini icon={TrendingDown} label="Fixed costs" value={fmt(fixedMonthly(s))} sub={`${s.fixed.length} items`} />
+                <Mini icon={PiggyBank} label="Savings" value={fmt(savingsMonthly(s))} sub="reserved first" />
               </div>
             </section>
 
@@ -209,7 +211,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                             {" · "}{categoryOf(e.category).label}
                           </p>
                         </div>
-                        <span className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">{chf(e.amount)}</span>
+                        <span className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">{fmt(e.amount)}</span>
                       </div>
                     </SwipeRow>
                   ))}
