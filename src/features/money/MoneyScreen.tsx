@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Settings2, Plus, Wallet, TrendingDown, PiggyBank, Clock } from "lucide-react";
 import {
-  useMoney, addExpense, removeExpense, isConfigured, estimateNetMonthly, estimatedDeductionPct,
-  spendableMonthly, dailyAllowance, hourlyAllowance, liveBalance, spentOnDay, spentInMonth,
+  useMoney, addExpense, removeExpense, isConfigured, afterTaxMonthly, estimatedTaxPct,
+  spendableMonthly, dailyAllowance, hourlyAllowance, liveBalance, meterBreakdown, spentOnDay, spentInMonth,
   savingsMonthly, fixedMonthly, todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, expensesInMonth, categoryOf,
 } from "../../lib/money/store";
 import { chf } from "../../lib/business/format";
@@ -64,7 +64,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
           <button onClick={() => setSetupOpen(true)} className="w-full text-left rounded-3xl p-5 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}>
             <Wallet size={26} className="mb-2 text-white/90" />
             <p className="text-lg font-bold">Set up Affordability</p>
-            <p className="text-[13px] text-white/80 mt-1">Enter your salary, canton and fixed costs — I'll work out what you can safely spend right now, per day and per hour.</p>
+            <p className="text-[13px] text-white/80 mt-1">Enter what lands on your bank account, your canton and fixed costs — I'll reserve your taxes and work out what you can safely spend right now, per day and per hour.</p>
           </button>
         ) : (
           <>
@@ -73,12 +73,23 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               <div className="absolute -right-8 -top-10 w-44 h-44 rounded-full bg-white/15 blur-2xl" />
               <div className="relative">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">You can spend right now</p>
-                <p className={`mt-1 text-[38px] leading-none font-extrabold display-num tabular-nums ${balance < 0 ? "text-rose-200" : ""}`}>
+                <p className={`mt-1 text-[38px] leading-none font-extrabold display-num tabular-nums ${balance <= -0.005 ? "text-rose-200" : ""}`}>
                   {chf(balance)}
                 </p>
-                <p className="text-xs text-white/80 mt-1.5">
-                  {balance >= 0 ? "accrued through your waking hours, minus what you spent" : "over budget — the meter refills as hours pass"}
-                </p>
+                {(() => {
+                  const bd = meterBreakdown(s, now);
+                  return (
+                    <p className="text-xs text-white/80 mt-1.5 tabular-nums">
+                      {chf(bd.todayAccrued)} flowed in today − {chf(bd.todaySpent)} spent
+                      {Math.abs(bd.carryover) >= 0.5 && (
+                        bd.carryover > 0
+                          ? <> + {chf(bd.carryover)} carried over</>
+                          : <> − {chf(-bd.carryover)} earlier overspend</>
+                      )}
+                    </p>
+                  );
+                })()}
+                {balance <= -0.005 && <p className="text-[11px] text-rose-200/90 mt-1">over budget — the meter refills as waking hours pass</p>}
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-xl bg-white/12 px-2 py-2">
                     <p className="text-[15px] font-bold tabular-nums">{chf(daily)}</p>
@@ -131,7 +142,9 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
             <section className="rounded-3xl glass p-5 space-y-4">
               <div className="flex items-baseline justify-between">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">This month</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">{chf(monthSpent)} of {chf(spendableMonthly(s))} spendable</p>
+                {/* "monthly budget", not "spendable" — the live meter above draws
+                    on a smaller, tracking-prorated pool and must not be conflated */}
+                <p className="text-xs text-slate-400 dark:text-slate-500">{chf(monthSpent)} spent · budget {chf(spendableMonthly(s))}</p>
               </div>
               <div className="h-2 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
                 <div className={`h-full rounded-full ${monthSpent > spendableMonthly(s) ? "bg-rose-500" : "accent-gradient"}`} style={{ width: `${Math.min(100, spendableMonthly(s) ? (monthSpent / spendableMonthly(s)) * 100 : 0)}%` }} />
@@ -174,7 +187,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
 
               {/* Budget summary */}
               <div className="grid grid-cols-3 gap-2 pt-1">
-                <Mini icon={Wallet} label="Net salary" value={chf(estimateNetMonthly(s.settings))} sub={s.settings.netOverride ? "your figure" : `est. −${estimatedDeductionPct(s.settings)}%`} />
+                <Mini icon={Wallet} label="After tax" value={chf(afterTaxMonthly(s.settings))} sub={`tax −${estimatedTaxPct(s.settings)}%`} />
                 <Mini icon={TrendingDown} label="Fixed costs" value={chf(fixedMonthly(s))} sub={`${s.fixed.length} items`} />
                 <Mini icon={PiggyBank} label="Savings" value={chf(savingsMonthly(s))} sub="reserved first" />
               </div>

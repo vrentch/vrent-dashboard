@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Trash2, Plus, Check } from "lucide-react";
+import { Trash2, Plus, Check, Landmark } from "lucide-react";
 import Sheet from "../../components/Sheet";
 import {
-  useMoney, setSettings, addFixed, removeFixed, estimateNetMonthly, estimatedDeductionPct,
+  useMoney, setSettings, addFixed, removeFixed, afterTaxMonthly, estimatedTaxPct, taxReserveMonthly,
   spendableMonthly, dailyAllowance, hourlyAllowance, savingsMonthly, fixedMonthly,
   CANTONS, type MaritalStatus,
 } from "../../lib/money/store";
@@ -16,8 +16,8 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
   const [fxLabel, setFxLabel] = useState("");
   const [fxAmount, setFxAmount] = useState("");
 
-  const estPct = estimatedDeductionPct(st);
-  const net = estimateNetMonthly(st);
+  const taxPct = estimatedTaxPct(st);
+  const afterTax = afterTaxMonthly(st);
 
   function addFx() {
     const a = parseFloat(fxAmount.replace(",", "."));
@@ -39,12 +39,12 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
       }
     >
       <div className="space-y-5">
-        {/* Income */}
+        {/* Income — what lands on the bank account */}
         <section>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Income</h3>
           <label className="block">
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">Gross salary / month (CHF)</span>
-            <input type="number" inputMode="decimal" value={st.grossMonthly || ""} onChange={(e) => setSettings({ grossMonthly: Number(e.target.value) || 0 })} placeholder="e.g. 8000" className={inputCls} />
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">Received on your bank account / month (CHF)</span>
+            <input type="number" inputMode="decimal" value={st.bankMonthly || ""} onChange={(e) => setSettings({ bankMonthly: Number(e.target.value) || 0 })} placeholder="e.g. 6500" className={inputCls} />
           </label>
           <div className="grid grid-cols-2 gap-3 mt-3">
             <label className="block">
@@ -63,27 +63,23 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
             </label>
           </div>
 
-          {/* Deduction tune + net override */}
+          {/* Tax reserve — Kantons- + Bundessteuer are owed later, not withheld */}
           <div className="mt-3 rounded-2xl glass-subtle p-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">Deductions (tax + social)</span>
-              <span className="text-[12px] font-bold tabular-nums text-slate-900 dark:text-slate-100">−{estPct}%</span>
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200"><Landmark size={13} /> Income tax (Kanton + Bund)</span>
+              <span className="text-[12px] font-bold tabular-nums text-slate-900 dark:text-slate-100">−{taxPct}% · {chf(taxReserveMonthly(st))}/mo</span>
             </div>
             <input
-              type="range" min={10} max={45} step={0.5}
-              value={estPct}
-              onChange={(e) => setSettings({ deductionPct: Number(e.target.value), netOverride: null })}
+              type="range" min={0} max={35} step={0.5}
+              value={taxPct}
+              onChange={(e) => setSettings({ taxPct: Number(e.target.value) })}
               className="w-full mt-2 accent-indigo-600"
             />
             <div className="flex items-center justify-between mt-1">
-              <button onClick={() => setSettings({ deductionPct: null, netOverride: null })} className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">Reset to estimate</button>
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">estimate — tweak to match your payslip</span>
+              <button onClick={() => setSettings({ taxPct: null })} className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">Reset to estimate</button>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">set aside now, owed later</span>
             </div>
-            <label className="block mt-2">
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">…or enter your exact net / month</span>
-              <input type="number" inputMode="decimal" value={st.netOverride ?? ""} onChange={(e) => setSettings({ netOverride: e.target.value === "" ? null : Number(e.target.value) || 0 })} placeholder={`estimated: ${Math.round(net)}`} className={inputCls} />
-            </label>
-            <p className="mt-2 text-sm font-bold text-slate-900 dark:text-slate-100">Net: {chf(net)} / month</p>
+            <p className="mt-2 text-sm font-bold text-slate-900 dark:text-slate-100">Yours after tax: {chf(afterTax)} / month</p>
           </div>
         </section>
 
@@ -113,9 +109,9 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
           <div className="flex gap-2">
             <select value={st.savingsMode} onChange={(e) => setSettings({ savingsMode: e.target.value as any })} className="rounded-xl glass-subtle px-3 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none">
               <option value="amount">CHF / month</option>
-              <option value="percent">% of net</option>
+              <option value="percent">% after tax</option>
             </select>
-            <input type="number" inputMode="decimal" value={st.savingsValue || ""} onChange={(e) => setSettings({ savingsValue: Number(e.target.value) || 0 })} placeholder="0" className="flex-1 rounded-xl glass-subtle px-3 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none" />
+            <input type="number" inputMode="decimal" min={0} value={st.savingsValue || ""} onChange={(e) => setSettings({ savingsValue: Math.max(0, Number(e.target.value) || 0) })} placeholder="0" className="flex-1 rounded-xl glass-subtle px-3 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none" />
           </div>
         </section>
 
@@ -132,14 +128,25 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
               <input type="number" inputMode="numeric" min={8} max={24} value={st.wakingHours} onChange={(e) => setSettings({ wakingHours: Math.max(8, Math.min(24, Number(e.target.value) || 18)) })} className={inputCls} />
             </label>
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Money only "flows" while you're awake — asleep, nothing accrues and nothing is spent.</p>
+          <label className="block mt-3">
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">Tracking since (meter starts counting here)</span>
+            <input
+              type="date"
+              value={st.trackingSince}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => { const v = e.target.value; if (v) setSettings({ trackingSince: v }); }}
+              className={inputCls}
+            />
+          </label>
+          <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Money only "flows" while you're awake, and only from the day you started tracking — earlier days earn nothing.</p>
         </section>
 
         {/* Summary */}
         <section className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75 mb-2">Your allowance</p>
           <div className="space-y-1 text-[13px]">
-            <Row k="Net salary" v={chf(net)} />
+            <Row k="On bank account" v={chf(st.bankMonthly)} />
+            <Row k={`− Tax reserve (${taxPct}%)`} v={chf(taxReserveMonthly(st))} />
             <Row k="− Fixed costs" v={chf(fixedMonthly(s))} />
             <Row k="− Savings" v={chf(savingsMonthly(s))} />
             <div className="border-t border-white/20 my-1.5" />
@@ -149,7 +156,7 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
           </div>
         </section>
 
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">Tax estimate is approximate (federal + cantonal + social insurances). Tune the slider or enter your exact net from your payslip for precision.</p>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">The tax estimate is approximate (effective Kantons-, Gemeinde- + Bundessteuer). Drag the slider to match your real tax bill.</p>
       </div>
     </Sheet>
   );

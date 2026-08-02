@@ -19,15 +19,19 @@ export type Canton = "ZH" | "SZ" | "ZG" | "OTHER";
 export type MaritalStatus = "single" | "married" | "divorced";
 
 export interface MoneySettings {
-  grossMonthly: number;            // gross salary per month (CHF)
+  // What actually lands on the bank account each month (social insurances are
+  // already deducted by the employer). Income tax is NOT withheld in
+  // Switzerland — it's owed later — so the app reserves it from this amount.
+  bankMonthly: number;
   canton: Canton;
   status: MaritalStatus;
-  deductionPct: number | null;     // manual effective deduction % (null = estimate)
-  netOverride: number | null;      // manual net salary (null = use estimate)
+  taxPct: number | null;           // manual effective income-tax % (null = estimate)
   savingsMode: "amount" | "percent";
-  savingsValue: number;            // CHF/month or % of net
+  savingsValue: number;            // CHF/month or % of after-tax income
   wakeTime: string;                // "HH:MM" when the waking window starts
   wakingHours: number;             // hours awake per day (spending window)
+  trackingSince: string;           // YYYY-MM-DD — accrual never starts earlier
+                                   // (no phantom credit for pre-tracking days)
 }
 
 export interface MoneyState {
@@ -67,10 +71,10 @@ function uid(): string {
 function defaults(): Persisted {
   return {
     settings: {
-      grossMonthly: 0, canton: "ZH", status: "single",
-      deductionPct: null, netOverride: null,
+      bankMonthly: 0, canton: "ZH", status: "single", taxPct: null,
       savingsMode: "amount", savingsValue: 0,
       wakeTime: "06:00", wakingHours: 18,
+      trackingSince: "",
     },
     expenses: [],
     fixed: [],
@@ -82,9 +86,27 @@ function load(): Persisted {
   try {
     const p = JSON.parse(localStorage.getItem(KEY) || "null");
     if (!p) return d;
+    const raw = p.settings || {};
+    const expenses: Expense[] = Array.isArray(p.expenses) ? p.expenses : [];
+    // Migrate the old gross-salary model: the closest stand-in for "received on
+    // the bank account" is the old net override, else gross minus ~12.5% social.
+    const bankMonthly =
+      raw.bankMonthly ?? (raw.netOverride != null && raw.netOverride > 0 ? raw.netOverride : raw.grossMonthly ? Math.round(raw.grossMonthly * 0.875) : 0);
+    // Accrual must not start before the user actually began tracking — for
+    // existing data, the earliest logged expense is the honest start; a
+    // configured legacy store with no expenses starts today (never month-start,
+    // which would grant phantom credit).
+    const trackingSince =
+      raw.trackingSince ||
+      (expenses.length ? expenses.map((e) => e.date).sort()[0] : bankMonthly > 0 ? todayKey() : "");
+    const settings = { ...d.settings, ...raw, bankMonthly, taxPct: raw.taxPct ?? null, trackingSince };
+    // Drop legacy keys so they don't get re-persisted forever.
+    delete (settings as any).grossMonthly;
+    delete (settings as any).netOverride;
+    delete (settings as any).deductionPct;
     return {
-      settings: { ...d.settings, ...(p.settings || {}) },
-      expenses: Array.isArray(p.expenses) ? p.expenses : [],
+      settings,
+      expenses,
       fixed: Array.isArray(p.fixed) ? p.fixed : [],
     };
   } catch { return d; }
@@ -101,7 +123,14 @@ export function useMoney(): Persisted {
 }
 
 // Mutations -------------------------------------------------------------------
-export function setSettings(patch: Partial<MoneySettings>) { set({ settings: { ...state.settings, ...patch } }); }
+export function setSettings(patch: Partial<MoneySettings>) {
+  const next = { ...state.settings, ...patch };
+  // Stamp the tracking start the moment affordability is first configured, so
+  // the meter never credits days that were never tracked. Only auto-stamp when
+  // the patch didn't touch trackingSince — an explicit user value must win.
+  if (!("trackingSince" in patch) && !next.trackingSince && next.bankMonthly > 0) next.trackingSince = todayKey();
+  set({ settings: next });
+}
 export function addFixed(label: string, amount: number) {
   if (!label.trim() || !(amount > 0)) return;
   set({ fixed: [...state.fixed, { id: uid(), label: label.trim(), amount }] });
@@ -131,41 +160,44 @@ function parseHM(s: string): number {
   return (h || 0) + (m || 0) / 60;
 }
 
-// ── Swiss net-salary estimate (approximate — user can tweak or override) ──────
-// Employee social deductions (AHV/IV/EO + ALV + BVG pension + NBU accident),
-// roughly constant across cantons.
-const SOCIAL_PCT = 12.5;
-// Very rough effective income-tax % (federal+cantonal+municipal) by canton &
-// income band, for a single filer. Married gets a splitting discount.
-function incomeTaxPct(canton: Canton, status: MaritalStatus, annualGross: number): number {
+// ── Swiss income-tax estimate (tax only — approximate, user can tweak) ────────
+// The bank amount already excludes social insurances (employer withholds AHV/
+// ALV/BVG/NBU). What still has to be paid out of it is income tax: Kantons- +
+// Gemeinde- + Bundessteuer. Rough effective rates by canton & income band for a
+// single filer; married gets a splitting discount.
+function incomeTaxPct(canton: Canton, status: MaritalStatus, annualIncome: number): number {
   const bands: { upto: number; ZH: number; SZ: number; ZG: number; OTHER: number }[] = [
-    { upto: 60000, ZH: 5, SZ: 3, ZG: 3, OTHER: 6 },
-    { upto: 100000, ZH: 10, SZ: 6, ZG: 5, OTHER: 11 },
-    { upto: 150000, ZH: 14, SZ: 8, ZG: 7, OTHER: 15 },
-    { upto: Infinity, ZH: 18, SZ: 11, ZG: 9, OTHER: 19 },
+    { upto: 55000, ZH: 6, SZ: 4, ZG: 3, OTHER: 7 },
+    { upto: 90000, ZH: 11, SZ: 7, ZG: 5, OTHER: 12 },
+    { upto: 135000, ZH: 15, SZ: 9, ZG: 8, OTHER: 16 },
+    { upto: Infinity, ZH: 19, SZ: 12, ZG: 10, OTHER: 20 },
   ];
-  const b = bands.find((x) => annualGross <= x.upto) || bands[bands.length - 1];
+  const b = bands.find((x) => annualIncome <= x.upto) || bands[bands.length - 1];
   let pct = b[canton] ?? b.OTHER;
   if (status === "married") pct *= 0.8; // rough splitting benefit
   return pct;
 }
-export function estimatedDeductionPct(s: MoneySettings): number {
-  if (s.deductionPct != null) return s.deductionPct;
-  return Math.round((SOCIAL_PCT + incomeTaxPct(s.canton, s.status, s.grossMonthly * 12)) * 10) / 10;
+export function estimatedTaxPct(s: MoneySettings): number {
+  if (s.taxPct != null) return s.taxPct;
+  return Math.round(incomeTaxPct(s.canton, s.status, s.bankMonthly * 12) * 10) / 10;
 }
-export function estimateNetMonthly(s: MoneySettings): number {
-  if (s.netOverride != null && s.netOverride > 0) return s.netOverride;
-  return Math.max(0, s.grossMonthly * (1 - estimatedDeductionPct(s) / 100));
+// What's actually yours to allocate: bank amount minus the tax reserve.
+export function afterTaxMonthly(s: MoneySettings): number {
+  return Math.max(0, s.bankMonthly * (1 - estimatedTaxPct(s) / 100));
+}
+export function taxReserveMonthly(s: MoneySettings): number {
+  return Math.max(0, s.bankMonthly - afterTaxMonthly(s));
 }
 
 // ── Affordability derivations ────────────────────────────────────────────────
 export function savingsMonthly(s: Persisted): number {
-  const net = estimateNetMonthly(s.settings);
-  return s.settings.savingsMode === "percent" ? (net * s.settings.savingsValue) / 100 : s.settings.savingsValue;
+  const net = afterTaxMonthly(s.settings);
+  const v = Math.max(0, s.settings.savingsValue || 0); // negative savings would inflate the meter
+  return s.settings.savingsMode === "percent" ? (net * v) / 100 : v;
 }
 export function fixedMonthly(s: Persisted): number { return s.fixed.reduce((a, f) => a + (f.amount || 0), 0); }
 export function spendableMonthly(s: Persisted): number {
-  return Math.max(0, estimateNetMonthly(s.settings) - fixedMonthly(s) - savingsMonthly(s));
+  return Math.max(0, afterTaxMonthly(s.settings) - fixedMonthly(s) - savingsMonthly(s));
 }
 export function dailyAllowance(s: Persisted, now = new Date()): number {
   return spendableMonthly(s) / daysInMonth(now);
@@ -175,14 +207,42 @@ export function hourlyAllowance(s: Persisted, now = new Date()): number {
   return dailyAllowance(s, now) / wh;
 }
 
-// Waking hours accrued from the 1st of the month up to `now`.
+// Waking hours accrued this month up to `now`. Accrual starts at the LATER of
+// the 1st of the month and `trackingSince` — days before tracking began earn
+// nothing (that money was spent untracked; crediting it would inflate the meter).
+//
+// Each day's window opens at `wakeTime` and runs `wakingHours`; it may cross
+// midnight (wake 22:00 + 8h ends 06:00 next day). Summing per-window elapsed
+// time keeps the drip continuous across midnight — no jump at 00:00, no frozen
+// stretch. The previous month's last window spills its tail into this month so
+// crossing windows still deliver ~the full monthly amount.
 function accruedHoursThisMonth(s: Persisted, now: Date): number {
   const wh = s.settings.wakingHours || 18;
-  const pastDays = now.getDate() - 1;
   const wake = parseHM(s.settings.wakeTime);
-  const nowH = now.getHours() + now.getMinutes() / 60;
-  const todayFrac = Math.max(0, Math.min(wh, nowH - wake));
-  return pastDays * wh + todayFrac;
+  const ts = s.settings.trackingSince;
+  let startDay = 1;
+  let trackedBeforeMonth = true; // no explicit start → treat month as tracked
+  if (ts) {
+    const [y, m, d] = ts.split("-").map(Number);
+    const tsDate = new Date(y || 0, (m || 1) - 1, d || 1);
+    if (tsDate > now) return 0; // tracking starts in the future
+    if (y === now.getFullYear() && m === now.getMonth() + 1) {
+      startDay = Math.max(1, d || 1);
+      trackedBeforeMonth = false;
+    }
+  }
+  const nowAbs = (now.getDate() - 1) * 24 + now.getHours() + now.getMinutes() / 60;
+  let total = 0;
+  // Tail of the previous month's last window that crosses into this month.
+  if (wake + wh > 24 && trackedBeforeMonth && startDay === 1) {
+    const spill = wake + wh - 24;
+    total += Math.max(0, Math.min(nowAbs, spill));
+  }
+  for (let d = startDay; d <= now.getDate(); d++) {
+    const startAbs = (d - 1) * 24 + wake;
+    total += Math.max(0, Math.min(nowAbs - startAbs, wh));
+  }
+  return total;
 }
 
 export function spentInMonth(s: Persisted, ym: string): number {
@@ -193,15 +253,40 @@ export function spentOnDay(s: Persisted, date: string): number {
 }
 
 // The live "spend now" balance: what has accrued so far this month minus what
-// you've spent. Rolls over between days; resets each month with fresh salary.
+// you've spent since tracking began. Rolls over between days; resets each month
+// with fresh salary. Expenses dated before `trackingSince` stay in the stats
+// but don't drain the meter (that era earned no accrual either).
 export function liveBalance(s: Persisted, now = new Date()): number {
   const accrued = accruedHoursThisMonth(s, now) * hourlyAllowance(s, now);
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  return accrued - spentInMonth(s, ym);
+  const ts = s.settings.trackingSince;
+  const spent = s.expenses
+    .filter((e) => e.date.startsWith(ym) && (!ts || e.date >= ts))
+    .reduce((a, e) => a + (e.amount || 0), 0);
+  return accrued - spent;
 }
 
 export function isConfigured(s: Persisted): boolean {
-  return s.settings.grossMonthly > 0 || (s.settings.netOverride ?? 0) > 0;
+  return s.settings.bankMonthly > 0;
+}
+
+// Transparent composition of the live meter, for display:
+// balance = (accrued today − spent today) + carryover from previous days.
+export function meterBreakdown(s: Persisted, now = new Date()) {
+  const balance = liveBalance(s, now);
+  // "Flowed in today" = accrual during this calendar day — computed as a
+  // difference so it stays correct when the waking window crosses midnight.
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+  const todayAccrued = Math.max(0, (accruedHoursThisMonth(s, now) - accruedHoursThisMonth(s, startOfDay)) * hourlyAllowance(s, now));
+  const dayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  // Same trackingSince filter as liveBalance, so the decomposition can't
+  // fabricate carryover out of pre-tracking expenses.
+  const ts = s.settings.trackingSince;
+  const todaySpent = s.expenses
+    .filter((e) => e.date === dayKey && (!ts || e.date >= ts))
+    .reduce((a, e) => a + (e.amount || 0), 0);
+  const carryover = balance - todayAccrued + todaySpent;
+  return { balance, todayAccrued, todaySpent, carryover };
 }
 
 // Spending grouped by category for a set of expenses.

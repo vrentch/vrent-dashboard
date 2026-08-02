@@ -1,11 +1,19 @@
 // Swiss-formatted money + month helpers for the Business stats.
 
-// e.g. chf(1234.5) → "CHF 1'234.50"  (Swiss apostrophe thousands separator)
+// e.g. chf(1234.5) → "CHF 1'234.50"  (Swiss apostrophe thousands separator).
+// Negatives are formatted ourselves ("− CHF 19.87") because de-CH's CLDR
+// pattern glues the minus to the code ("CHF-19.87"); sub-cent values round to
+// a clean zero instead of "−0.00".
 export function chf(n: number, currency = "CHF"): string {
+  let v = Math.round((n || 0) * 100) / 100;
+  if (v === 0) v = 0; // normalize −0
+  const neg = v < 0;
+  const abs = neg ? -v : v;
   try {
-    return new Intl.NumberFormat("de-CH", { style: "currency", currency }).format(n || 0);
+    const out = new Intl.NumberFormat("de-CH", { style: "currency", currency }).format(abs);
+    return neg ? `− ${out}` : out;
   } catch {
-    return `${currency} ${(n || 0).toFixed(2)}`;
+    return `${neg ? "− " : ""}${currency} ${abs.toFixed(2)}`;
   }
 }
 
