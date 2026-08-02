@@ -11,6 +11,7 @@ import ScanScreen from "./features/scan/ScanScreen";
 import BusinessScreen from "./features/business/BusinessScreen";
 import CalendarScreen from "./features/calendar/CalendarScreen";
 import BriefingScreen from "./features/briefing/BriefingScreen";
+import MoneyScreen from "./features/money/MoneyScreen";
 import SettingsScreen from "./features/settings/SettingsScreen";
 import LockScreen from "./features/lock/LockScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -20,7 +21,7 @@ import { fetchHealthStatus, pullHealth } from "./lib/api";
 import { applyTheme, watchSystemTheme } from "./lib/theme";
 import { useLocked } from "./lib/lock";
 
-export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "business" | "calendar" | "settings" | "briefing";
+export type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "business" | "calendar" | "settings" | "briefing" | "money";
 
 // Bottom bar: three tabs each side of the raised center Scan (AI) button.
 // News hosts both News & Sport via an in-header switch; Settings & Briefing are
@@ -116,6 +117,7 @@ export default function App() {
           {tab === "business" && <BusinessScreen />}
           {tab === "calendar" && <CalendarScreen />}
           {tab === "briefing" && <BriefingScreen onBack={() => setTab("home")} />}
+          {tab === "money" && <MoneyScreen onBack={() => setTab("home")} />}
           {tab === "settings" && <SettingsScreen onNavigate={setTab} />}
         </ErrorBoundary>
       </main>

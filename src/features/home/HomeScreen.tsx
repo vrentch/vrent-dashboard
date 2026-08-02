@@ -11,9 +11,11 @@ import StockRow from "../markets/StockRow";
 import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
-import { ChevronRight as Chev, CalendarDays, Plus, Sparkles, ScanLine, HeartPulse, CalendarPlus } from "lucide-react";
+import { ChevronRight as Chev, CalendarDays, Plus, Sparkles, ScanLine, HeartPulse, CalendarPlus, Wallet } from "lucide-react";
+import { useMoney, isConfigured as moneyConfigured, liveBalance, dailyAllowance, spentOnDay, todayKey as moneyToday } from "../../lib/money/store";
+import { chf } from "../../lib/business/format";
 
-type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing";
+type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money";
 
 export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const prefs = usePrefs();
@@ -72,6 +74,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
+  const money = useMoney();
   const events = useEvents();
   const todayEvents = useMemo(() => eventsOn(events, todayKey()), [events]);
   const upcomingEvents = useMemo(() => upcoming(events, todayKey()).slice(0, 3), [events]);
@@ -125,6 +128,36 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
             </button>
           ))}
         </div>
+
+        {/* Money — live affordability meter (opens the full tracker) */}
+        <button
+          onClick={() => onNavigate("money")}
+          className="w-full text-left rounded-3xl p-5 text-white relative overflow-hidden accent-gradient shadow-accent active:scale-[0.99] transition"
+        >
+          <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
+          <div className="relative flex items-center justify-between gap-3">
+            {moneyConfigured(money) ? (
+              <>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">You can spend right now</p>
+                  <p className="text-[30px] leading-tight font-extrabold display-num tabular-nums">{chf(liveBalance(money))}</p>
+                  <p className="text-xs text-white/80">
+                    {chf(dailyAllowance(money))}/day · spent today {chf(spentOnDay(money, moneyToday()))}
+                  </p>
+                </div>
+                <span className="grid place-items-center w-11 h-11 rounded-2xl bg-white/15 shrink-0"><Wallet size={20} /></span>
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="text-base font-bold">Money & Affordability</p>
+                  <p className="text-xs text-white/80 mt-0.5">Track all spending in one place — see what you can spend per day & hour.</p>
+                </div>
+                <span className="grid place-items-center w-11 h-11 rounded-2xl bg-white/15 shrink-0"><Wallet size={20} /></span>
+              </>
+            )}
+          </div>
+        </button>
 
         {/* Daily briefing — tap to expand into the full one-pager */}
         <button

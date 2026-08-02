@@ -8,15 +8,19 @@ import {
 } from "../../lib/health";
 import { useBusiness, receiptsFor, receiptsInMonth, totalsFor } from "../../lib/business/store";
 import { useEvents, upcoming, saveEvent } from "../../lib/calendar";
+import {
+  useMoney, isConfigured as moneyConfigured, addExpense, liveBalance, dailyAllowance,
+  spentOnDay as moneySpentOn, spentInMonth as moneySpentInMonth, spendableMonthly, todayKey as moneyToday,
+} from "../../lib/money/store";
 
 type Msg = { role: "user" | "assistant"; text: string };
 
 const SUGGESTIONS = [
-  "How many calories can I still eat?",
+  "How much can I spend right now?",
+  "I spent 25 on lunch",
   "Log 2 boiled eggs and a coffee",
   "Open my markets",
   "Add dentist tomorrow at 3pm",
-  "What's my spend this month?",
 ];
 
 // Web Speech API (voice input) — available on Chrome/Android; iOS falls back to
@@ -27,6 +31,7 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
   const h = useHealth();
   const biz = useBusiness();
   const events = useEvents();
+  const money = useMoney();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -74,6 +79,15 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
         your_foods: foodHints(8),
       },
       business: company ? { company: company.name, month, receipts: bt.count, spend_chf: Math.round(bt.gross), vat_chf: Math.round(bt.vat) } : null,
+      money: moneyConfigured(money)
+        ? {
+            can_spend_now_chf: Math.round(liveBalance(money)),
+            daily_allowance_chf: Math.round(dailyAllowance(money)),
+            spent_today_chf: Math.round(moneySpentOn(money, moneyToday())),
+            spent_this_month_chf: Math.round(moneySpentInMonth(money, month)),
+            spendable_per_month_chf: Math.round(spendableMonthly(money)),
+          }
+        : null,
       upcoming_events: upcoming(events, today).slice(0, 6).map((e) => ({ title: e.title, date: e.date, time: e.start || "", done: !!e.done })),
     };
   }
@@ -93,6 +107,7 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
           case "log_weight": addWeight(a.kg || 0); break;
           case "log_activity": addActivity({ kind: "workout", label: a.label || "Workout", minutes: Math.round(a.minutes || 0), calories: Math.round(a.calories || 0) }); break;
           case "add_event": saveEvent({ title: a.title || "Event", date: a.date || todayKey(), allDay: !a.time, start: a.time || undefined, category: a.category || "other", remind: null }); break;
+          case "log_expense": if (a.amount > 0) addExpense({ amount: a.amount, category: a.category || "other", note: a.note || undefined }); break;
         }
       } catch { /* skip a bad action */ }
     }

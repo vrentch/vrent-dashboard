@@ -1131,7 +1131,7 @@ function normalizeAction(a: any): any | null {
   switch (type) {
     case "navigate": {
       const tab = str(a?.tab);
-      return ["home", "news", "sport", "markets", "health", "scan", "business", "calendar", "briefing"].includes(tab)
+      return ["home", "news", "sport", "markets", "health", "scan", "business", "calendar", "briefing", "money"].includes(tab)
         ? { type, tab }
         : null;
     }
@@ -1147,6 +1147,8 @@ function normalizeAction(a: any): any | null {
       return { type, label: str(a?.label) || "Workout", minutes: nnum(a?.minutes), calories: nnum(a?.calories) };
     case "add_event":
       return { type, title: str(a?.title) || "Event", date: str(a?.date).slice(0, 10), time: str(a?.time).slice(0, 5), category: str(a?.category) || "other" };
+    case "log_expense":
+      return { type, amount: nnum(a?.amount), category: str(a?.category) || "other", note: str(a?.note) };
     default:
       return null;
   }
@@ -1227,13 +1229,14 @@ Use realistic values for the ACTUAL portion/product size (not per 100 g unless t
 {"reply":"a short, friendly, spoken-style response (1-2 sentences, no JSON, no markdown)","actions":[ ...zero or more action objects... ]}
 
 Allowed actions (include ONLY when clearly intended):
-- {"type":"navigate","tab":"home|news|sport|markets|health|scan|business|calendar|briefing"} — open a section (for "show/open/go to ...").
+- {"type":"navigate","tab":"home|news|sport|markets|health|scan|business|calendar|briefing|money"} — open a section (for "show/open/go to ...").
 - {"type":"log_food","name":"","quantity":0,"unit":"g|piece|slice|cup|ml|serving|bowl|plate|tbsp|tsp|oz","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0} — log something the user ate/drank. Give accurate nutrition for that amount, using known brand/restaurant values when named.
 - {"type":"log_water","ml":0}
 - {"type":"log_steps","steps":0}
 - {"type":"log_weight","kg":0}
 - {"type":"log_activity","label":"","minutes":0,"calories":0} — a workout.
 - {"type":"add_event","title":"","date":"YYYY-MM-DD","time":"HH:MM or empty for all-day","category":"work|meeting|deadline|finance|personal|other"}
+- {"type":"log_expense","amount":0,"category":"food|groceries|transport|shopping|leisure|health|bills|other","note":""} — money the user spent (e.g. "I spent 25 on lunch"). Amount in CHF.
 
 Rules:
 - For questions about stats/data (calories left, spend this month, upcoming events, watchlist), ANSWER from context in "reply"; you may also navigate to that section.
