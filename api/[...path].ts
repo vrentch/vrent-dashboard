@@ -1890,15 +1890,96 @@ async function tickHandler() {
   return { status: 200, body: { ok: true, subs: ids.length, sent } };
 }
 
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// Two tiers. Free/high-traffic routes (news, quotes, img, sports) use an
+// in-memory fixed-window counter — per serverless instance, zero latency, and
+// still enough to blunt a hammering client. Routes that spend money (AI) or
+// write to storage (health-push) use a KV-backed counter shared across all
+// instances. KV errors fail OPEN: the limiter is nuisance-control, not a
+// vault — an Upstash hiccup must never take the app down.
+
+const rlMem = new Map<string, { n: number; reset: number }>();
+
+function memBump(key: string, windowSec: number): number {
+  const now = Date.now();
+  let e = rlMem.get(key);
+  if (!e || e.reset <= now) {
+    if (rlMem.size > 5000) rlMem.clear(); // bound memory under an IP-spray flood
+    e = { n: 0, reset: now + windowSec * 1000 };
+    rlMem.set(key, e);
+  }
+  e.n += 1;
+  return e.n;
+}
+
+async function kvBump(key: string, windowSec: number): Promise<number> {
+  if (!kvConfigured()) return memBump(key, windowSec);
+  const bucket = Math.floor(Date.now() / (windowSec * 1000));
+  const k = `rl:${key}:${bucket}`;
+  try {
+    const n = Number(await kv(["INCR", k]));
+    if (n === 1) await kv(["EXPIRE", k, windowSec]);
+    return isFinite(n) ? n : 0;
+  } catch {
+    return 0; // fail open
+  }
+}
+
+// Read the wrong-code counter without incrementing it.
+async function badCodeCount(ip: string): Promise<number> {
+  if (!kvConfigured()) {
+    const e = rlMem.get(`bad:${ip}`);
+    return e && e.reset > Date.now() ? e.n : 0;
+  }
+  const bucket = Math.floor(Date.now() / (BAD_CODE_WINDOW * 1000));
+  try {
+    return Number(await kv(["GET", `rl:bad:${ip}:${bucket}`])) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+const FREE_LIMIT = 300;   // free-route hits per minute per IP
+const AI_LIMIT = 30;      // AI calls per 5 minutes per IP
+const AI_WINDOW = 300;
+const PUSH_LIMIT = 40;    // health-push writes per 15 minutes per IP
+const PUSH_WINDOW = 900;
+const BAD_CODE_LIMIT = 5; // wrong access codes per 15 minutes → AI lockout
+const BAD_CODE_WINDOW = 900;
+
+const AI_ROUTES = new Set(["ai-vision", "ai-text", "ai-chat", "ai-studio", "briefing", "ai-unlock"]);
+
 // ── Router (shared by dev middleware and the serverless handler) ─────────────
 
 export async function handleApi(
   pathname: string,
   search: URLSearchParams,
-  ctx: { method?: string; body?: any } = {}
+  ctx: { method?: string; body?: any; ip?: string } = {}
 ): Promise<{ status: number; body: unknown; location?: string; cache?: string }> {
   try {
     const route = pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
+    const ip = (ctx.ip || "").trim() || "unknown";
+
+    if (AI_ROUTES.has(route)) {
+      if ((await badCodeCount(ip)) >= BAD_CODE_LIMIT) {
+        return { status: 429, body: { ok: false, error: "Too many wrong access codes from this connection. Locked for a while — try again in about 15 minutes." } };
+      }
+      if ((await kvBump(`ai:${ip}`, AI_WINDOW)) > AI_LIMIT) {
+        return { status: 429, body: { ok: false, error: "Too many AI requests — take a short break and try again in a few minutes." } };
+      }
+      // Count wrong (non-empty) codes toward the lockout. A missing code is a
+      // fresh user seeing the unlock screen, not a guess — don't punish that.
+      const given = ctx.body?.code;
+      if (aiLocked() && typeof given === "string" && given !== "" && !codeMatches(given)) {
+        await kvBump(`bad:${ip}`, BAD_CODE_WINDOW);
+      }
+    } else if (route === "health-push") {
+      if ((await kvBump(`hp:${ip}`, PUSH_WINDOW)) > PUSH_LIMIT) {
+        return { status: 429, body: { ok: false, error: "rate limited" } };
+      }
+    } else if (memBump(`g:${ip}`, 60) > FREE_LIMIT) {
+      return { status: 429, body: { error: "rate limited" }, cache: "no-store" };
+    }
 
     if (route === "img") {
       const u = search.get("u") || "";
@@ -2050,7 +2131,9 @@ function safeJson(s: string): any {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://localhost");
   const body = req.method === "POST" ? await readBody(req) : undefined;
-  const { status, body: out, location, cache } = await handleApi(url.pathname, url.searchParams, { method: req.method, body });
+  // Vercel sets x-forwarded-for itself; the first entry is the real client.
+  const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
+  const { status, body: out, location, cache } = await handleApi(url.pathname, url.searchParams, { method: req.method, body, ip });
 
   // Redirect responses (e.g. the image resolver).
   if (location) {

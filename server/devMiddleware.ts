@@ -26,7 +26,8 @@ export function apiDevMiddleware(): Connect.NextHandleFunction {
     if (!req.url || !req.url.startsWith("/api/")) return next();
     const url = new URL(req.url, "http://localhost");
     const body = req.method === "POST" ? await readBody(req) : undefined;
-    const { status, body: out, location } = await handleApi(url.pathname, url.searchParams, { method: req.method, body });
+    const ip = req.socket?.remoteAddress || "";
+    const { status, body: out, location } = await handleApi(url.pathname, url.searchParams, { method: req.method, body, ip });
     if (location) {
       res.statusCode = status;
       res.setHeader("Location", location);
