@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil } from "lucide-react";
+import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRight, Loader2, Footprints, Droplets, Moon, Scale, X, Heart, Pencil, Timer, Utensils } from "lucide-react";
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
-  waterOn, sleepOn, latestWeight, removeActivity, removeFood, savePlan, recentSummary, toKey, weeklyStats, foodHints, type FoodEntry,
+  waterOn, sleepOn, latestWeight, removeActivity, removeFood, savePlan, saveCoach, recentSummary, toKey, weeklyStats, foodHints,
+  fastingStatus, markLastMeal, mealTypeOf, mealBreakdown, MEAL_META, type FoodEntry, type MealType,
 } from "../../lib/health";
 import SwipeRow from "../../components/SwipeRow";
-import { analyzeImage, aiPlan, type FoodEstimate } from "../../lib/api";
+import { analyzeImage, aiPlan, aiCoach, type FoodEstimate } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
 import { useAiAccess } from "../../lib/aiAccess";
 import AiUnlock from "../ai/AiUnlock";
@@ -16,6 +17,18 @@ import MealEditSheet from "./MealEditSheet";
 import QuickAddFoods from "./QuickAddFoods";
 import PlanSheet from "./PlanSheet";
 import AppleHealthSheet from "./AppleHealthSheet";
+import FastingSheet from "./FastingSheet";
+
+const MEAL_COLORS: Record<MealType, string> = { breakfast: "#f59e0b", lunch: "#14b8a6", snack: "#8b5cf6", dinner: "#6366f1" };
+
+function fmtDur(ms: number): string {
+  const h = Math.floor(ms / 3600_000);
+  const m = Math.floor((ms % 3600_000) / 60_000);
+  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+function fmtClock(ts: number): string {
+  return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
 
 export default function HealthScreen() {
   const s = useHealth();
@@ -29,8 +42,19 @@ export default function HealthScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [editMeal, setEditMeal] = useState<FoodEntry | null>(null);
   const [appleOpen, setAppleOpen] = useState(false);
+  const [fastOpen, setFastOpen] = useState(false);
+  const [coachLoading, setCoachLoading] = useState(false);
   const [viewDate, setViewDate] = useState(today);
   const isToday = viewDate === today;
+
+  // Live clock for the fasting timer (30 s granularity is plenty).
+  const [nowTs, setNowTs] = useState(Date.now());
+  useEffect(() => {
+    if (!s.fasting.enabled) return;
+    const t = setInterval(() => setNowTs(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [s.fasting.enabled]);
+  const fast = fastingStatus(s, nowTs);
 
   const openLog = (mode: typeof logMode) => { setLogMode(mode); setLogOpen(true); };
 
@@ -55,6 +79,37 @@ export default function HealthScreen() {
   const meals = foodsOn(s, viewDate);
   const acts = activitiesOn(s, viewDate).filter((a) => a.kind === "workout");
   const wk = useMemo(() => weeklyStats(s), [s]);
+  const weekMeals = useMemo(() => mealBreakdown(s, 7), [s]);
+
+  // The day's meals grouped into breakfast / lunch / snacks / dinner.
+  const mealGroups = useMemo(() => {
+    const g: Record<MealType, FoodEntry[]> = { breakfast: [], lunch: [], snack: [], dinner: [] };
+    for (const m of meals) g[mealTypeOf(m)].push(m);
+    return (Object.keys(MEAL_META) as MealType[])
+      .sort((a, b) => MEAL_META[a].order - MEAL_META[b].order)
+      .map((type) => ({ type, items: g[type], kcal: Math.round(g[type].reduce((n, x) => n + (x.calories || 0), 0)) }))
+      .filter((x) => x.items.length > 0);
+  }, [meals]);
+
+  async function getCoaching() {
+    setCoachLoading(true);
+    try {
+      const res = await aiCoach({
+        profile: s.profile,
+        targets,
+        today: { ...eaten, remaining, steps, burn, waterMl: water, sleepH: sleep },
+        fasting: s.fasting.enabled
+          ? { protocol: `${s.fasting.fastingHours}:${24 - s.fasting.fastingHours}`, phase: fast.phase, hoursSinceLastMeal: +(fast.sinceLastMealMs / 3600_000).toFixed(1) }
+          : null,
+        mealPattern: weekMeals.map((m) => ({ meal: m.type, sharePct: Math.round(m.share * 100) })),
+        planHeadline: s.plan?.headline || null,
+        localTime: new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      });
+      if (res.ok && res.data) saveCoach(res.data);
+    } catch { /* ignore */ } finally {
+      setCoachLoading(false);
+    }
+  }
 
   // Last 14 days for the day picker (today first).
   const dayStrip = useMemo(() => {
@@ -222,6 +277,80 @@ export default function HealthScreen() {
         {/* One-tap common foods & drinks */}
         <QuickAddFoods />
 
+        {/* Intermittent fasting */}
+        {s.fasting.enabled ? (
+          <section className="rounded-3xl glass p-4">
+            <button onClick={() => setFastOpen(true)} className="w-full text-left">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  Fasting {s.fasting.fastingHours}:{24 - s.fasting.fastingHours}
+                </p>
+                <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
+              </div>
+              {fast.phase === "idle" ? (
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Log a meal (or set your last one) to start the timer.</p>
+              ) : fast.phase === "fasting" ? (
+                <>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">{fmtDur(fast.remainMs)} <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">until you can eat</span></p>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Eating window opens at {fmtClock(fast.fastEndsAt)} · fasting for {fmtDur(fast.sinceLastMealMs)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">Eating window open 🎉</p>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Closes around {fmtClock(fast.windowClosesAt)} ({fmtDur(fast.remainMs)} left) — logging a meal restarts the fast.</p>
+                </>
+              )}
+              {fast.phase !== "idle" && (
+                <div className="mt-2.5 h-2 rounded-full bg-slate-200/70 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-700"
+                    style={{ width: `${Math.round(fast.pct * 100)}%`, background: fast.phase === "fasting" ? "linear-gradient(90deg,#818cf8,#4f46e5)" : "linear-gradient(90deg,#34d399,#059669)" }}
+                  />
+                </div>
+              )}
+            </button>
+            <button onClick={() => markLastMeal()} className="mt-3 w-full py-2 rounded-xl glass-subtle text-xs font-semibold text-slate-600 dark:text-slate-300 active:scale-[0.98]">
+              🍽 I just finished eating — restart timer
+            </button>
+          </section>
+        ) : (
+          <button onClick={() => setFastOpen(true)} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">
+            <span className="grid place-items-center w-10 h-10 shrink-0 rounded-xl accent-gradient-soft text-brand-600 dark:text-brand-300"><Timer size={18} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Intermittent fasting</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">16:8 & friends — timer until your next meal</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+          </button>
+        )}
+
+        {/* AI coach — advice for the rest of the day */}
+        {aiReady && (
+          <section className="rounded-3xl p-4 text-white" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70 inline-flex items-center gap-1.5"><Sparkles size={12} /> Today's coaching</p>
+              {s.coach?.date === today && (
+                <button onClick={getCoaching} disabled={coachLoading} className="inline-flex items-center gap-1 text-[11px] font-semibold text-white/80 disabled:opacity-50">
+                  <RefreshCw size={11} className={coachLoading ? "animate-spin" : ""} /> Refresh
+                </button>
+              )}
+            </div>
+            {s.coach?.date === today ? (
+              <>
+                <p className="mt-1.5 text-sm font-bold">{s.coach.data.headline}</p>
+                <p className="mt-1 text-[12.5px] text-white/85 leading-relaxed">{s.coach.data.advice}</p>
+                {s.coach.data.nextMeal && (
+                  <p className="mt-2 text-[12px] text-white/85 rounded-xl bg-white/10 px-3 py-2 inline-flex items-start gap-1.5"><Utensils size={12} className="mt-0.5 shrink-0" /> {s.coach.data.nextMeal}</p>
+                )}
+              </>
+            ) : (
+              <button onClick={getCoaching} disabled={coachLoading} className="mt-2 w-full py-2.5 rounded-xl bg-white/15 text-sm font-semibold active:scale-[0.98] disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                {coachLoading ? <><Loader2 size={14} className="animate-spin" /> Reading your day…</> : "What should I do for the rest of today?"}
+              </button>
+            )}
+          </section>
+        )}
+
         {/* Apple Health */}
         <button onClick={() => setAppleOpen(true)} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">
           <span className="grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-rose-500/15 text-rose-500"><Heart size={18} fill="currentColor" /></span>
@@ -258,23 +387,33 @@ export default function HealthScreen() {
         </section>
         </>)}
 
-        {/* Meals for the selected day */}
-        {meals.length > 0 && (
+        {/* Meals for the selected day, grouped by breakfast / lunch / snacks / dinner */}
+        {mealGroups.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">{isToday ? "Today's meals" : "Meals"}</h2>
-            <div className="space-y-2">
-              {meals.map((m) => (
-                <SwipeRow key={m.id} onDelete={() => removeFood(m.id)}>
-                  <button onClick={() => setEditMeal(m)} className="w-full flex items-center gap-3 glass-subtle p-3 text-left active:scale-[0.99] transition">
-                    <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-slate-500/15 text-slate-600 dark:text-slate-300 text-base">🍽️</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">P {m.protein_g} · C {m.carbs_g} · F {m.fat_g} g</p>
-                    </div>
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{m.calories}</span>
-                    <Pencil size={14} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                  </button>
-                </SwipeRow>
+            <div className="space-y-4">
+              {mealGroups.map((g) => (
+                <div key={g.type}>
+                  <div className="flex items-baseline justify-between mb-1.5 px-0.5">
+                    <p className="text-[12px] font-bold text-slate-700 dark:text-slate-200">{MEAL_META[g.type].emoji} {MEAL_META[g.type].label}</p>
+                    <p className="text-[11px] font-semibold tabular-nums" style={{ color: MEAL_COLORS[g.type] }}>{g.kcal} kcal</p>
+                  </div>
+                  <div className="space-y-2">
+                    {g.items.map((m) => (
+                      <SwipeRow key={m.id} onDelete={() => removeFood(m.id)}>
+                        <button onClick={() => setEditMeal(m)} className="w-full flex items-center gap-3 glass-subtle p-3 text-left active:scale-[0.99] transition">
+                          <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl text-base" style={{ backgroundColor: `${MEAL_COLORS[g.type]}22` }}>{MEAL_META[g.type].emoji}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500">{new Date(m.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} · P {m.protein_g} · C {m.carbs_g} · F {m.fat_g} g</p>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{m.calories}</span>
+                          <Pencil size={14} className="text-slate-300 dark:text-slate-600 shrink-0" />
+                        </button>
+                      </SwipeRow>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </section>
@@ -312,6 +451,26 @@ export default function HealthScreen() {
             <WStat label="Avg water" value={wk.avgWaterMl ? `${(wk.avgWaterMl / 1000).toFixed(1)}L` : "—"} />
             <WStat label="On target" value={wk.loggedDays ? `${wk.onTargetDays}/${wk.loggedDays}` : "—"} />
           </div>
+          {/* When you eat — calorie share by meal across the week */}
+          {weekMeals.some((m) => m.calories > 0) && (
+            <div className="rounded-2xl glass p-4 mb-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2.5">When you eat</p>
+              <div className="flex h-3 rounded-full overflow-hidden bg-slate-200/70 dark:bg-slate-700">
+                {weekMeals.filter((m) => m.share > 0).map((m) => (
+                  <div key={m.type} style={{ width: `${Math.max(2, m.share * 100)}%`, backgroundColor: MEAL_COLORS[m.type] }} />
+                ))}
+              </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                {weekMeals.filter((m) => m.calories > 0).map((m) => (
+                  <div key={m.type} className="flex items-center gap-1.5 text-[11px]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: MEAL_COLORS[m.type] }} />
+                    <span className="text-slate-600 dark:text-slate-300 font-medium">{MEAL_META[m.type].emoji} {MEAL_META[m.type].label}</span>
+                    <span className="ml-auto text-slate-400 dark:text-slate-500 tabular-nums">{Math.round(m.share * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="rounded-2xl glass p-4">
             <div className="flex items-end justify-between gap-2 h-28">
               {week.map((w) => {
@@ -335,6 +494,7 @@ export default function HealthScreen() {
       <FoodConfirmSheet open={foodOpen} onClose={() => setFoodOpen(false)} loading={foodLoading} error={foodErr} estimate={foodEstimate} preview={foodPreview} />
       <MealEditSheet open={!!editMeal} onClose={() => setEditMeal(null)} entry={editMeal} />
       <AppleHealthSheet open={appleOpen} onClose={() => setAppleOpen(false)} />
+      <FastingSheet open={fastOpen} onClose={() => setFastOpen(false)} />
     </div>
   );
 }

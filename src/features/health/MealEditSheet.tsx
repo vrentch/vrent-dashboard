@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Trash2, Check } from "lucide-react";
 import Sheet from "../../components/Sheet";
-import { updateFood, removeFood, type FoodEntry } from "../../lib/health";
+import { updateFood, removeFood, mealTypeOf, MEAL_META, type FoodEntry, type MealType } from "../../lib/health";
 
 export default function MealEditSheet({ open, onClose, entry }: { open: boolean; onClose: () => void; entry: FoodEntry | null }) {
   const [name, setName] = useState("");
@@ -9,6 +9,7 @@ export default function MealEditSheet({ open, onClose, entry }: { open: boolean;
   const [p, setP] = useState("");
   const [c, setC] = useState("");
   const [f, setF] = useState("");
+  const [meal, setMeal] = useState<MealType>("lunch");
 
   useEffect(() => {
     if (entry) {
@@ -17,6 +18,7 @@ export default function MealEditSheet({ open, onClose, entry }: { open: boolean;
       setP(String(entry.protein_g));
       setC(String(entry.carbs_g));
       setF(String(entry.fat_g));
+      setMeal(mealTypeOf(entry));
     }
   }, [entry]);
 
@@ -29,6 +31,7 @@ export default function MealEditSheet({ open, onClose, entry }: { open: boolean;
       protein_g: Math.round(Number(p) || 0),
       carbs_g: Math.round(Number(c) || 0),
       fat_g: Math.round(Number(f) || 0),
+      meal,
     });
     onClose();
   }
@@ -57,6 +60,20 @@ export default function MealEditSheet({ open, onClose, entry }: { open: boolean;
         <div>
           <label className="text-[11px] text-slate-400 dark:text-slate-500">Meal name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-xl glass-subtle px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none" />
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400 dark:text-slate-500">Meal</label>
+          <div className="mt-1 grid grid-cols-4 gap-1.5">
+            {(Object.keys(MEAL_META) as MealType[]).sort((a, b) => MEAL_META[a].order - MEAL_META[b].order).map((t) => (
+              <button
+                key={t}
+                onClick={() => setMeal(t)}
+                className={`py-2 rounded-xl text-[11px] font-semibold transition ${meal === t ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-600 dark:text-slate-300"}`}
+              >
+                {MEAL_META[t].emoji} {MEAL_META[t].label}
+              </button>
+            ))}
+          </div>
         </div>
         <Field label="Calories" value={cal} onChange={setCal} suffix="kcal" />
         <div className="grid grid-cols-3 gap-3">

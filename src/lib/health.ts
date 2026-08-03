@@ -17,6 +17,8 @@ export interface Profile {
   targetCalories: number | null; // manual override
 }
 
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+
 export interface FoodEntry {
   id: string;
   date: string; // YYYY-MM-DD
@@ -26,6 +28,31 @@ export interface FoodEntry {
   carbs_g: number;
   fat_g: number;
   at: number;
+  meal?: MealType; // explicit override; otherwise derived from the log time
+}
+
+// Classify a meal by when it was logged (user can override per entry).
+export function mealTypeOf(e: FoodEntry): MealType {
+  if (e.meal) return e.meal;
+  const h = new Date(e.at).getHours() + new Date(e.at).getMinutes() / 60;
+  if (h >= 4 && h < 11) return "breakfast";
+  if (h >= 11 && h < 15) return "lunch";
+  if (h >= 17 && h < 22.5) return "dinner";
+  return "snack";
+}
+
+export const MEAL_META: Record<MealType, { label: string; emoji: string; order: number }> = {
+  breakfast: { label: "Breakfast", emoji: "🍳", order: 0 },
+  lunch: { label: "Lunch", emoji: "🥗", order: 1 },
+  snack: { label: "Snacks", emoji: "🍎", order: 2 },
+  dinner: { label: "Dinner", emoji: "🌙", order: 3 },
+};
+
+// ── Intermittent fasting ─────────────────────────────────────────────────────
+export interface FastingSettings {
+  enabled: boolean;
+  fastingHours: number;    // e.g. 16 → the classic 16:8
+  lastMealAt: number | null; // when the user last ate (auto-set by meal logs)
 }
 
 // A food the user has confirmed before — the app "learns" these so it can bias
@@ -75,6 +102,8 @@ export interface SleepEntry {
   at: number;
 }
 
+export interface CoachAdvice { headline: string; advice: string; nextMeal: string }
+
 export interface HealthState {
   profile: Profile;
   foods: FoodEntry[];
@@ -85,6 +114,8 @@ export interface HealthState {
   learnedFoods: LearnedFood[];
   plan: HealthPlan | null;
   planAt: number | null;
+  fasting: FastingSettings;
+  coach: { date: string; data: CoachAdvice } | null; // today's cached coaching
 }
 
 const KEY = "vrent.health.v1";
@@ -115,6 +146,8 @@ function defaults(): HealthState {
     learnedFoods: [],
     plan: null,
     planAt: null,
+    fasting: { enabled: false, fastingHours: 16, lastMealAt: null },
+    coach: null,
   };
 }
 
@@ -134,6 +167,8 @@ function load(): HealthState {
       learnedFoods: Array.isArray(p.learnedFoods) ? p.learnedFoods : [],
       plan: p.plan ?? null,
       planAt: p.planAt ?? null,
+      fasting: { ...d.fasting, ...(p.fasting || {}) },
+      coach: p.coach ?? null,
     };
   } catch {
     return d;
@@ -172,7 +207,45 @@ export function setProfile(patch: Partial<Profile>) {
 
 export function addFood(e: Omit<FoodEntry, "id" | "at" | "date"> & { date?: string }) {
   const entry: FoodEntry = { id: uid(), at: Date.now(), date: e.date || todayKey(), ...e };
-  set({ foods: [entry, ...state.foods] });
+  // Any meal logged for today restarts the fasting clock automatically.
+  const fasting = entry.date === todayKey() && entry.at > (state.fasting.lastMealAt || 0)
+    ? { ...state.fasting, lastMealAt: entry.at }
+    : state.fasting;
+  set({ foods: [entry, ...state.foods], fasting });
+}
+
+// ── Intermittent fasting ─────────────────────────────────────────────────────
+export function setFasting(patch: Partial<FastingSettings>) {
+  set({ fasting: { ...state.fasting, ...patch } });
+}
+export function markLastMeal(at = Date.now()) {
+  set({ fasting: { ...state.fasting, lastMealAt: at } });
+}
+
+export interface FastingStatus {
+  phase: "idle" | "fasting" | "eating";
+  fastEndsAt: number;      // when the fast completes (lastMeal + fastingHours)
+  windowClosesAt: number;  // when the eating window closes again
+  remainMs: number;        // ms left in the current phase
+  pct: number;             // progress through the current phase (0–1)
+  sinceLastMealMs: number;
+}
+export function fastingStatus(s: HealthState, now = Date.now()): FastingStatus {
+  const f = s.fasting;
+  const eatingHours = Math.max(1, 24 - f.fastingHours);
+  if (!f.lastMealAt) return { phase: "idle", fastEndsAt: 0, windowClosesAt: 0, remainMs: 0, pct: 0, sinceLastMealMs: 0 };
+  const fastEndsAt = f.lastMealAt + f.fastingHours * 3600_000;
+  const windowClosesAt = fastEndsAt + eatingHours * 3600_000;
+  if (now < fastEndsAt) {
+    const total = f.fastingHours * 3600_000;
+    return { phase: "fasting", fastEndsAt, windowClosesAt, remainMs: fastEndsAt - now, pct: Math.min(1, (now - f.lastMealAt) / total), sinceLastMealMs: now - f.lastMealAt };
+  }
+  const total = eatingHours * 3600_000;
+  return { phase: "eating", fastEndsAt, windowClosesAt, remainMs: Math.max(0, windowClosesAt - now), pct: Math.min(1, (now - fastEndsAt) / total), sinceLastMealMs: now - f.lastMealAt };
+}
+
+export function saveCoach(data: CoachAdvice) {
+  set({ coach: { date: todayKey(), data } });
 }
 
 // ── Food learning ────────────────────────────────────────────────────────────
@@ -421,6 +494,27 @@ export function weeklyStats(s: HealthState): WeeklyStats {
     target,
     weightChange,
   };
+}
+
+// Calories by meal type across the last `days` days — powers the "when you
+// eat" distribution stats and the coach context.
+export interface MealBreakdown { type: MealType; calories: number; count: number; share: number }
+export function mealBreakdown(s: HealthState, days = 7): MealBreakdown[] {
+  const cutoff = toKey(new Date(Date.now() - (days - 1) * 86400000));
+  const totals: Record<MealType, { calories: number; count: number }> = {
+    breakfast: { calories: 0, count: 0 }, lunch: { calories: 0, count: 0 }, dinner: { calories: 0, count: 0 }, snack: { calories: 0, count: 0 },
+  };
+  let grand = 0;
+  for (const f of s.foods) {
+    if (f.date < cutoff) continue;
+    const t = mealTypeOf(f);
+    totals[t].calories += f.calories || 0;
+    totals[t].count += 1;
+    grand += f.calories || 0;
+  }
+  return (Object.keys(MEAL_META) as MealType[])
+    .sort((a, b) => MEAL_META[a].order - MEAL_META[b].order)
+    .map((type) => ({ type, calories: Math.round(totals[type].calories), count: totals[type].count, share: grand ? totals[type].calories / grand : 0 }));
 }
 
 // ── Background sync (Apple Health via Shortcut) ───────────────────────────────

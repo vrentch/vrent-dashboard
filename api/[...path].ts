@@ -1217,6 +1217,15 @@ Keep each item's quantity and unit exactly as given. Round to whole numbers. Foo
     prompt = `You are a nutrition database assistant. The user describes a food or meal — often a specific restaurant, cafe, brand, or packaged product (e.g. "McDonald's Big Mac", "Starbucks grande oat latte", "Coop Betty Bossi lasagne", "Migros chicken sandwich", "Gipfeli from a Swiss bakery"). Identify the exact product and give its nutrition using the brand/restaurant's known published values when you know them, or the web search tool to find them; otherwise give a careful estimate from a typical recipe. If the description is a combo/meal, split it into its components. Respond with ONLY a JSON object:
 {"items":[{"name":"clear food name","quantity":0,"unit":"g | piece | slice | cup | ml | serving | …","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}],"source":"where the numbers came from, e.g. 'McDonald's official', 'brand label', 'typical recipe estimate'","note":"one short caveat"}
 Use realistic values for the ACTUAL portion/product size (not per 100 g unless that is the unit). Pick the most natural unit per item. Round to whole numbers. Food: """${desc}"""`;
+  } else if (task === "coach") {
+    // Daily coaching: profile + today's intake + fasting state → short,
+    // actionable advice to stay on plan. Cheap (fast model, small output).
+    const ctx = body?.context && typeof body.context === "object" ? body.context : {};
+    maxTokens = 500;
+    prompt = `You are a pragmatic nutrition & fitness coach inside a personal health app. Given the user's profile, targets, today's intake so far, their intermittent-fasting state and recent meal-timing pattern, give focused advice for the REST of today. Respond with ONLY a JSON object:
+{"headline":"one short motivating line (max 8 words)","advice":"2-3 concrete sentences for the rest of today — remaining calories & protein, hydration, fasting window, steps. Reference their actual numbers.","nextMeal":"one specific suggestion for their next meal/snack that fits the remaining budget and their eating window, with approx kcal"}
+Be practical and kind, never preachy. If they're over budget, say how to land the day softly (light dinner, a walk) — never suggest skipping meals inside their eating window entirely. This is general guidance, not medical advice.
+Data: ${JSON.stringify(ctx).slice(0, 2500)}`;
   } else if (task === "receipt-text") {
     // Extract invoice details from an email's text (no attachment) so HTML
     // invoices like Meta ad receipts flow into Business without a screenshot.
@@ -1334,6 +1343,9 @@ User said: """${message}"""`;
       fat_g: nnum(i?.fat_g) || 0,
     }));
     return { status: 200, body: { ok: true, data: { items }, model: AI_MODEL } };
+  }
+  if (task === "coach") {
+    return { status: 200, body: { ok: true, data: { headline: str(data?.headline) || "Keep going", advice: str(data?.advice), nextMeal: str(data?.nextMeal) }, model: AI_MODEL } };
   }
   if (task === "receipt-text") {
     return { status: 200, body: { ok: true, data: normalizeVision("receipt", data), model: AI_MODEL } };

@@ -361,6 +361,11 @@ export function aiPlan(profile: unknown, recent: unknown): Promise<AiResult<Heal
   return postJson(`/api/ai-text`, { task: "plan", profile, recent, code: getAiCode() });
 }
 
+// Daily coaching from today's numbers + fasting state (fast model, tiny cost).
+export function aiCoach(context: unknown): Promise<AiResult<{ headline: string; advice: string; nextMeal: string }>> {
+  return postJson(`/api/ai-text`, { task: "coach", context, code: getAiCode() });
+}
+
 // Re-estimate nutrition after the user corrects a food's name and/or amount
 // (amount = quantity + unit, e.g. 2 "piece", 1 "cup", 200 "g").
 export interface NutritionItem { name: string; quantity: number; unit: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }
