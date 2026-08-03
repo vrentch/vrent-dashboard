@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Trash2, Check } from "lucide-react";
+import { Trash2, Check, Maximize2 } from "lucide-react";
 import Sheet from "../../components/Sheet";
+import ImageViewer from "../../components/ImageViewer";
 import { useBusiness, updateReceipt, removeReceipt, rememberVendorCode, type Receipt } from "../../lib/business/store";
 import { getImage } from "../../lib/business/images";
 import CodePicker from "./CodePicker";
@@ -12,10 +13,12 @@ export default function ReceiptSheet({ id, onClose }: { id: string | null; onClo
   const receipt = s.receipts.find((r) => r.id === id) || null;
   const [d, setD] = useState<Receipt | null>(null);
   const [img, setImg] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   useEffect(() => {
     setD(receipt ? { ...receipt } : null);
     setImg(null);
+    setViewerOpen(false);
     if (receipt?.hasImage && receipt.id) getImage(receipt.id).then(setImg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -53,7 +56,14 @@ export default function ReceiptSheet({ id, onClose }: { id: string | null; onClo
       }
     >
       <div className="space-y-4">
-        {img && <img src={img} alt="" className="w-full max-h-64 object-contain rounded-2xl bg-slate-100 dark:bg-slate-800" />}
+        {img && (
+          <button onClick={() => setViewerOpen(true)} className="relative block w-full active:scale-[0.99] transition" aria-label="Enlarge image">
+            <img src={img} alt="" className="w-full max-h-64 object-contain rounded-2xl bg-slate-100 dark:bg-slate-800" />
+            <span className="absolute bottom-2 right-2 grid place-items-center w-8 h-8 rounded-full bg-black/45 text-white backdrop-blur">
+              <Maximize2 size={14} />
+            </span>
+          </button>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Date"><input type="date" value={d.date} onChange={(e) => field({ date: e.target.value })} className={inputCls} /></Field>
@@ -77,6 +87,7 @@ export default function ReceiptSheet({ id, onClose }: { id: string | null; onClo
 
         <p className="text-[11px] text-slate-400 dark:text-slate-500">Fields were pre-filled by AI from the image — check the amount, VAT and pick the right Bexio code. Add your codes in Setup.</p>
       </div>
+      {viewerOpen && img && <ImageViewer src={img} onClose={() => setViewerOpen(false)} />}
     </Sheet>
   );
 }
