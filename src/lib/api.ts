@@ -294,6 +294,46 @@ export function analyzeReceipt(image: string, mediaType = "image/jpeg"): Promise
   return postJson(`/api/ai-vision`, { task: "receipt", image, mediaType, code: getAiCode() });
 }
 
+// Extract invoice details from an email's text (HTML invoices with no PDF).
+export function aiReceiptFromText(text: string): Promise<AiResult<ReceiptExtract>> {
+  return postJson(`/api/ai-text`, { task: "receipt-text", text, code: getAiCode() });
+}
+
+// ── Gmail invoice import ─────────────────────────────────────────────────────
+// The device holds a private random key; the server keeps the Google tokens
+// under it (same model as the Apple Health sync key).
+
+const GMAIL_KEY = "vrent.gmailkey.v1";
+export function gmailKey(): string {
+  let k = localStorage.getItem(GMAIL_KEY);
+  if (!k) {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    k = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    localStorage.setItem(GMAIL_KEY, k);
+  }
+  return k;
+}
+
+export interface GmailAtt { id: string; filename: string; mime: string; size: number }
+export interface GmailEmail { account: string; id: string; from: string; subject: string; date: string; snippet: string; atts: GmailAtt[] }
+
+export function gmailStatus(): Promise<{ configured: boolean; accounts: string[] }> {
+  return getJson(`/api/gmail-status?key=${gmailKey()}`);
+}
+export function gmailConnectUrl(): string {
+  return `/api/gmail-auth-start?key=${gmailKey()}`;
+}
+export function gmailScan(days = 90): Promise<{ ok: boolean; configured?: boolean; accounts: string[]; emails: GmailEmail[]; error?: string }> {
+  return getJson(`/api/gmail-scan?key=${gmailKey()}&days=${days}`);
+}
+export function gmailFetch(account: string, id: string, attId?: string): Promise<{ ok: boolean; kind?: "file" | "text"; data?: string; text?: string; error?: string }> {
+  return postJson(`/api/gmail-fetch`, { key: gmailKey(), account, id, attId });
+}
+export function gmailDisconnect(email: string): Promise<{ ok: boolean; accounts: string[] }> {
+  return postJson(`/api/gmail-disconnect`, { key: gmailKey(), email });
+}
+
 /** Send a base64 JPEG (no data-URL prefix) for identification or food analysis.
  * `hints` (the user's frequent foods) bias food recognition toward their diet. */
 export function analyzeImage<T = Identified>(task: "identify" | "food", image: string, mediaType = "image/jpeg", hints?: string[]): Promise<AiResult<T>> {

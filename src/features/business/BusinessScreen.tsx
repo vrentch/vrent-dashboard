@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Receipt as ReceiptIcon, Camera, Settings, Loader2, Share2, FileText, Plus, ChevronDown } from "lucide-react";
+import { Receipt as ReceiptIcon, Camera, Settings, Loader2, Share2, FileText, Plus, ChevronDown, Mail } from "lucide-react";
 import { prepareImage } from "../../lib/image";
 import { analyzeReceipt } from "../../lib/api";
 import { useAiAccess } from "../../lib/aiAccess";
@@ -13,6 +13,7 @@ import { chf, monthChip, monthLabel } from "../../lib/business/format";
 import { putImage, getImage } from "../../lib/business/images";
 import { buildReceiptsZip, shareOrDownloadFile } from "../../lib/business/export";
 import ReceiptSheet from "./ReceiptSheet";
+import EmailImportSheet from "./EmailImportSheet";
 import SetupSheet from "./SetupSheet";
 import ImageCropper from "./ImageCropper";
 import Stats from "./Stats";
@@ -27,6 +28,7 @@ export default function BusinessScreen() {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [companyMenu, setCompanyMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null); // shown in the crop editor
@@ -169,6 +171,14 @@ export default function BusinessScreen() {
               </div>
             </button>
 
+            {/* Email invoices */}
+            <button
+              onClick={() => setEmailOpen(true)}
+              className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98]"
+            >
+              <Mail size={16} className="text-brand-600 dark:text-brand-400" /> Import from Gmail — scan for invoices
+            </button>
+
             {/* Month selector */}
             <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-0.5">
               {[thisMonth(), ...months.filter((m) => m !== thisMonth())].map((m) => (
@@ -241,6 +251,16 @@ export default function BusinessScreen() {
           onDone={onCropDone}
         />
       )}
+      {activeId && (
+        <EmailImportSheet
+          open={emailOpen}
+          onClose={() => setEmailOpen(false)}
+          companyId={activeId}
+          aiReady={aiStatus === "ready"}
+          onAdded={(id) => setEditId(id)}
+        />
+      )}
+      {/* Mounted after the email sheet so the confirm sheet stacks on top of it. */}
       <ReceiptSheet id={editId} onClose={() => setEditId(null)} />
       <SetupSheet open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>

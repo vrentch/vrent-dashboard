@@ -33,6 +33,9 @@ export interface BusinessState {
   // Learned vendor → Bexio code memory. Keyed by a normalized vendor token so
   // e.g. "Meta Platforms Ireland" and "Meta" both map to the same code.
   vendorCodes: Record<string, string>;
+  // Gmail import memory: which scanned emails were already handled, keyed by
+  // "account:messageId", so Accept/Ignore decisions stick across scans.
+  emailStatus: Record<string, "added" | "ignored">;
 }
 
 const KEY = "vrent.business.v1";
@@ -46,7 +49,7 @@ function uid(): string {
 }
 
 function load(): BusinessState {
-  const empty: BusinessState = { companies: [], activeCompanyId: null, receipts: [], bexioCodes: [], vendorCodes: {} };
+  const empty: BusinessState = { companies: [], activeCompanyId: null, receipts: [], bexioCodes: [], vendorCodes: {}, emailStatus: {} };
   try {
     const p = JSON.parse(localStorage.getItem(KEY) || "null");
     if (!p) return empty;
@@ -56,6 +59,7 @@ function load(): BusinessState {
       receipts: Array.isArray(p.receipts) ? p.receipts : [],
       bexioCodes: Array.isArray(p.bexioCodes) ? p.bexioCodes : [],
       vendorCodes: p.vendorCodes && typeof p.vendorCodes === "object" ? p.vendorCodes : {},
+      emailStatus: p.emailStatus && typeof p.emailStatus === "object" ? p.emailStatus : {},
     };
   } catch {
     return empty;
@@ -155,6 +159,19 @@ export function removeReceipt(id: string) {
   const r = state.receipts.find((x) => x.id === id);
   if (r?.hasImage) deleteImage(id);
   set({ receipts: state.receipts.filter((x) => x.id !== id) });
+}
+
+// Gmail import memory ---------------------------------------------------------
+export function emailKey(account: string, msgId: string): string {
+  return `${account}:${msgId}`;
+}
+export function markEmail(account: string, msgId: string, status: "added" | "ignored") {
+  set({ emailStatus: { ...state.emailStatus, [emailKey(account, msgId)]: status } });
+}
+export function unmarkEmail(account: string, msgId: string) {
+  const next = { ...state.emailStatus };
+  delete next[emailKey(account, msgId)];
+  set({ emailStatus: next });
 }
 
 // Vendor learning ------------------------------------------------------------

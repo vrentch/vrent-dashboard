@@ -1217,6 +1217,16 @@ Keep each item's quantity and unit exactly as given. Round to whole numbers. Foo
     prompt = `You are a nutrition database assistant. The user describes a food or meal — often a specific restaurant, cafe, brand, or packaged product (e.g. "McDonald's Big Mac", "Starbucks grande oat latte", "Coop Betty Bossi lasagne", "Migros chicken sandwich", "Gipfeli from a Swiss bakery"). Identify the exact product and give its nutrition using the brand/restaurant's known published values when you know them, or the web search tool to find them; otherwise give a careful estimate from a typical recipe. If the description is a combo/meal, split it into its components. Respond with ONLY a JSON object:
 {"items":[{"name":"clear food name","quantity":0,"unit":"g | piece | slice | cup | ml | serving | …","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}],"source":"where the numbers came from, e.g. 'McDonald's official', 'brand label', 'typical recipe estimate'","note":"one short caveat"}
 Use realistic values for the ACTUAL portion/product size (not per 100 g unless that is the unit). Pick the most natural unit per item. Round to whole numbers. Food: """${desc}"""`;
+  } else if (task === "receipt-text") {
+    // Extract invoice details from an email's text (no attachment) so HTML
+    // invoices like Meta ad receipts flow into Business without a screenshot.
+    const text = String(body?.text || "").slice(0, 9000);
+    if (!text.trim()) return { status: 200, body: { ok: false, error: "No email text" } };
+    maxTokens = 600;
+    prompt = `Extract the invoice/receipt details from this email. Respond with ONLY a JSON object:
+{"vendor":"the company that charged the money","date":"YYYY-MM-DD invoice/charge date","currency":"CHF|EUR|USD|...","total":0.0,"vatAmount":0.0,"vatRate":0.0,"category":"short expense category (e.g. Advertising, IT, Transport)","description":"one-line bookkeeping description","confidence":"high|medium|low"}
+Use the TOTAL amount actually charged (incl. VAT). If a value is genuinely absent use "" or 0 — never invent numbers. Email:
+"""${text}"""`;
   } else if (task === "tax-lookup") {
     // Estimate the effective Swiss income-tax rate for a specific Gemeinde.
     const canton = str(body?.canton).slice(0, 30);
@@ -1324,6 +1334,9 @@ User said: """${message}"""`;
       fat_g: nnum(i?.fat_g) || 0,
     }));
     return { status: 200, body: { ok: true, data: { items }, model: AI_MODEL } };
+  }
+  if (task === "receipt-text") {
+    return { status: 200, body: { ok: true, data: normalizeVision("receipt", data), model: AI_MODEL } };
   }
   if (task === "plan") return { status: 200, body: { ok: true, data: normalizePlan(data), model: AI_MODEL } };
   if (task === "explain") {
@@ -1890,6 +1903,234 @@ async function tickHandler() {
   return { status: 200, body: { ok: true, subs: ids.length, sent } };
 }
 
+// ── Gmail invoice import ─────────────────────────────────────────────────────
+// Read-only Gmail access via Google OAuth. The app never sees the mailbox
+// password: the user grants gmail.readonly in Google's own consent screen, and
+// the refresh token is stored server-side in KV under a private per-device key
+// (same trust model as the Apple Health sync). Supports multiple mailboxes per
+// key. Scan finds invoice-looking mail; fetch returns one attachment or the
+// email text so the client can run it through the existing receipt pipeline.
+
+const GMAIL_ID = process.env.GOOGLE_CLIENT_ID;
+const GMAIL_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GMAIL_REDIRECT = process.env.GOOGLE_REDIRECT_URI || "https://ac-news-tau.vercel.app/api/gmail-callback";
+const GMAIL_KEY_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
+// Subject/body terms Gmail matches for the scan (multi-language, incl. German/French/Italian).
+const INVOICE_QUERY = '(invoice OR receipt OR rechnung OR quittung OR beleg OR facture OR fattura OR "order confirmation" OR "payment received" OR "your bill")';
+
+function gmailConfigured(): boolean {
+  return !!(GMAIL_ID && GMAIL_SECRET && kvConfigured());
+}
+
+interface GmailAccount { email: string; refresh: string; at: number }
+
+async function gmailAccounts(key: string): Promise<GmailAccount[]> {
+  try {
+    const raw = await kv(["GET", `gmail:${key}`]);
+    const a = JSON.parse(raw || "[]");
+    return Array.isArray(a) ? a.filter((x) => x?.email && x?.refresh) : [];
+  } catch {
+    return [];
+  }
+}
+
+function gmailHtmlPage(title: string, msg: string) {
+  const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>AC App</title><body style="margin:0;font-family:-apple-system,'Segoe UI',sans-serif;display:grid;place-items:center;min-height:96vh;background:linear-gradient(140deg,#312e81 0%,#0f0e20 100%);color:#fff;text-align:center;padding:24px"><div><div style="font-size:40px">${title.startsWith("✅") ? "✅" : "⚠️"}</div><h2 style="margin:12px 0 6px">${title.replace(/^✅\s*/, "")}</h2><p style="color:#c7c9e2;max-width:420px;margin:0 auto">${msg}</p></div>`;
+  return { status: 200, body: null, html };
+}
+
+function gmailAuthStart(key: string) {
+  if (!gmailConfigured()) return { status: 200, body: { ok: false, error: "Gmail import isn't configured on the server yet." } };
+  if (!GMAIL_KEY_RE.test(key)) return { status: 400, body: { error: "bad key" } };
+  const p = new URLSearchParams({
+    client_id: GMAIL_ID!,
+    redirect_uri: GMAIL_REDIRECT,
+    response_type: "code",
+    scope: "https://www.googleapis.com/auth/gmail.readonly",
+    access_type: "offline",
+    // consent forces Google to (re)issue a refresh token; select_account lets
+    // the user pick which of their mailboxes to connect.
+    prompt: "consent select_account",
+    state: key,
+  });
+  return { status: 302, body: null, location: `https://accounts.google.com/o/oauth2/v2/auth?${p.toString()}` };
+}
+
+async function gmailCallback(code: string, state: string) {
+  if (!gmailConfigured() || !GMAIL_KEY_RE.test(state) || !code) {
+    return gmailHtmlPage("Connection failed", "Something was missing from Google's response. Go back to AC App and try again.");
+  }
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ code, client_id: GMAIL_ID!, client_secret: GMAIL_SECRET!, redirect_uri: GMAIL_REDIRECT, grant_type: "authorization_code" }).toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    const tok: any = await res.json();
+    if (!res.ok || !tok?.access_token) throw new Error(str(tok?.error_description) || "Google rejected the sign-in");
+    if (!tok?.refresh_token) throw new Error("Google didn't grant offline access — try connecting again");
+    const prof: any = await fetch(`${GMAIL_API}/profile`, {
+      headers: { Authorization: `Bearer ${tok.access_token}` },
+      signal: AbortSignal.timeout(10000),
+    }).then((r) => r.json());
+    const email = str(prof?.emailAddress);
+    if (!email) throw new Error("Could not read the mailbox address");
+    const list = (await gmailAccounts(state)).filter((a) => a.email !== email);
+    list.push({ email, refresh: tok.refresh_token, at: Date.now() });
+    await kv(["SET", `gmail:${state}`, JSON.stringify(list)]);
+    return gmailHtmlPage(`✅ ${email} connected`, "Close this window and return to AC App — the mailbox will appear under Email invoices.");
+  } catch (e) {
+    return gmailHtmlPage("Connection failed", String(e instanceof Error ? e.message : e));
+  }
+}
+
+async function gmailAccessToken(acc: GmailAccount): Promise<string | null> {
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: GMAIL_ID!, client_secret: GMAIL_SECRET!, refresh_token: acc.refresh, grant_type: "refresh_token" }).toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    const tok: any = await res.json();
+    return res.ok ? str(tok?.access_token) || null : null;
+  } catch {
+    return null;
+  }
+}
+
+function fromB64Url(s: string): string {
+  try {
+    return Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+// Collect real attachments (parts with a filename + attachmentId) from the
+// message's MIME tree, preferring documents/images over calendar blobs etc.
+function gmailAttachments(payload: any): { id: string; filename: string; mime: string; size: number }[] {
+  const out: { id: string; filename: string; mime: string; size: number }[] = [];
+  (function walk(p: any) {
+    if (!p) return;
+    if (p.filename && p.body?.attachmentId) {
+      const mime = str(p.mimeType);
+      if (/pdf|image|octet-stream/.test(mime) || /\.(pdf|png|jpe?g|webp|heic)$/i.test(str(p.filename))) {
+        out.push({ id: str(p.body.attachmentId), filename: str(p.filename), mime, size: nnum(p.body.size) });
+      }
+    }
+    for (const c of arr<any>(p?.parts)) walk(c);
+  })(payload);
+  return out;
+}
+
+// Plain-text body of a message (falls back to stripped HTML), for invoices
+// that live in the email itself (e.g. Meta ad receipts) rather than a PDF.
+function gmailBodyText(payload: any): string {
+  let plain = "";
+  let html = "";
+  (function walk(p: any) {
+    if (!p) return;
+    const data = p.body?.data;
+    if (data && p.mimeType === "text/plain" && !plain) plain = fromB64Url(data);
+    if (data && p.mimeType === "text/html" && !html) html = fromB64Url(data);
+    for (const c of arr<any>(p?.parts)) walk(c);
+  })(payload);
+  return (plain || stripHtml(html)).slice(0, 9000);
+}
+
+function gmailHeader(payload: any, name: string): string {
+  const h = arr<any>(payload?.headers).find((x) => str(x?.name).toLowerCase() === name.toLowerCase());
+  return str(h?.value);
+}
+
+async function gmailScanHandler(key: string, days: number) {
+  if (!gmailConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  if (!GMAIL_KEY_RE.test(key)) return { status: 400, body: { ok: false, error: "bad key" } };
+  const accounts = await gmailAccounts(key);
+  if (!accounts.length) return { status: 200, body: { ok: true, configured: true, accounts: [], emails: [] } };
+  const emails: any[] = [];
+  for (const acc of accounts) {
+    try {
+      const token = await gmailAccessToken(acc);
+      if (!token) continue; // revoked/expired — the other mailbox still scans
+      const q = `newer_than:${days}d ${INVOICE_QUERY}`;
+      const list: any = await fetch(`${GMAIL_API}/messages?q=${encodeURIComponent(q)}&maxResults=25`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(15000),
+      }).then((r) => r.json());
+      const ids = arr<any>(list?.messages).map((m) => str(m?.id)).filter(Boolean);
+      const metas = await Promise.all(ids.map(async (id) => {
+        try {
+          const m: any = await fetch(`${GMAIL_API}/messages/${id}?format=full`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(15000),
+          }).then((r) => r.json());
+          const from = gmailHeader(m?.payload, "From");
+          return {
+            account: acc.email,
+            id,
+            from: from.replace(/\s*<[^>]*>/, "").replace(/^"|"$/g, "").trim() || from,
+            subject: gmailHeader(m?.payload, "Subject") || "(no subject)",
+            date: new Date(nnum(m?.internalDate) || Date.now()).toISOString().slice(0, 10),
+            ts: nnum(m?.internalDate),
+            snippet: str(m?.snippet).slice(0, 160),
+            atts: gmailAttachments(m?.payload),
+          };
+        } catch {
+          return null;
+        }
+      }));
+      emails.push(...metas.filter(Boolean));
+    } catch { /* keep scanning the other account */ }
+  }
+  emails.sort((a, b) => b.ts - a.ts);
+  return { status: 200, body: { ok: true, configured: true, accounts: accounts.map((a) => a.email), emails } };
+}
+
+async function gmailFetchHandler(body: any) {
+  if (!gmailConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  const key = str(body?.key);
+  if (!GMAIL_KEY_RE.test(key)) return { status: 400, body: { ok: false, error: "bad key" } };
+  const acc = (await gmailAccounts(key)).find((a) => a.email === str(body?.account));
+  if (!acc) return { status: 404, body: { ok: false, error: "mailbox not connected" } };
+  const token = await gmailAccessToken(acc);
+  if (!token) return { status: 200, body: { ok: false, error: "Google session expired — reconnect this mailbox" } };
+  const msgId = str(body?.id);
+  if (!msgId) return { status: 400, body: { ok: false, error: "id required" } };
+
+  const attId = str(body?.attId);
+  if (attId) {
+    const att: any = await fetch(`${GMAIL_API}/messages/${msgId}/attachments/${attId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(20000),
+    }).then((r) => r.json());
+    const data = str(att?.data);
+    if (!data) return { status: 200, body: { ok: false, error: "Attachment not found" } };
+    if (nnum(att?.size) > 8 * 1024 * 1024) return { status: 200, body: { ok: false, error: "Attachment too large" } };
+    // Gmail returns base64url; hand back standard base64 for atob() on the client.
+    return { status: 200, body: { ok: true, kind: "file", data: data.replace(/-/g, "+").replace(/_/g, "/") } };
+  }
+
+  const m: any = await fetch(`${GMAIL_API}/messages/${msgId}?format=full`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  }).then((r) => r.json());
+  const text = gmailBodyText(m?.payload);
+  if (!text.trim()) return { status: 200, body: { ok: false, error: "Could not read the email body" } };
+  return { status: 200, body: { ok: true, kind: "text", text, subject: gmailHeader(m?.payload, "Subject"), from: gmailHeader(m?.payload, "From") } };
+}
+
+async function gmailDisconnectHandler(body: any) {
+  const key = str(body?.key);
+  if (!gmailConfigured() || !GMAIL_KEY_RE.test(key)) return { status: 400, body: { ok: false } };
+  const list = (await gmailAccounts(key)).filter((a) => a.email !== str(body?.email));
+  await kv(["SET", `gmail:${key}`, JSON.stringify(list)]);
+  return { status: 200, body: { ok: true, accounts: list.map((a) => a.email) } };
+}
+
 // ── Rate limiting ────────────────────────────────────────────────────────────
 // Two tiers. Free/high-traffic routes (news, quotes, img, sports) use an
 // in-memory fixed-window counter — per serverless instance, zero latency, and
@@ -1955,7 +2196,7 @@ export async function handleApi(
   pathname: string,
   search: URLSearchParams,
   ctx: { method?: string; body?: any; ip?: string } = {}
-): Promise<{ status: number; body: unknown; location?: string; cache?: string }> {
+): Promise<{ status: number; body: unknown; location?: string; cache?: string; html?: string }> {
   try {
     const route = pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
     const ip = (ctx.ip || "").trim() || "unknown";
@@ -2079,6 +2320,21 @@ export async function handleApi(
       return { status: 200, body: { configured: kvConfigured() } };
     }
 
+    if (route === "gmail-status") {
+      const key = search.get("key") || "";
+      if (!gmailConfigured()) return { status: 200, body: { configured: false, accounts: [] } };
+      if (!GMAIL_KEY_RE.test(key)) return { status: 200, body: { configured: true, accounts: [] } };
+      return { status: 200, body: { configured: true, accounts: (await gmailAccounts(key)).map((a) => a.email) } };
+    }
+    if (route === "gmail-auth-start") return gmailAuthStart(search.get("key") || "");
+    if (route === "gmail-callback") return await gmailCallback(search.get("code") || "", search.get("state") || "");
+    if (route === "gmail-scan") {
+      const days = Math.max(7, Math.min(365, Number(search.get("days")) || 90));
+      return await gmailScanHandler(search.get("key") || "", days);
+    }
+    if (route === "gmail-fetch") return await gmailFetchHandler(ctx.body || {});
+    if (route === "gmail-disconnect") return await gmailDisconnectHandler(ctx.body || {});
+
     if (route === "health-push") {
       // Accept the key + metrics from either the query string (Shortcut GET) or
       // a JSON POST body.
@@ -2133,7 +2389,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const body = req.method === "POST" ? await readBody(req) : undefined;
   // Vercel sets x-forwarded-for itself; the first entry is the real client.
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "";
-  const { status, body: out, location, cache } = await handleApi(url.pathname, url.searchParams, { method: req.method, body, ip });
+  const { status, body: out, location, cache, html } = await handleApi(url.pathname, url.searchParams, { method: req.method, body, ip });
+
+  // HTML responses (the Gmail OAuth callback's "connected" page).
+  if (html) {
+    res.statusCode = status;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.end(html);
+    return;
+  }
 
   // Redirect responses (e.g. the image resolver).
   if (location) {
