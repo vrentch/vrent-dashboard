@@ -12,7 +12,7 @@ import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
 import { ChevronRight as Chev, CalendarDays, Plus, Sparkles, ScanLine, HeartPulse, CalendarPlus, Wallet } from "lucide-react";
-import { useMoney, isConfigured as moneyConfigured, liveBalance, dailyAllowance, spentOnDay, todayKey as moneyToday } from "../../lib/money/store";
+import { useMoney, isConfigured as moneyConfigured, liveBalance, dailyAllowance, spentOnDay, meterBreakdown, todayKey as moneyToday } from "../../lib/money/store";
 import { chf } from "../../lib/business/format";
 
 type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money";
@@ -139,11 +139,22 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
             {moneyConfigured(money) ? (
               <>
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">You can spend right now</p>
-                  <p className="text-[30px] leading-tight font-extrabold display-num tabular-nums">{chf(liveBalance(money), money.settings.currency || "CHF")}</p>
-                  <p className="text-xs text-white/80">
-                    {chf(dailyAllowance(money), money.settings.currency || "CHF")}/day · spent today {chf(spentOnDay(money, moneyToday()), money.settings.currency || "CHF")}
-                  </p>
+                  {(() => {
+                    const cur = money.settings.currency || "CHF";
+                    const daily = dailyAllowance(money);
+                    const bd = meterBreakdown(money);
+                    const carry = Math.abs(bd.carryover) >= 0.5 ? bd.carryover : 0;
+                    const leftToday = Math.max(0, daily + carry) - spentOnDay(money, moneyToday());
+                    return (
+                      <>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">Left to spend today</p>
+                        <p className={`text-[30px] leading-tight font-extrabold display-num tabular-nums ${leftToday <= -0.005 ? "text-rose-200" : ""}`}>{chf(leftToday, cur)}</p>
+                        <p className="text-xs text-white/80">
+                          {chf(liveBalance(money), cur)} unlocked so far · {chf(daily, cur)}/day
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
                 <span className="grid place-items-center w-11 h-11 rounded-2xl bg-white/15 shrink-0"><Wallet size={20} /></span>
               </>

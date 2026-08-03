@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trash2, Plus, Check, Landmark, Sparkles, Loader2 } from "lucide-react";
 import Sheet from "../../components/Sheet";
 import {
@@ -26,6 +26,19 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
   const [looking, setLooking] = useState(false);
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [lookupErr, setLookupErr] = useState<string | null>(null);
+  // Draft for the waking-hours field: clamping on every keystroke made the
+  // input unusable (clearing it snapped to 18, typing "1" snapped to 8).
+  // Type freely; the value commits, clamped, when you leave the field.
+  const [whDraft, setWhDraft] = useState(String(s.settings.wakingHours));
+  useEffect(() => {
+    if (open) setWhDraft(String(s.settings.wakingHours));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  function commitWakingHours() {
+    const n = Math.max(4, Math.min(24, Math.round(Number(whDraft.replace(",", ".")) || 0) || st.wakingHours || 18));
+    setWhDraft(String(n));
+    setSettings({ wakingHours: n });
+  }
 
   const sys = st.taxSystem || "CH";
   const cur = st.currency || "CHF";
@@ -234,7 +247,14 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
             </label>
             <label className="block">
               <span className="text-[11px] text-slate-400 dark:text-slate-500">Waking hours</span>
-              <input type="number" inputMode="numeric" min={8} max={24} value={st.wakingHours} onChange={(e) => setSettings({ wakingHours: Math.max(8, Math.min(24, Number(e.target.value) || 18)) })} className={inputCls} />
+              <input
+                type="number" inputMode="numeric" min={4} max={24}
+                value={whDraft}
+                onChange={(e) => setWhDraft(e.target.value)}
+                onBlur={commitWakingHours}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                className={inputCls}
+              />
             </label>
           </div>
           <label className="block mt-3">
