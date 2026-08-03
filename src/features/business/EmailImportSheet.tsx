@@ -6,7 +6,7 @@ import {
   analyzeReceipt, aiReceiptFromText, type GmailEmail,
 } from "../../lib/api";
 import { prepareImage } from "../../lib/image";
-import { useBusiness, addReceipt, markEmail, emailKey, suggestCodeForVendor } from "../../lib/business/store";
+import { useBusiness, addReceipt, markEmail, unmarkEmail, emailKey, suggestCodeForVendor } from "../../lib/business/store";
 import { putImage } from "../../lib/business/images";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -254,9 +254,20 @@ export default function EmailImportSheet({
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                           {status ? (
-                            <span className={`text-[11px] font-semibold ${status === "added" ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>
-                              {status === "added" ? "✓ Added to receipts" : "Ignored"}
-                            </span>
+                            <>
+                              <span className={`flex-1 text-[11px] font-semibold ${status === "added" ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>
+                                {status === "added" ? "✓ Added to receipts" : "Ignored"}
+                              </span>
+                              {status === "added" ? (
+                                <button onClick={() => accept(e)} disabled={busy || busyId != null} className="px-3 py-1.5 rounded-lg glass-subtle text-[11px] font-semibold text-brand-600 dark:text-brand-400 active:scale-[0.97] disabled:opacity-50">
+                                  {busy ? "Reading…" : "Add again"}
+                                </button>
+                              ) : (
+                                <button onClick={() => unmarkEmail(e.account, e.id)} className="px-3 py-1.5 rounded-lg glass-subtle text-[11px] font-semibold text-brand-600 dark:text-brand-400 active:scale-[0.97]">
+                                  Undo
+                                </button>
+                              )}
+                            </>
                           ) : (
                             <>
                               <button onClick={() => accept(e)} disabled={busy || busyId != null} className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold active:scale-[0.97] disabled:opacity-50">
