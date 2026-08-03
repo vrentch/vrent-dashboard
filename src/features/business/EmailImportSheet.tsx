@@ -136,6 +136,13 @@ export default function EmailImportSheet({
         const ai = await aiReceiptFromText(`From: ${e.from}\nSubject: ${e.subject}\nDate: ${e.date}\n\n${res.text}`);
         if (!ai.ok || !ai.data) { setError(ai.error || "AI could not read this invoice."); return; }
         const ex = ai.data;
+        // Render the email itself into a receipt document, so text-only
+        // invoices get a visual file for the list, sheet and ZIP export too.
+        let docUrl = "";
+        try {
+          const { renderEmailDocument } = await import("../../lib/business/emailDoc");
+          docUrl = renderEmailDocument({ from: e.from, subject: e.subject, date: e.date, account: e.account }, res.text);
+        } catch { /* data-only receipt if rendering fails */ }
         const id = addReceipt({
           companyId,
           date: ex.date || e.date || todayISO(),
@@ -147,8 +154,9 @@ export default function EmailImportSheet({
           category: ex.category || "",
           description: ex.description || e.subject,
           bexioCode: suggestCodeForVendor(ex.vendor || e.from),
-          hasImage: false,
+          hasImage: !!docUrl,
         });
+        if (docUrl) await putImage(id, docUrl);
         markEmail(e.account, e.id, "added");
         onAdded(id);
       }

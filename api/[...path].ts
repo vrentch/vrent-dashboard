@@ -2026,8 +2026,26 @@ function gmailAttachments(payload: any): { id: string; filename: string; mime: s
   return out;
 }
 
-// Plain-text body of a message (falls back to stripped HTML), for invoices
-// that live in the email itself (e.g. Meta ad receipts) rather than a PDF.
+// HTML → text that keeps the document's line structure (unlike stripHtml,
+// which collapses everything to one line) — the client renders this into a
+// visual receipt document, so layout matters.
+function stripHtmlKeepLines(html: string): string {
+  const cleaned = html
+    .replace(/<(?:style|script)[^>]*>[\s\S]*?<\/(?:style|script)>/gi, " ")
+    .replace(/<(?:br|hr)[^>]*>/gi, "\n")
+    .replace(/<\/(?:p|div|tr|li|h[1-6]|table|section|header|footer)>/gi, "\n");
+  const text = decodeEntities(decodeEntities(cleaned.replace(/<[^>]*>/g, " ")));
+  return text
+    .split("\n")
+    .map((l) => l.replace(/[ \t ]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Plain-text body of a message (falls back to line-preserving stripped HTML),
+// for invoices that live in the email itself (e.g. Apple/Meta receipts)
+// rather than a PDF.
 function gmailBodyText(payload: any): string {
   let plain = "";
   let html = "";
@@ -2038,7 +2056,7 @@ function gmailBodyText(payload: any): string {
     if (data && p.mimeType === "text/html" && !html) html = fromB64Url(data);
     for (const c of arr<any>(p?.parts)) walk(c);
   })(payload);
-  return (plain || stripHtml(html)).slice(0, 9000);
+  return (plain || stripHtmlKeepLines(html)).slice(0, 9000);
 }
 
 function gmailHeader(payload: any, name: string): string {
