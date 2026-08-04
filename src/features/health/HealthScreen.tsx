@@ -367,8 +367,8 @@ export default function HealthScreen() {
         <button onClick={() => setAppleOpen(true)} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">
           <span className="grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-rose-500/15 text-rose-500"><Heart size={18} fill="currentColor" /></span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Connect Apple Health</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">Sync steps, weight & sleep via a Shortcut</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{/android/i.test(navigator.userAgent) ? "Connect Samsung Health" : "Connect Apple Health"}</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">{/android/i.test(navigator.userAgent) ? "Sync steps & more via Health Connect" : "Sync steps, weight & sleep via a Shortcut"}</p>
           </div>
           <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
         </button>

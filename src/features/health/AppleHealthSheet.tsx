@@ -5,11 +5,14 @@ import { getSyncKey } from "../../lib/health";
 import { fetchHealthStatus } from "../../lib/api";
 
 const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://ac-news-tau.vercel.app";
+// Same push link works from any automation tool — Shortcuts on iOS,
+// MacroDroid/Tasker on Android — so the sheet shows the right recipe.
+const IS_ANDROID = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
 
 export default function AppleHealthSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [status, setStatus] = useState<"checking" | "on" | "off">("checking");
   const key = getSyncKey();
-  // Base link for the Shortcut's Text action — append the Sum variable after "=".
+  // Base link for the automation's HTTP action — append the value after "=".
   const example = `${ORIGIN}/api/health-push?key=${key}&steps=`;
 
   useEffect(() => {
@@ -21,7 +24,7 @@ export default function AppleHealthSheet({ open, onClose }: { open: boolean; onC
   }, [open]);
 
   return (
-    <Sheet open={open} onClose={onClose} title="Connect Apple Health">
+    <Sheet open={open} onClose={onClose} title={IS_ANDROID ? "Connect Samsung Health" : "Connect Apple Health"}>
       <div className="space-y-5">
         <div className="flex items-center gap-2">
           {status === "on" ? (
@@ -40,7 +43,9 @@ export default function AppleHealthSheet({ open, onClose }: { open: boolean; onC
         </div>
 
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          An iPhone <b>Shortcut</b> quietly sends your Health data to the app in the background — no browser, nothing to open. Your steps, weight, sleep and more then show up here every time you open the app.
+          {IS_ANDROID
+            ? <>An automation app quietly sends your Samsung Health data here in the background. Samsung Health shares into Android's <b>Health Connect</b>; a free automation app like <b>MacroDroid</b> reads it once a day and calls your private link below.</>
+            : <>An iPhone <b>Shortcut</b> quietly sends your Health data to the app in the background — no browser, nothing to open. Your steps, weight, sleep and more then show up here every time you open the app.</>}
         </p>
 
         <div>
@@ -62,13 +67,23 @@ export default function AppleHealthSheet({ open, onClose }: { open: boolean; onC
 
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Set it up once</h3>
-          <ol className="space-y-2 text-[13px] text-slate-600 dark:text-slate-300">
-            <li><b>1.</b> Open <b>Shortcuts</b> → <b>＋</b> → add <b>Find Health Samples</b> (e.g. Steps, today).</li>
-            <li><b>2.</b> Add <b>Calculate Statistics</b> → <b>Sum</b> of those samples.</li>
-            <li><b>3.</b> Add a <b>Text</b> action, paste the link below, and drop the <b>Sum</b> in right after <code className="text-[11px]">steps=</code>.</li>
-            <li><b>4.</b> Add <b>Get Contents of URL</b> and set it to that <b>Text</b>. (This sends it silently — don't use “Open URLs”.)</li>
-            <li><b>5.</b> Add a daily <b>Automation</b> so it runs on its own.</li>
-          </ol>
+          {IS_ANDROID ? (
+            <ol className="space-y-2 text-[13px] text-slate-600 dark:text-slate-300">
+              <li><b>1.</b> In <b>Samsung Health</b>: Settings → <b>Health Connect</b> → allow sharing (steps, sleep, weight…).</li>
+              <li><b>2.</b> Install <b>MacroDroid</b> (Play Store, free) and allow it to read <b>Health Connect</b>.</li>
+              <li><b>3.</b> New macro → Trigger: <b>Day/Time</b>, e.g. every evening 21:00.</li>
+              <li><b>4.</b> Action: <b>Health Connect → read today's steps</b> into a variable (on older MacroDroid versions without Health Connect, use the <b>Pedometer</b>/step-counter action instead).</li>
+              <li><b>5.</b> Action: <b>HTTP Request (GET)</b> — paste the link below and put the steps variable right after <code className="text-[11px]">steps=</code>.</li>
+            </ol>
+          ) : (
+            <ol className="space-y-2 text-[13px] text-slate-600 dark:text-slate-300">
+              <li><b>1.</b> Open <b>Shortcuts</b> → <b>＋</b> → add <b>Find Health Samples</b> (e.g. Steps, today).</li>
+              <li><b>2.</b> Add <b>Calculate Statistics</b> → <b>Sum</b> of those samples.</li>
+              <li><b>3.</b> Add a <b>Text</b> action, paste the link below, and drop the <b>Sum</b> in right after <code className="text-[11px]">steps=</code>.</li>
+              <li><b>4.</b> Add <b>Get Contents of URL</b> and set it to that <b>Text</b>. (This sends it silently — don't use “Open URLs”.)</li>
+              <li><b>5.</b> Add a daily <b>Automation</b> so it runs on its own.</li>
+            </ol>
+          )}
         </div>
 
         <div className="rounded-2xl glass-subtle p-3">
