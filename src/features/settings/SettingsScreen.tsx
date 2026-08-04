@@ -134,6 +134,8 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
         <TransferSection />
 
+        <PrivacySection />
+
         <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Your news feed</h2>
           <div className="space-y-2.5">
@@ -395,6 +397,59 @@ function TransferSection() {
         </button>
       </div>
       <input ref={fileRef} type="file" accept=".acapp,.gz,.json,application/gzip,application/json" onChange={doImport} className="hidden" />
+      {msg && <p className="mt-2 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">{msg}</p>}
+      {err && <p className="mt-2 text-[12px] font-medium text-rose-600 dark:text-rose-400">{err}</p>}
+    </section>
+  );
+}
+
+// The server only ever holds transient sync copies (Apple Health metrics,
+// Apple Pay transactions). This wipes them; everything stays on the phones.
+function PrivacySection() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function wipe() {
+    if (!window.confirm("Delete this device's synced health & payment data from the server? Your phones keep everything — only the server copies are removed.")) return;
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const { getSyncKey } = await import("../../lib/health");
+      const { getWalletKey } = await import("../../lib/money/store");
+      const res = await fetch("/api/sync-wipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ healthKey: getSyncKey(), walletKey: getWalletKey() }),
+      });
+      const j: any = await res.json().catch(() => ({}));
+      if (j.ok) setMsg("Server copies deleted. Your data now lives only on your phones. New Shortcut pushes would add fresh data again — remove the automations if you want that stopped too.");
+      else setErr(j.error || "Nothing to delete or the server isn't configured.");
+    } catch {
+      setErr("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl glass p-4">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
+          <ShieldCheck size={17} />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Server data</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Synced Health & Apple Pay copies</p>
+        </div>
+      </div>
+      <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+        The server briefly holds what your iPhone Shortcuts push (health metrics, Apple Pay transactions) so the app can pick them up. Once your phones have the data, you can wipe those copies any time.
+      </p>
+      <button onClick={wipe} disabled={busy} className="mt-3 w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 text-sm font-semibold active:scale-[0.98] disabled:opacity-50">
+        {busy ? <Loader2 size={15} className="animate-spin" /> : null} Delete synced data from the server
+      </button>
       {msg && <p className="mt-2 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">{msg}</p>}
       {err && <p className="mt-2 text-[12px] font-medium text-rose-600 dark:text-rose-400">{err}</p>}
     </section>

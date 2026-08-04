@@ -2496,6 +2496,21 @@ export async function handleApi(
       return await moneyPull(search.get("key") || ctx.body?.key || "");
     }
 
+    if (route === "sync-wipe") {
+      // Delete this device's synced copies (health metrics + wallet
+      // transactions) from KV. Local data on the phones is untouched; future
+      // Shortcut pushes would repopulate only from that moment on.
+      if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
+      const hk = str(ctx.body?.healthKey);
+      const wk = str(ctx.body?.walletKey);
+      const keys: string[] = [];
+      if (HEALTH_KEY_RE.test(hk)) keys.push(`health:${hk}`);
+      if (HEALTH_KEY_RE.test(wk)) keys.push(`wallet:${wk}`);
+      if (!keys.length) return { status: 400, body: { ok: false, error: "no keys" } };
+      const deleted = Number(await kv(["DEL", ...keys])) || 0;
+      return { status: 200, body: { ok: true, deleted } };
+    }
+
     if (route === "transfer-up") return await transferUp(ctx.body || {});
     if (route === "transfer-down") return await transferDown(search.get("code") || "", search.get("part"));
     if (route === "transfer-done") return await transferDone(ctx.body || {});
