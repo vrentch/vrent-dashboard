@@ -29,7 +29,7 @@ const SHARE_HOST = SHARE_URL.replace(/^https?:\/\//, "");
 import { usePrefs, resetPrefs, setPrefs, type Theme } from "../../lib/store";
 import { useRef } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react";
-import { buildBackup, restoreBackup, backupFilename } from "../../lib/transfer";
+import { buildBackup, restoreBackup, backupFilename, sendToCloud, receiveFromCloud } from "../../lib/transfer";
 import { shareOrDownloadFile } from "../../lib/business/export";
 import { hasPasscode, clearPasscode } from "../../lib/lock";
 import PasscodeSetup from "../lock/PasscodeSetup";
@@ -260,9 +260,48 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 // the app on the new phone (same link), import the file there.
 function TransferSection() {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const [busy, setBusy] = useState<"export" | "import" | "send" | "receive" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [sendCode, setSendCode] = useState<string | null>(null);
+  const [recvOpen, setRecvOpen] = useState(false);
+  const [recvCode, setRecvCode] = useState("");
+  const [progress, setProgress] = useState("");
+
+  // One-button path: upload under a code, type the code on the new phone.
+  async function doSend() {
+    setBusy("send");
+    setErr(null);
+    setMsg(null);
+    setSendCode(null);
+    try {
+      const { code, info } = await sendToCloud((d, t) => setProgress(t > 1 ? `Uploading ${d}/${t}…` : "Uploading…"));
+      setSendCode(code);
+      setMsg(`${info.keys} data sets and ${info.images} receipt files uploaded (${(info.bytes / 1024 / 1024).toFixed(1)} MB).`);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Upload failed — try again.");
+    } finally {
+      setBusy(null);
+      setProgress("");
+    }
+  }
+
+  async function doReceive() {
+    if (!recvCode.trim()) return;
+    if (!window.confirm("Import from your old phone? Data on THIS device will be replaced.")) return;
+    setBusy("receive");
+    setErr(null);
+    try {
+      const info = await receiveFromCloud(recvCode, (d, t) => setProgress(t > 1 ? `Downloading ${d}/${t}…` : "Downloading…"));
+      setMsg(`Moved ${info.keys} data sets and ${info.images} receipt files — reloading…`);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Transfer failed — check the code.");
+      setBusy(null);
+    } finally {
+      setProgress("");
+    }
+  }
 
   async function doExport() {
     setBusy("export");
@@ -308,14 +347,51 @@ function TransferSection() {
         </div>
       </div>
       <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-        Export a backup file here, install the app on the new phone (same link), then import the file there. It carries your receipts (with photos), health & money data, calendar, learned memories, the AI access code and connections.
+        On the <b>old phone</b> tap Send — you get a code. On the <b>new phone</b> (app installed from the same link) tap Receive and type the code. Everything moves: receipts with photos, health & money data, calendar, learned memories, the AI access code and connections. The transfer copy is <b>deleted from the server the moment it arrives</b> (and auto-expires after 15 minutes anyway).
       </p>
+
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button onClick={doExport} disabled={busy != null} className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold active:scale-[0.98] disabled:opacity-50">
-          {busy === "export" ? <Loader2 size={15} className="animate-spin" /> : <ArrowUpFromLine size={15} />} Export backup
+        <button onClick={doSend} disabled={busy != null} className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl accent-gradient text-white text-sm font-semibold shadow-accent active:scale-[0.98] disabled:opacity-50">
+          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : <ArrowUpFromLine size={15} />} Send to new phone
         </button>
-        <button onClick={() => fileRef.current?.click()} disabled={busy != null} className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass-subtle text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98] disabled:opacity-50">
-          {busy === "import" ? <Loader2 size={15} className="animate-spin" /> : <ArrowDownToLine size={15} />} Import backup
+        <button onClick={() => setRecvOpen((v) => !v)} disabled={busy != null} className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold active:scale-[0.98] disabled:opacity-50">
+          <ArrowDownToLine size={15} /> Receive with code
+        </button>
+      </div>
+
+      {sendCode && (
+        <div className="mt-3 rounded-2xl p-4 text-center text-white" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">Enter this code on the new phone</p>
+          <p className="mt-1 text-[28px] font-extrabold tracking-[0.2em] tabular-nums">{sendCode.slice(0, 4)}-{sendCode.slice(4)}</p>
+          <p className="text-[11px] text-white/70 mt-1">Valid for 15 minutes · deleted as soon as the new phone has it</p>
+        </div>
+      )}
+
+      {recvOpen && (
+        <div className="mt-3 flex gap-2">
+          <input
+            value={recvCode}
+            onChange={(e) => setRecvCode(e.target.value.toUpperCase())}
+            placeholder="XXXX-XXXX"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            className="flex-1 min-w-0 rounded-xl glass-subtle px-3 py-2.5 text-base font-bold tracking-[0.15em] text-center text-slate-900 dark:text-slate-100 outline-none"
+          />
+          <button onClick={doReceive} disabled={busy != null || !recvCode.trim()} className="px-4 rounded-xl bg-emerald-600 text-white text-sm font-semibold active:scale-95 disabled:opacity-50">
+            {busy === "receive" ? <Loader2 size={15} className="animate-spin" /> : "Go"}
+          </button>
+        </div>
+      )}
+
+      {progress && <p className="mt-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">{progress}</p>}
+
+      <div className="mt-3 flex items-center gap-3 text-[12px]">
+        <span className="text-slate-400 dark:text-slate-500">Prefer a file?</span>
+        <button onClick={doExport} disabled={busy != null} className="font-semibold text-brand-600 dark:text-brand-400 disabled:opacity-50">
+          {busy === "export" ? "Exporting…" : "Export backup"}
+        </button>
+        <button onClick={() => fileRef.current?.click()} disabled={busy != null} className="font-semibold text-brand-600 dark:text-brand-400 disabled:opacity-50">
+          {busy === "import" ? "Importing…" : "Import backup"}
         </button>
       </div>
       <input ref={fileRef} type="file" accept=".acapp,.gz,.json,application/gzip,application/json" onChange={doImport} className="hidden" />

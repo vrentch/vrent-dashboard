@@ -2211,6 +2211,55 @@ async function gmailDisconnectHandler(body: any) {
   return { status: 200, body: { ok: true, accounts: list.map((a) => a.email) } };
 }
 
+// ── Phone-to-phone transfer ──────────────────────────────────────────────────
+// One-button device migration: the old phone uploads its (gzipped, base64)
+// backup in chunks under a random 8-char code; the new phone downloads with
+// the code and then tells us to delete. Every key also self-expires after
+// 15 minutes, so nothing lingers even if the transfer is abandoned.
+
+const TRANSFER_CODE_RE = /^[A-Z2-9]{8}$/;
+const TRANSFER_TTL = 900;                 // seconds
+const TRANSFER_MAX_PARTS = 40;            // × ~700 KB ≈ 28 MB max backup
+const TRANSFER_MAX_PART_CHARS = 900_000;  // keeps each KV request under 1 MB
+
+async function transferUp(body: any) {
+  if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  const code = str(body?.code).toUpperCase();
+  const part = Math.floor(nnum(body?.part));
+  const total = Math.floor(nnum(body?.total));
+  const data = str(body?.data);
+  if (!TRANSFER_CODE_RE.test(code)) return { status: 400, body: { ok: false, error: "bad code" } };
+  if (!(part >= 0) || !(total >= 1) || total > TRANSFER_MAX_PARTS || part >= total) return { status: 400, body: { ok: false, error: "bad part" } };
+  if (!data || data.length > TRANSFER_MAX_PART_CHARS) return { status: 400, body: { ok: false, error: "bad data" } };
+  await kv(["SET", `transfer:${code}:${part}`, data, "EX", TRANSFER_TTL]);
+  await kv(["SET", `transfer:${code}:m`, String(total), "EX", TRANSFER_TTL]);
+  return { status: 200, body: { ok: true, part, total } };
+}
+
+async function transferDown(codeRaw: string, partRaw: string | null) {
+  if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  const code = (codeRaw || "").toUpperCase();
+  const part = Math.max(0, Math.floor(Number(partRaw) || 0));
+  if (!TRANSFER_CODE_RE.test(code)) return { status: 400, body: { ok: false, error: "bad code" } };
+  const [total, data] = await Promise.all([
+    kv(["GET", `transfer:${code}:m`]),
+    kv(["GET", `transfer:${code}:${part}`]),
+  ]);
+  if (!total || !data) return { status: 200, body: { ok: false, error: "Code not found — it may have expired (codes live 15 minutes)." } };
+  return { status: 200, body: { ok: true, total: Number(total), data } };
+}
+
+async function transferDone(body: any) {
+  if (!kvConfigured()) return { status: 200, body: { ok: false } };
+  const code = str(body?.code).toUpperCase();
+  if (!TRANSFER_CODE_RE.test(code)) return { status: 400, body: { ok: false } };
+  const total = Number(await kv(["GET", `transfer:${code}:m`])) || TRANSFER_MAX_PARTS;
+  const keys = [`transfer:${code}:m`];
+  for (let i = 0; i < Math.min(total, TRANSFER_MAX_PARTS); i++) keys.push(`transfer:${code}:${i}`);
+  await kv(["DEL", ...keys]);
+  return { status: 200, body: { ok: true, deleted: true } };
+}
+
 // ── Rate limiting ────────────────────────────────────────────────────────────
 // Two tiers. Free/high-traffic routes (news, quotes, img, sports) use an
 // in-memory fixed-window counter — per serverless instance, zero latency, and
@@ -2446,6 +2495,10 @@ export async function handleApi(
     if (route === "money-pull") {
       return await moneyPull(search.get("key") || ctx.body?.key || "");
     }
+
+    if (route === "transfer-up") return await transferUp(ctx.body || {});
+    if (route === "transfer-down") return await transferDown(search.get("code") || "", search.get("part"));
+    if (route === "transfer-done") return await transferDone(ctx.body || {});
 
     if (route === "briefing") {
       return await briefingHandler(ctx.body || {});
