@@ -2563,7 +2563,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // sources momentarily down) must also not be cached, or the CDN would pin the
   // empty screen for its whole TTL — force a fresh retry on the next request.
   const emptyNews = url.pathname.endsWith("/news") && (out as any)?.count === 0;
-  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || url.pathname.includes("/health-") || url.pathname.endsWith("/briefing") || emptyNews;
+  const noCache = url.pathname.includes("/push-") || url.pathname.endsWith("/tick") || url.pathname.includes("/ai-") || url.pathname.includes("/health-") || url.pathname.endsWith("/briefing") || url.pathname.includes("/gmail-") || url.pathname.includes("/money-") || url.pathname.includes("/transfer-") || emptyNews;
   res.setHeader("Cache-Control", cache || (noCache ? "no-store" : "s-maxage=60, stale-while-revalidate=300"));
   res.end(JSON.stringify(out));
 }
