@@ -1696,6 +1696,56 @@ async function healthPush(key: string, get: (k: string) => string | null) {
   return { status: 200, body: { ok: true, configured: true, saved: { date, ...metrics } } };
 }
 
+// ── Apple Pay spending sync ──────────────────────────────────────────────────
+// An iOS Shortcuts "Transaction" automation fires on every Apple Pay payment
+// and pushes amount + merchant here (keyed by a private per-device key, same
+// model as health-push). The app pulls on open and books the expenses.
+
+// Shortcuts sends amounts like "CHF 12.50", "12,50" or "-3.20" — extract the
+// number robustly, in either comma or dot decimal style.
+function parseMoney(v: string | null | undefined): number {
+  if (!v) return 0;
+  const cleaned = String(v).replace(/[^0-9.,-]/g, "");
+  const normalized = /,\d{1,2}$/.test(cleaned)
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned.replace(/,/g, "");
+  const n = Math.abs(parseFloat(normalized));
+  return isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+const WALLET_MAX_TX = 300;
+const WALLET_MAX_AGE = 90 * 86400000;
+
+async function moneyPush(key: string, get: (k: string) => string | null) {
+  if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
+  if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { ok: false, error: "bad key" } };
+  const amount = parseMoney(get("amount"));
+  if (!(amount > 0)) return { status: 400, body: { ok: false, error: "no amount" } };
+  const tx = {
+    id: `t${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+    at: Date.now(),
+    amount,
+    merchant: (get("merchant") || get("name") || "").slice(0, 80),
+    card: (get("card") || "").slice(0, 40),
+    currency: (get("currency") || "").toUpperCase().slice(0, 5),
+  };
+  let list: any[] = [];
+  try { const raw = await kv(["GET", `wallet:${key}`]); if (raw) list = JSON.parse(raw); } catch { list = []; }
+  if (!Array.isArray(list)) list = [];
+  const cutoff = Date.now() - WALLET_MAX_AGE;
+  list = [tx, ...list.filter((t) => t && t.at > cutoff)].slice(0, WALLET_MAX_TX);
+  await kv(["SET", `wallet:${key}`, JSON.stringify(list)]);
+  return { status: 200, body: { ok: true, saved: { amount: tx.amount, merchant: tx.merchant } } };
+}
+
+async function moneyPull(key: string) {
+  if (!kvConfigured()) return { status: 200, body: { configured: false, txs: [] } };
+  if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { configured: true, error: "bad key", txs: [] } };
+  let list: any[] = [];
+  try { const raw = await kv(["GET", `wallet:${key}`]); if (raw) list = JSON.parse(raw); } catch { list = []; }
+  return { status: 200, body: { configured: true, txs: Array.isArray(list) ? list.slice(0, WALLET_MAX_TX) : [] } };
+}
+
 async function healthPull(key: string) {
   if (!kvConfigured()) return { status: 200, body: { configured: false, days: [] } };
   if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { configured: true, error: "bad key", days: [] } };
@@ -2244,7 +2294,7 @@ export async function handleApi(
       if (aiLocked() && typeof given === "string" && given !== "" && !codeMatches(given)) {
         await kvBump(`bad:${ip}`, BAD_CODE_WINDOW);
       }
-    } else if (route === "health-push") {
+    } else if (route === "health-push" || route === "money-push") {
       if ((await kvBump(`hp:${ip}`, PUSH_WINDOW)) > PUSH_LIMIT) {
         return { status: 429, body: { ok: false, error: "rate limited" } };
       }
@@ -2380,6 +2430,21 @@ export async function handleApi(
 
     if (route === "health-pull") {
       return await healthPull(search.get("key") || ctx.body?.key || "");
+    }
+
+    if (route === "money-push") {
+      const body = ctx.body || {};
+      const key = search.get("key") || body.key || "";
+      const get = (k: string): string | null => {
+        const q = search.get(k);
+        if (q != null) return q;
+        return body[k] != null ? String(body[k]) : null;
+      };
+      return await moneyPush(String(key), get);
+    }
+
+    if (route === "money-pull") {
+      return await moneyPull(search.get("key") || ctx.body?.key || "");
     }
 
     if (route === "briefing") {

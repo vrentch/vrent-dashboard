@@ -213,6 +213,12 @@ export function fetchAiStatus(): Promise<{ configured: boolean; model: string | 
   return getJson(`/api/ai-status`);
 }
 
+// Apple Pay spending sync -----------------------------------------------------
+export interface WalletTxDTO { id: string; at: number; amount: number; merchant: string; card: string; currency: string }
+export function pullWalletTxs(key: string): Promise<{ configured: boolean; txs: WalletTxDTO[] }> {
+  return getJson(`/api/money-pull?key=${encodeURIComponent(key)}`);
+}
+
 // Apple Health background sync ------------------------------------------------
 export interface SyncDayDTO {
   date: string;

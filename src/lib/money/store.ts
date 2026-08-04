@@ -13,6 +13,7 @@ export interface Expense {
   amount: number;  // CHF
   category: string;
   note?: string;
+  source?: "applepay"; // auto-imported from the Apple Pay Shortcut automation
 }
 
 // One-time income (bonus, 13th salary, side gig) allocated across the month's
@@ -223,6 +224,81 @@ export function addExpense(e: { amount: number; category: string; note?: string;
   return id;
 }
 export function removeExpense(id: string) { set({ expenses: state.expenses.filter((x) => x.id !== id) }); }
+
+// ── Apple Pay import ─────────────────────────────────────────────────────────
+// Each device owns a private wallet sync key; the iOS Shortcut pushes every
+// Apple Pay transaction to the server under it, and the app books what's new.
+const WALLET_KEY_LS = "vrent.money.walletkey.v1";
+const WALLET_SEEN_LS = "vrent.money.walletseen.v1";
+
+export function getWalletKey(): string {
+  let k: string | null = null;
+  try { k = localStorage.getItem(WALLET_KEY_LS); } catch { /* ignore */ }
+  if (!k || !/^[A-Za-z0-9_-]{8,64}$/.test(k)) {
+    try {
+      const a = new Uint8Array(16);
+      crypto.getRandomValues(a);
+      k = Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
+    } catch {
+      k = `w${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`.padEnd(16, "0");
+    }
+    try { localStorage.setItem(WALLET_KEY_LS, k); } catch { /* ignore */ }
+  }
+  return k;
+}
+
+// Guess a category from the merchant name (Swiss-heavy keyword map).
+const CAT_KEYWORDS: [string, RegExp][] = [
+  ["groceries", /migros|coop|denner|aldi|lidl|spar|volg|edeka|rewe|tesco|sainsbury/i],
+  ["transport", /sbb|cff|ffs|zvv|vbz|uber|bolt|taxi|shell|esso|avia|socar|bp |agip|parking|parkhaus|easyjet|swiss int|lufthansa|ryanair/i],
+  ["food", /restaurant|ristorante|cafe|café|kaffee|coffee|starbucks|mcdonald|burger|kebab|pizz|sushi|thai|bäckerei|baecker|bakery|tibits|holy cow|subway|kfc|dieci|eats/i],
+  ["health", /apotheke|pharmacie|farmacia|pharmacy|drogerie|arzt|dental|fitness|gym|activ fitness/i],
+  ["shopping", /zalando|galaxus|digitec|amazon|h&m|zara|uniqlo|ikea|interdiscount|fust|media ?markt|manor|globus|decathlon|ochsner/i],
+  ["bills", /netflix|spotify|swisscom|sunrise|salt|wingo|yallo|apple\.com|google|icloud|disney|dazn|sky/i],
+  ["leisure", /kino|cinema|pathe|bar |club|event|ticket|spotify|museum|zoo|verkehrshaus/i],
+];
+export function guessCategory(merchant: string): string {
+  for (const [cat, re] of CAT_KEYWORDS) if (re.test(merchant || "")) return cat;
+  return "other";
+}
+
+export interface WalletTx { id: string; at: number; amount: number; merchant: string; card: string; currency: string }
+
+// Book pulled transactions as expenses, once each (seen-ids persist locally).
+export function applyWalletTxs(txs: WalletTx[]): number {
+  if (!Array.isArray(txs) || txs.length === 0) return 0;
+  let seen: Record<string, 1> = {};
+  try { seen = JSON.parse(localStorage.getItem(WALLET_SEEN_LS) || "{}"); } catch { seen = {}; }
+  let applied = 0;
+  const next = [...state.expenses];
+  for (const t of txs) {
+    if (!t || !t.id || seen[t.id] || !(t.amount > 0)) continue;
+    const d = new Date(t.at || Date.now());
+    next.unshift({
+      id: uid(),
+      at: t.at || Date.now(),
+      date: todayKeyOf(d),
+      amount: Math.round(t.amount * 100) / 100,
+      category: guessCategory(t.merchant),
+      note: t.merchant || t.card || "Apple Pay",
+      source: "applepay",
+    });
+    seen[t.id] = 1;
+    applied++;
+  }
+  if (applied > 0) {
+    // Bound the seen-set (server keeps at most 300 transactions anyway).
+    const ids = Object.keys(seen);
+    if (ids.length > 1000) for (const id of ids.slice(0, ids.length - 600)) delete seen[id];
+    try { localStorage.setItem(WALLET_SEEN_LS, JSON.stringify(seen)); } catch { /* ignore */ }
+    set({ expenses: next });
+  }
+  return applied;
+}
+
+function todayKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 export function updateExpense(id: string, patch: Partial<Expense>) {
   set({ expenses: state.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
 }
