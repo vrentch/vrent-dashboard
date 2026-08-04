@@ -94,7 +94,18 @@ export function fetchNews(opts: {
   const p = new URLSearchParams();
   p.set("spec", JSON.stringify(spec));
   if (opts.query) p.set("q", opts.query);
-  return getJson<NewsResponse>(`/api/news?${p.toString()}`);
+  return getJson<NewsResponse>(`/api/news?${p.toString()}`).then((r) => {
+    // The same story can arrive from several feeds (country × topic overlap).
+    // Dedupe by id here so every list renders unique keys and no card shows
+    // twice — React's duplicate-key warning was causing glitchy lists.
+    const seen = new Set<string>();
+    const items = (r.items || []).filter((it) => {
+      if (!it?.id || seen.has(it.id)) return false;
+      seen.add(it.id);
+      return true;
+    });
+    return { ...r, items, count: items.length };
+  });
 }
 
 export function fetchQuotes(symbols: string[]): Promise<{ quotes: Quote[]; errors: string[] }> {

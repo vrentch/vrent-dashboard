@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, Send, Loader2, Volume2, VolumeX, Sparkles, Square } from "lucide-react";
 import Sheet from "../../components/Sheet";
 import { aiAssistant } from "../../lib/api";
+import { speak as ttsSpeak, stopSpeaking } from "../../lib/tts";
 import {
   useHealth, macrosOn, calorieTarget, stepsOn, waterOn, foodsOn, todayKey, foodHints,
   addFood, addWater, setSteps, addWeight, addActivity, rememberFood,
@@ -50,7 +51,7 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
   useEffect(() => {
     if (!open) {
       try { recRef.current?.stop(); } catch { /* noop */ }
-      try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+      stopSpeaking();
       setListening(false);
     }
   }, [open]);
@@ -117,12 +118,7 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
 
   function speak(text: string) {
     if (!speakOn) return;
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.03;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch { /* TTS unavailable */ }
+    ttsSpeak(text);
   }
 
   async function send(text?: string) {
