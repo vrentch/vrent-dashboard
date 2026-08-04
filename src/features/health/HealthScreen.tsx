@@ -3,7 +3,7 @@ import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRig
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
   waterOn, sleepOn, latestWeight, removeActivity, removeFood, savePlan, saveCoach, recentSummary, toKey, weeklyStats, foodHints,
-  fastingStatus, markLastMeal, mealTypeOf, mealBreakdown, MEAL_META, type FoodEntry, type MealType,
+  fastingStatus, markLastMeal, markFirstMeal, mealTypeOf, mealBreakdown, MEAL_META, type FoodEntry, type MealType,
 } from "../../lib/health";
 import SwipeRow from "../../components/SwipeRow";
 import { analyzeImage, aiPlan, aiCoach, type FoodEstimate } from "../../lib/api";
@@ -99,7 +99,7 @@ export default function HealthScreen() {
         targets,
         today: { ...eaten, remaining, steps, burn, waterMl: water, sleepH: sleep },
         fasting: s.fasting.enabled
-          ? { protocol: `${s.fasting.fastingHours}:${24 - s.fasting.fastingHours}`, phase: fast.phase, hoursSinceLastMeal: +(fast.sinceLastMealMs / 3600_000).toFixed(1) }
+          ? { protocol: `${s.fasting.fastingHours}:${24 - s.fasting.fastingHours}`, phase: fast.phase, hoursInPhase: +(fast.sinceMs / 3600_000).toFixed(1) }
           : null,
         mealPattern: weekMeals.map((m) => ({ meal: m.type, sharePct: Math.round(m.share * 100) })),
         planHeadline: s.plan?.headline || null,
@@ -288,16 +288,16 @@ export default function HealthScreen() {
                 <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
               </div>
               {fast.phase === "idle" ? (
-                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Log a meal (or set your last one) to start the timer.</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Tap First meal or Last meal below to start the schedule.</p>
               ) : fast.phase === "fasting" ? (
                 <>
                   <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">{fmtDur(fast.remainMs)} <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">until you can eat</span></p>
-                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Eating window opens at {fmtClock(fast.fastEndsAt)} · fasting for {fmtDur(fast.sinceLastMealMs)}</p>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Eating opens at {fmtClock(fast.phaseEnd)} · fasting for {fmtDur(fast.sinceMs)}</p>
                 </>
               ) : (
                 <>
                   <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">Eating window open 🎉</p>
-                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Closes around {fmtClock(fast.windowClosesAt)} ({fmtDur(fast.remainMs)} left) — logging a meal restarts the fast.</p>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Fasting starts again at {fmtClock(fast.phaseEnd)} ({fmtDur(fast.remainMs)} left)</p>
                 </>
               )}
               {fast.phase !== "idle" && (
@@ -309,9 +309,21 @@ export default function HealthScreen() {
                 </div>
               )}
             </button>
-            <button onClick={() => markLastMeal()} className="mt-3 w-full py-2 rounded-xl glass-subtle text-xs font-semibold text-slate-600 dark:text-slate-300 active:scale-[0.98]">
-              🍽 I just finished eating — restart timer
-            </button>
+            {/* First/Last meal — the one that matches the current phase is highlighted */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => { markFirstMeal(); setNowTs(Date.now()); }}
+                className={`py-2.5 rounded-xl text-xs font-bold active:scale-[0.97] transition ${fast.phase !== "eating" ? "accent-gradient text-white shadow-accent" : "glass-subtle text-slate-500 dark:text-slate-400"}`}
+              >
+                🍳 First meal — start eating
+              </button>
+              <button
+                onClick={() => { markLastMeal(); setNowTs(Date.now()); }}
+                className={`py-2.5 rounded-xl text-xs font-bold active:scale-[0.97] transition ${fast.phase === "eating" ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-500 dark:text-slate-400"}`}
+              >
+                🍽️ Last meal — start fasting
+              </button>
+            </div>
           </section>
         ) : (
           <button onClick={() => setFastOpen(true)} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">

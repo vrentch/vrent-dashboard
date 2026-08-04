@@ -45,14 +45,18 @@ export const MEAL_META: Record<MealType, { label: string; emoji: string; order: 
   breakfast: { label: "Breakfast", emoji: "🍳", order: 0 },
   lunch: { label: "Lunch", emoji: "🥗", order: 1 },
   snack: { label: "Snacks", emoji: "🍎", order: 2 },
-  dinner: { label: "Dinner", emoji: "🌙", order: 3 },
+  dinner: { label: "Dinner", emoji: "🍽️", order: 3 },
 };
 
 // ── Intermittent fasting ─────────────────────────────────────────────────────
+// The schedule is a repeating cycle (fast N hours ⇄ eat 24−N hours) anchored to
+// the last "First meal" / "Last meal" press (or meal log). When a phase's time
+// is up the status flips to the next phase automatically — no press needed.
 export interface FastingSettings {
   enabled: boolean;
-  fastingHours: number;    // e.g. 16 → the classic 16:8
-  lastMealAt: number | null; // when the user last ate (auto-set by meal logs)
+  fastingHours: number;     // e.g. 16 → the classic 16:8
+  anchor: "fast" | "eat";   // which phase started at anchorAt
+  anchorAt: number | null;  // when that phase started
 }
 
 // A food the user has confirmed before — the app "learns" these so it can bias
@@ -146,7 +150,7 @@ function defaults(): HealthState {
     learnedFoods: [],
     plan: null,
     planAt: null,
-    fasting: { enabled: false, fastingHours: 16, lastMealAt: null },
+    fasting: { enabled: false, fastingHours: 16, anchor: "fast", anchorAt: null },
     coach: null,
   };
 }
@@ -167,7 +171,13 @@ function load(): HealthState {
       learnedFoods: Array.isArray(p.learnedFoods) ? p.learnedFoods : [],
       plan: p.plan ?? null,
       planAt: p.planAt ?? null,
-      fasting: { ...d.fasting, ...(p.fasting || {}) },
+      fasting: (() => {
+        const f = { ...d.fasting, ...(p.fasting || {}) } as FastingSettings & { lastMealAt?: number | null };
+        // Migrate the old lastMealAt-only shape: a meal ended eating → fast starts there.
+        if (!f.anchorAt && f.lastMealAt) { f.anchor = "fast"; f.anchorAt = f.lastMealAt; }
+        delete f.lastMealAt;
+        return f;
+      })(),
       coach: p.coach ?? null,
     };
   } catch {
@@ -207,10 +217,14 @@ export function setProfile(patch: Partial<Profile>) {
 
 export function addFood(e: Omit<FoodEntry, "id" | "at" | "date"> & { date?: string }) {
   const entry: FoodEntry = { id: uid(), at: Date.now(), date: e.date || todayKey(), ...e };
-  // Any meal logged for today restarts the fasting clock automatically.
-  const fasting = entry.date === todayKey() && entry.at > (state.fasting.lastMealAt || 0)
-    ? { ...state.fasting, lastMealAt: entry.at }
-    : state.fasting;
+  // A meal logged while fasting (or before any anchor) is the "first meal" —
+  // it opens the eating window. Meals inside an open window leave it alone;
+  // the schedule (or the Last-meal button) closes it.
+  let fasting = state.fasting;
+  if (entry.date === todayKey()) {
+    const phase = fastingStatus(state, entry.at).phase;
+    if (phase !== "eating") fasting = { ...state.fasting, anchor: "eat", anchorAt: entry.at };
+  }
   set({ foods: [entry, ...state.foods], fasting });
 }
 
@@ -218,30 +232,46 @@ export function addFood(e: Omit<FoodEntry, "id" | "at" | "date"> & { date?: stri
 export function setFasting(patch: Partial<FastingSettings>) {
   set({ fasting: { ...state.fasting, ...patch } });
 }
+// "Last meal" — eating is done, the fast starts now.
 export function markLastMeal(at = Date.now()) {
-  set({ fasting: { ...state.fasting, lastMealAt: at } });
+  set({ fasting: { ...state.fasting, anchor: "fast", anchorAt: at } });
+}
+// "First meal" — the fast is broken, the eating window starts now.
+export function markFirstMeal(at = Date.now()) {
+  set({ fasting: { ...state.fasting, anchor: "eat", anchorAt: at } });
 }
 
 export interface FastingStatus {
   phase: "idle" | "fasting" | "eating";
-  fastEndsAt: number;      // when the fast completes (lastMeal + fastingHours)
-  windowClosesAt: number;  // when the eating window closes again
-  remainMs: number;        // ms left in the current phase
-  pct: number;             // progress through the current phase (0–1)
-  sinceLastMealMs: number;
+  phaseStart: number;   // when the current phase began
+  phaseEnd: number;     // when it flips to the next phase automatically
+  remainMs: number;     // ms left in the current phase
+  pct: number;          // progress through the current phase (0–1)
+  sinceMs: number;      // how long the current phase has been running
 }
 export function fastingStatus(s: HealthState, now = Date.now()): FastingStatus {
   const f = s.fasting;
-  const eatingHours = Math.max(1, 24 - f.fastingHours);
-  if (!f.lastMealAt) return { phase: "idle", fastEndsAt: 0, windowClosesAt: 0, remainMs: 0, pct: 0, sinceLastMealMs: 0 };
-  const fastEndsAt = f.lastMealAt + f.fastingHours * 3600_000;
-  const windowClosesAt = fastEndsAt + eatingHours * 3600_000;
-  if (now < fastEndsAt) {
-    const total = f.fastingHours * 3600_000;
-    return { phase: "fasting", fastEndsAt, windowClosesAt, remainMs: fastEndsAt - now, pct: Math.min(1, (now - f.lastMealAt) / total), sinceLastMealMs: now - f.lastMealAt };
+  if (!f.anchorAt) return { phase: "idle", phaseStart: 0, phaseEnd: 0, remainMs: 0, pct: 0, sinceMs: 0 };
+  const fastMs = f.fastingHours * 3600_000;
+  const eatMs = Math.max(1, 24 - f.fastingHours) * 3600_000;
+  // Walk the cycle forward from the anchor to now — phases flip on their own.
+  let phase: "fast" | "eat" = f.anchor;
+  let start = f.anchorAt;
+  for (let i = 0; i < 1000; i++) {
+    const dur = phase === "fast" ? fastMs : eatMs;
+    if (now < start + dur) break;
+    start += dur;
+    phase = phase === "fast" ? "eat" : "fast";
   }
-  const total = eatingHours * 3600_000;
-  return { phase: "eating", fastEndsAt, windowClosesAt, remainMs: Math.max(0, windowClosesAt - now), pct: Math.min(1, (now - fastEndsAt) / total), sinceLastMealMs: now - f.lastMealAt };
+  const dur = phase === "fast" ? fastMs : eatMs;
+  return {
+    phase: phase === "fast" ? "fasting" : "eating",
+    phaseStart: start,
+    phaseEnd: start + dur,
+    remainMs: Math.max(0, start + dur - now),
+    pct: Math.min(1, (now - start) / dur),
+    sinceMs: now - start,
+  };
 }
 
 export function saveCoach(data: CoachAdvice) {

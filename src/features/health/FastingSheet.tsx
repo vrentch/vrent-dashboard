@@ -22,7 +22,7 @@ export default function FastingSheet({ open, onClose }: { open: boolean; onClose
     if (open) {
       setEnabled(s.fasting.enabled);
       setHours(s.fasting.fastingHours);
-      const t = s.fasting.lastMealAt ? new Date(s.fasting.lastMealAt) : new Date();
+      const t = s.fasting.anchorAt ? new Date(s.fasting.anchorAt) : new Date();
       setLastAte(`${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
