@@ -181,7 +181,7 @@ export default function HealthScreen() {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
             <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Health</h1>
             <p className="text-xs text-slate-400 dark:text-slate-500">{viewLabel}</p>
@@ -199,7 +199,7 @@ export default function HealthScreen() {
 
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" />
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-6">
         {/* Day picker — review any of the last 14 days */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4">
           {dayStrip.map((d) => {

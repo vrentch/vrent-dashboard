@@ -61,7 +61,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
             <button onClick={onBack} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600 dark:text-brand-400 mb-0.5">
               <ChevronLeft size={14} /> Home
@@ -74,7 +74,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-5">
         {!configured ? (
           <button onClick={() => setSetupOpen(true)} className="w-full text-left rounded-3xl p-5 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}>
             <Wallet size={26} className="mb-2 text-white/90" />
@@ -269,7 +269,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
             {monthExpenses.length > 0 && (
               <section>
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Spending · {monthExpenses.length}</h2>
-                <div className="space-y-2">
+                <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 md:gap-2 md:items-start">
                   {monthExpenses.slice(0, 40).map((e) => (
                     <SwipeRow key={e.id} onDelete={() => removeExpense(e.id)}>
                       <div className="flex items-center gap-3 glass-subtle p-3">

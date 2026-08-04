@@ -87,7 +87,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
             <h1 className="text-[26px] font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">{greeting()}</h1>
             <p className="text-[13px] font-medium text-slate-400 dark:text-slate-500">{today}</p>
@@ -111,7 +111,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-6">
         {/* Quick actions — one tap to the things used most */}
         <div className="grid grid-cols-4 gap-2.5">
           {([

@@ -41,6 +41,23 @@ export async function getImage(id: string): Promise<string | null> {
   });
 }
 
+// Everything in the store, keyed by receipt id — used by the phone-transfer
+// backup so receipt images travel to a new device.
+export async function getAllImages(): Promise<Record<string, string>> {
+  const store = await tx("readonly");
+  return new Promise((resolve) => {
+    const out: Record<string, string> = {};
+    const req = store.openCursor();
+    req.onsuccess = () => {
+      const c = req.result;
+      if (!c) { resolve(out); return; }
+      if (typeof c.value === "string") out[String(c.key)] = c.value;
+      c.continue();
+    };
+    req.onerror = () => resolve(out);
+  });
+}
+
 export async function deleteImage(id: string): Promise<void> {
   const store = await tx("readwrite");
   return new Promise((resolve) => {

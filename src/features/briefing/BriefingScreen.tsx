@@ -59,7 +59,7 @@ export default function BriefingScreen({ onBack }: { onBack: () => void }) {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-2.5">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-2.5">
           <div className="flex items-center justify-between">
             <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 dark:text-slate-400 active:scale-95">
               <ChevronLeft size={18} /> Home
@@ -85,7 +85,7 @@ export default function BriefingScreen({ onBack }: { onBack: () => void }) {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-6">
         {ai.status === "locked" && (
           <AiUnlock onSubmit={ai.unlock} />
         )}

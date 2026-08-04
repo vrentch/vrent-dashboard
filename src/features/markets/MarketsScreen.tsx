@@ -67,7 +67,7 @@ export default function MarketsScreen() {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div>
             <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Markets</h1>
             <p className="text-xs text-slate-400 dark:text-slate-500">Tap a market to see its movers</p>
@@ -82,7 +82,7 @@ export default function MarketsScreen() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-6">
         {/* Market sentiment hero */}
         {sentiment.total > 0 && (
           <div className="rounded-3xl p-5 text-white relative overflow-hidden accent-gradient shadow-accent">
@@ -113,7 +113,7 @@ export default function MarketsScreen() {
 
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Markets</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {REGIONS.map((r) => {
             const idx = primaryIndex(r);
             const q = indexQuotes[idx.symbol.toUpperCase()];

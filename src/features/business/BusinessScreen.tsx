@@ -116,7 +116,7 @@ export default function BusinessScreen() {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3 flex items-center justify-between">
           <div className="min-w-0">
             <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Business</h1>
             {company ? (
@@ -130,7 +130,7 @@ export default function BusinessScreen() {
           <button onClick={() => setSetupOpen(true)} className="grid place-items-center w-10 h-10 rounded-full glass text-slate-600 dark:text-slate-300 active:scale-95" aria-label="Setup"><Settings size={18} /></button>
         </div>
         {companyMenu && s.companies.length > 0 && (
-          <div className="max-w-lg mx-auto px-4 pb-2 flex flex-wrap gap-2">
+          <div className="max-w-lg md:max-w-3xl mx-auto px-4 pb-2 flex flex-wrap gap-2">
             {s.companies.map((c) => (
               <button key={c.id} onClick={() => { setActiveCompany(c.id); setCompanyMenu(false); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold ${c.id === activeId ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-600 dark:text-slate-300"}`}>{c.name}</button>
             ))}
@@ -141,7 +141,7 @@ export default function BusinessScreen() {
 
       <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onPick} className="hidden" />
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-5">
         {aiStatus === "locked" && <AiUnlock onSubmit={unlock} compact />}
 
         {!company ? (
@@ -213,7 +213,7 @@ export default function BusinessScreen() {
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
                   {scope === "all" ? "All receipts" : monthLabel(scope)} · {receipts.length}
                 </h2>
-                <div className="space-y-2">
+                <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 md:gap-2 md:items-start">
                   {receipts.map((r) => (
                     <SwipeRow key={r.id} onDelete={() => removeReceipt(r.id)}>
                       <button onClick={() => setEditId(r.id)} className="w-full flex items-center gap-3 glass-subtle p-2.5 text-left active:scale-[0.99] transition">

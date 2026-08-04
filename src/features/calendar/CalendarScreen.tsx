@@ -63,7 +63,7 @@ export default function CalendarScreen() {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Calendar</h1>
@@ -95,7 +95,7 @@ export default function CalendarScreen() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-4">
         {view === "agenda" && (
           <>
             {agendaGroups.length === 0 && <Empty onAdd={() => openNew()} />}

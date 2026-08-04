@@ -110,7 +110,7 @@ export default function NewsScreen({ mode = "news", onMode }: { mode?: NewsMode;
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-2.5">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-2.5">
           <div className="flex items-center justify-between">
             {onMode ? (
               <NewsSportSegment mode={mode} onMode={onMode} />
@@ -183,7 +183,7 @@ export default function NewsScreen({ mode = "news", onMode }: { mode?: NewsMode;
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4">
         {loading && <SkeletonSections />}
 
         {!loading && error && items.length === 0 && (
@@ -192,11 +192,14 @@ export default function NewsScreen({ mode = "news", onMode }: { mode?: NewsMode;
 
         {/* Focused (filtered) list */}
         {!loading && focus && (
-          <div className="space-y-3">
+          <div>
             <SectionTitle {...groupLabel(focus.type, focus.value)} count={focusItems.length} />
-            {focusItems.map((it, i) => (
-              <NewsCard key={it.id} item={it} index={i} showCountry={focus.type !== "country"} onOpen={setReading} />
-            ))}
+            {/* One column on phones; two on tablets / unfolded foldables. */}
+            <div className="mt-3 space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-3 md:items-start">
+              {focusItems.map((it, i) => (
+                <NewsCard key={it.id} item={it} index={i} showCountry={focus.type !== "country"} onOpen={setReading} />
+              ))}
+            </div>
           </div>
         )}
 

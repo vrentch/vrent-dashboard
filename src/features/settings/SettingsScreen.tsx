@@ -27,6 +27,10 @@ import {
 const SHARE_URL = "https://ac-news-tau.vercel.app";
 const SHARE_HOST = SHARE_URL.replace(/^https?:\/\//, "");
 import { usePrefs, resetPrefs, setPrefs, type Theme } from "../../lib/store";
+import { useRef } from "react";
+import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react";
+import { buildBackup, restoreBackup, backupFilename } from "../../lib/transfer";
+import { shareOrDownloadFile } from "../../lib/business/export";
 import { hasPasscode, clearPasscode } from "../../lib/lock";
 import PasscodeSetup from "../lock/PasscodeSetup";
 import NotificationsSettings from "./NotificationsSettings";
@@ -69,13 +73,13 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3">
           <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Settings</h1>
           <p className="text-xs text-slate-400 dark:text-slate-500">Your preferences are saved on this device</p>
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-4">
         <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Appearance</h2>
           <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
@@ -127,6 +131,8 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
         <NotificationsSettings />
 
         <AiFeatures />
+
+        <TransferSection />
 
         <section className="rounded-2xl glass p-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Your news feed</h2>
@@ -247,6 +253,75 @@ export default function SettingsScreen({ onNavigate }: { onNavigate: (t: Tab) =>
 
       <PasscodeSetup open={lockSetup} onClose={() => setLockSetup(false)} />
     </div>
+  );
+}
+
+// Everything lives on-device, so switching phones is: export here, install
+// the app on the new phone (same link), import the file there.
+function TransferSection() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function doExport() {
+    setBusy("export");
+    setErr(null);
+    setMsg(null);
+    try {
+      const { blob, info } = await buildBackup();
+      await shareOrDownloadFile(blob, backupFilename());
+      setMsg(`Backup ready — ${info.keys} data sets, ${info.images} receipt files (${(info.bytes / 1024 / 1024).toFixed(1)} MB).`);
+    } catch {
+      setErr("Could not build the backup — try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!window.confirm("Import this backup? Data on THIS device will be replaced by the backup's content.")) return;
+    setBusy("import");
+    setErr(null);
+    try {
+      const info = await restoreBackup(f);
+      setMsg(`Imported ${info.keys} data sets and ${info.images} receipt files — reloading…`);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "That file couldn't be read.");
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl glass p-4">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="grid place-items-center w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400">
+          <Smartphone size={17} />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Move to a new phone</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Everything is stored on this device — carry it over</p>
+        </div>
+      </div>
+      <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+        Export a backup file here, install the app on the new phone (same link), then import the file there. It carries your receipts (with photos), health & money data, calendar, learned memories, the AI access code and connections.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button onClick={doExport} disabled={busy != null} className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold active:scale-[0.98] disabled:opacity-50">
+          {busy === "export" ? <Loader2 size={15} className="animate-spin" /> : <ArrowUpFromLine size={15} />} Export backup
+        </button>
+        <button onClick={() => fileRef.current?.click()} disabled={busy != null} className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl glass-subtle text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98] disabled:opacity-50">
+          {busy === "import" ? <Loader2 size={15} className="animate-spin" /> : <ArrowDownToLine size={15} />} Import backup
+        </button>
+      </div>
+      <input ref={fileRef} type="file" accept=".acapp,.gz,.json,application/gzip,application/json" onChange={doImport} className="hidden" />
+      {msg && <p className="mt-2 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">{msg}</p>}
+      {err && <p className="mt-2 text-[12px] font-medium text-rose-600 dark:text-rose-400">{err}</p>}
+    </section>
   );
 }
 

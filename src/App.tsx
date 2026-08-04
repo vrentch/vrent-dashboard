@@ -123,7 +123,7 @@ export default function App() {
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 glass-nav border-t border-white/40 dark:border-white/10 safe-bottom">
-        <div className="max-w-lg mx-auto relative flex items-end px-1">
+        <div className="max-w-lg md:max-w-3xl mx-auto relative flex items-end px-1">
           <div className="flex-1 grid grid-cols-3">
             {LEFT_TABS.map((t) => <TabButton key={t.key} item={t} active={tab === t.key} onClick={() => setTab(t.key)} />)}
           </div>

@@ -95,7 +95,7 @@ export default function ScanScreen() {
   return (
     <div>
       <header className="sticky top-0 z-30 glass-nav border-b border-white/40 dark:border-white/10 safe-top">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
+        <div className="max-w-lg md:max-w-3xl mx-auto px-4 pt-3 pb-3">
           <h1 className="text-[22px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Scanner</h1>
           <p className="text-xs text-slate-400 dark:text-slate-500">Point, snap & let AI tell you what it is</p>
         </div>
@@ -103,7 +103,7 @@ export default function ScanScreen() {
 
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" />
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
+      <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-5">
         {status === "off" && <AiOffNotice />}
         {status === "locked" && <AiUnlock onSubmit={unlock} />}
 
