@@ -1741,7 +1741,7 @@ function parseTxText(textRaw: string): { amount: number; merchant: string; curre
   // Merchant: prefer "at/bei/chez/presso <name>", stopping at punctuation or
   // trailing card/date chatter.
   let merchant = "";
-  const mm = t.match(/\b(?:at|bei|chez|presso|@)\s+([A-Za-zÀ-ž0-9&*'’.\- ]{2,48}?)(?=$|[.,;:!()]|\s(?:with|mit|on|am|um|for|für|per|via|le|il)\b)/i);
+  const mm = t.match(/\b(?:at|bei|chez|presso|@)\s+([A-Za-zÀ-ž0-9&*'’.\- ]{2,48}?)(?=$|[.,;:!()]|\s(?:with|mit|on|am|um|for|für|per|via|le|il|approved|declined|successful|completed|genehmigt|bestätigt|abgelehnt|erfolgt)\b)/i);
   if (mm) merchant = mm[1].trim();
   if (!merchant) {
     // Fall back to what's after the amount, cleaned of card noise.
