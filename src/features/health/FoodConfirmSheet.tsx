@@ -49,6 +49,20 @@ export default function FoodConfirmSheet({
   const [lookupErr, setLookupErr] = useState<string | null>(null);
   const [lookupNote, setLookupNote] = useState<string | null>(null);
 
+  // Opened directly in "describe it" mode (no photo, nothing loading): start
+  // from a clean slate so leftovers from a previous meal don't linger.
+  useEffect(() => {
+    if (open && !estimate && !loading) {
+      setItems([]);
+      setName("");
+      setLookupText("");
+      setLookupErr(null);
+      setLookupNote(null);
+      setRecalcErr(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (!estimate) return;
     const src = Array.isArray(estimate.items) ? estimate.items : [];

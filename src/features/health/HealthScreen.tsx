@@ -255,7 +255,7 @@ export default function HealthScreen() {
         </div>
 
         {isToday && (<>
-        {/* Actions */}
+        {/* Actions — food goes in by photo OR by describing it; both one tap away */}
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => fileRef.current?.click()}
@@ -267,12 +267,23 @@ export default function HealthScreen() {
             <p className="mt-2 text-sm font-bold">Snap a meal</p>
             <p className="text-[11px] text-white/80">{aiReady ? "AI counts the calories" : aiStatus === "locked" ? "Unlock AI above" : "Needs AI setup"}</p>
           </button>
-          <button onClick={() => openLog("steps")} className="rounded-2xl glass p-4 text-left active:scale-[0.98] transition">
-            <Plus size={22} className="text-slate-700 dark:text-slate-200" />
-            <p className="mt-2 text-sm font-bold text-slate-900 dark:text-slate-100">Log activity</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">Steps · workout · water · sleep</p>
+          <button
+            onClick={() => { setFoodErr(null); setFoodEstimate(null); setFoodPreview(null); setFoodLoading(false); setFoodOpen(true); }}
+            className="relative overflow-hidden rounded-2xl p-4 text-left active:scale-[0.98] transition accent-gradient text-white shadow-accent"
+          >
+            <Sparkles size={22} />
+            <p className="mt-2 text-sm font-bold">Describe food</p>
+            <p className="text-[11px] text-white/80">Type it — AI finds the calories</p>
           </button>
         </div>
+        <button onClick={() => openLog("steps")} className="w-full flex items-center gap-3 rounded-2xl glass p-3.5 text-left active:scale-[0.99] transition">
+          <span className="grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-slate-500/10 text-slate-700 dark:text-slate-200"><Plus size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Log activity</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">Steps · workout · water · sleep</p>
+          </div>
+          <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
+        </button>
 
         {/* One-tap common foods & drinks */}
         <QuickAddFoods />

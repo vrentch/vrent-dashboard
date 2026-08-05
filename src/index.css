@@ -37,12 +37,13 @@ body {
   text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
   letter-spacing: -0.011em;
-  /* Refined backdrop with a whisper of indigo up top so the accent feels part
-     of the environment, not bolted on. */
+  /* Airy, Apple-like environment: a cool lavender wash up top and a whisper
+     of cyan low-right, so glass surfaces have something to refract. */
   background:
     radial-gradient(1100px 720px at 50% -20%, #ffffff 0%, transparent 58%),
-    radial-gradient(900px 600px at 92% 4%, rgba(99, 102, 241, 0.10) 0%, transparent 55%),
-    linear-gradient(180deg, #f5f6fb 0%, #e8e9f1 100%);
+    radial-gradient(900px 600px at 92% 4%, rgba(99, 102, 241, 0.12) 0%, transparent 55%),
+    radial-gradient(800px 560px at 4% 88%, rgba(56, 189, 248, 0.07) 0%, transparent 55%),
+    linear-gradient(180deg, #f6f7fc 0%, #e9eaf3 100%);
   background-attachment: fixed;
 }
 
@@ -52,52 +53,85 @@ body {
 :root.dark body {
   color: #ededf0;
   background:
-    radial-gradient(1100px 720px at 50% -20%, rgba(129, 140, 248, 0.10) 0%, transparent 58%),
-    radial-gradient(900px 600px at 92% 4%, rgba(79, 70, 229, 0.16) 0%, transparent 55%),
+    radial-gradient(1100px 720px at 50% -20%, rgba(129, 140, 248, 0.12) 0%, transparent 58%),
+    radial-gradient(900px 600px at 92% 4%, rgba(79, 70, 229, 0.18) 0%, transparent 55%),
+    radial-gradient(800px 560px at 4% 88%, rgba(45, 212, 191, 0.06) 0%, transparent 55%),
     linear-gradient(180deg, #0a0a0f 0%, #101016 100%);
   background-attachment: fixed;
 }
 
-/* ── Liquid Glass surfaces ─────────────────────────────────────────────── */
+/* ── Liquid Glass surfaces ───────────────────────────────────────────────
+   The Apple recipe approximated in CSS: heavy blur + saturation boost so
+   colors bleed through, a specular highlight along the top inner edge (light
+   hitting the glass), a faint bottom bevel, and a soft two-layer shadow
+   (tight contact + wide ambient). */
 .glass {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.06) 45%),
+    rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.25),
+    0 2px 6px rgba(15, 23, 42, 0.04),
+    0 14px 36px rgba(15, 23, 42, 0.08);
 }
 :root.dark .glass {
-  background: rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 45%),
+    rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 16px 40px rgba(0, 0, 0, 0.42);
 }
 /* Frosted bars (headers, bottom nav, sheets) */
 .glass-nav {
-  background: rgba(246, 248, 252, 0.65);
-  backdrop-filter: blur(26px) saturate(180%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  background: rgba(246, 248, 252, 0.6);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  box-shadow: inset 0 -0.5px 0 rgba(15, 23, 42, 0.06);
 }
 :root.dark .glass-nav {
-  background: rgba(10, 15, 30, 0.6);
+  background: rgba(10, 15, 30, 0.58);
+  box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.06);
 }
 .glass-strong {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.12) 40%),
+    rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 24px 60px rgba(15, 23, 42, 0.18);
 }
 :root.dark .glass-strong {
-  background: rgba(17, 24, 42, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.01) 40%),
+    rgba(17, 24, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 24px 60px rgba(0, 0, 0, 0.5);
 }
 /* Subtle inner glass panel (e.g. inside a card) */
 .glass-subtle {
-  background: rgba(255, 255, 255, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.04) 50%),
+    rgba(255, 255, 255, 0.36);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 :root.dark .glass-subtle {
-  background: rgba(255, 255, 255, 0.04);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.005) 50%),
+    rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* Respect device notches / home indicators. */
@@ -170,16 +204,22 @@ body {
 
 /* ── Premium redesign utilities ────────────────────────────────────────── */
 
-/* Signature accent gradient — for hero tiles & primary CTAs. */
+/* Signature accent gradient — for hero tiles & primary CTAs. A glossy top
+   sheen makes the surface read as liquid glass rather than flat paint. */
 .accent-gradient {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 48%, #4338ca 100%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 42%),
+    linear-gradient(135deg, #6366f1 0%, #4f46e5 48%, #4338ca 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .accent-gradient-soft {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(79, 70, 229, 0.06) 100%);
 }
 /* A near-black premium hero (used where black reads better than indigo). */
 .hero-ink {
-  background: linear-gradient(150deg, #1e1e2a 0%, #14141c 55%, #0b0b10 100%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 40%),
+    linear-gradient(150deg, #1e1e2a 0%, #14141c 55%, #0b0b10 100%);
 }
 /* Accent glow ring for focused/active elements. */
 .ring-accent {
@@ -217,6 +257,15 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-pop { animation: pop-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Gentler for people who prefer reduced motion — keep the fades, drop the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in, .animate-pop {
+    animation-duration: 0.15s;
+    animation-name: none;
+    opacity: 1;
+  }
+}
 
 button {
   -webkit-tap-highlight-color: transparent;
