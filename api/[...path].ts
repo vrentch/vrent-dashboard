@@ -1716,18 +1716,63 @@ function parseMoney(v: string | null | undefined): number {
 const WALLET_MAX_TX = 300;
 const WALLET_MAX_AGE = 90 * 86400000;
 
+// Parse a payment notification's free text into amount + merchant + currency.
+// Android automations (MacroDroid watching Samsung Wallet / banking apps) send
+// the raw notification, which looks like "You paid CHF 12.50 at Migros",
+// "Kartenzahlung: CHF 8.90, Migros Zürich HB", "£4.20 at Pret A Manger" or
+// "Payment of 23.90 CHF with Visa •••• 5955 at Coop". Non-payment
+// notifications simply yield no amount and are dropped.
+const CUR_SYMBOLS: Record<string, string> = { "£": "GBP", "€": "EUR", "$": "USD" };
+function parseTxText(textRaw: string): { amount: number; merchant: string; currency: string } | null {
+  const t = String(textRaw || "").replace(/\s+/g, " ").trim().slice(0, 400);
+  if (!t) return null;
+  const NUM = "\\d{1,6}(?:['’\\u00A0]\\d{3})*(?:[.,]\\d{1,2})?";
+  let amount = 0;
+  let currency = "";
+  let m = t.match(new RegExp(`(CHF|EUR|USD|GBP|£|€|\\$)\\s?(${NUM})`, "i"));
+  if (m) {
+    currency = CUR_SYMBOLS[m[1]] || m[1].toUpperCase();
+    amount = parseMoney(m[2]);
+  } else {
+    m = t.match(new RegExp(`(${NUM})\\s?(CHF|EUR|USD|GBP)`, "i"));
+    if (m) { amount = parseMoney(m[1]); currency = m[2].toUpperCase(); }
+  }
+  if (!(amount > 0)) return null;
+  // Merchant: prefer "at/bei/chez/presso <name>", stopping at punctuation or
+  // trailing card/date chatter.
+  let merchant = "";
+  const mm = t.match(/\b(?:at|bei|chez|presso|@)\s+([A-Za-zÀ-ž0-9&*'’.\- ]{2,48}?)(?=$|[.,;:!()]|\s(?:with|mit|on|am|um|for|für|per|via|le|il)\b)/i);
+  if (mm) merchant = mm[1].trim();
+  if (!merchant) {
+    // Fall back to what's after the amount, cleaned of card noise.
+    const after = t.slice((m?.index ?? 0) + (m?.[0].length ?? 0));
+    merchant = after.replace(/[•*]{2,}\s?\d{2,4}/g, " ").replace(/\b(?:visa|mastercard|amex|debit|credit|karte|card|paid|payment|zahlung|kartenzahlung|erfolgt|successful|approved)\b/gi, " ")
+      .replace(/[^A-Za-zÀ-ž0-9&'’.\- ]/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 4).join(" ");
+  }
+  return { amount, merchant: merchant.slice(0, 80), currency };
+}
+
 async function moneyPush(key: string, get: (k: string) => string | null) {
   if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
   if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { ok: false, error: "bad key" } };
-  const amount = parseMoney(get("amount"));
-  if (!(amount > 0)) return { status: 400, body: { ok: false, error: "no amount" } };
+  let amount = parseMoney(get("amount"));
+  let merchant = (get("merchant") || get("name") || "").slice(0, 80);
+  let currency = (get("currency") || "").toUpperCase().slice(0, 5);
+  // Notification mode: no structured fields, just the raw notification text.
+  if (!(amount > 0)) {
+    const parsed = parseTxText(get("text") || "");
+    if (!parsed) return { status: 200, body: { ok: false, skipped: true, error: "no amount found" } };
+    amount = parsed.amount;
+    if (!merchant) merchant = parsed.merchant;
+    if (!currency) currency = parsed.currency;
+  }
   const tx = {
     id: `t${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
     at: Date.now(),
     amount,
-    merchant: (get("merchant") || get("name") || "").slice(0, 80),
+    merchant,
     card: (get("card") || "").slice(0, 40),
-    currency: (get("currency") || "").toUpperCase().slice(0, 5),
+    currency,
   };
   let list: any[] = [];
   try { const raw = await kv(["GET", `wallet:${key}`]); if (raw) list = JSON.parse(raw); } catch { list = []; }
