@@ -4,27 +4,17 @@ import {
   useMoney, addExpense, removeExpense, isConfigured, afterTaxMonthly, estimatedTaxPct,
   spendableMonthly, dailyAllowance, hourlyAllowance, liveBalance, meterBreakdown, spentOnDay, spentInMonth,
   savingsMonthly, fixedMonthly, todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, expensesInMonth, categoryOf,
-  extrasFor, removeExtra, boostFor, getWalletKey, applyWalletTxs,
+  extrasFor, removeExtra, boostFor,
 } from "../../lib/money/store";
-import { pullWalletTxs } from "../../lib/api";
 import { chf } from "../../lib/business/format";
 import SwipeRow from "../../components/SwipeRow";
 import AffordabilitySheet from "./AffordabilitySheet";
 import ExtraIncomeSheet from "./ExtraIncomeSheet";
-import WalletSheet from "./WalletSheet";
 
 export default function MoneyScreen({ onBack }: { onBack: () => void }) {
   const s = useMoney();
   const [setupOpen, setSetupOpen] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
-  const [walletOpen, setWalletOpen] = useState(false);
-
-  // Book any Apple Pay transactions the Shortcut pushed since last open.
-  useEffect(() => {
-    pullWalletTxs(getWalletKey())
-      .then((r) => { if (r.configured && r.txs?.length) applyWalletTxs(r.txs); })
-      .catch(() => { /* offline — next open catches up */ });
-  }, []);
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("food");
   const [note, setNote] = useState("");
@@ -177,15 +167,10 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               </div>
             </section>
 
-            {/* Bonus / one-time income + Apple Pay auto-tracking */}
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setExtraOpen(true)} className="inline-flex items-center justify-center gap-1.5 py-3 rounded-2xl glass text-[13px] font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98]">
-                <Gift size={15} className="text-brand-600 dark:text-brand-400" /> Add bonus
-              </button>
-              <button onClick={() => setWalletOpen(true)} className="inline-flex items-center justify-center gap-1.5 py-3 rounded-2xl glass text-[13px] font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98]">
-                <Wallet size={15} className="text-brand-600 dark:text-brand-400" /> Track Apple Pay
-              </button>
-            </div>
+            {/* Bonus / one-time income */}
+            <button onClick={() => setExtraOpen(true)} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl glass text-sm font-semibold text-slate-800 dark:text-slate-100 active:scale-[0.98]">
+              <Gift size={16} className="text-brand-600 dark:text-brand-400" /> Add bonus / extra income
+            </button>
 
             {/* Month stats */}
             <section className="rounded-3xl glass p-5 space-y-4">
@@ -279,7 +264,6 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                           <p className="text-[11px] text-slate-400 dark:text-slate-500">
                             {e.date === todayKey() ? "Today" : new Date(e.date + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })}
                             {" · "}{categoryOf(e.category).label}
-                            {e.source === "applepay" && <span className="ml-1.5 inline-flex items-center rounded-full bg-slate-900/8 dark:bg-white/10 px-1.5 py-px text-[9px] font-semibold text-slate-500 dark:text-slate-400"> Pay</span>}
                           </p>
                         </div>
                         <span className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">{fmt(e.amount)}</span>
@@ -295,7 +279,6 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
 
       <AffordabilitySheet open={setupOpen} onClose={() => setSetupOpen(false)} />
       <ExtraIncomeSheet open={extraOpen} onClose={() => setExtraOpen(false)} month={ym} />
-      <WalletSheet open={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
   );
 }

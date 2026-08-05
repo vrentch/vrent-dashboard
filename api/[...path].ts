@@ -1696,101 +1696,6 @@ async function healthPush(key: string, get: (k: string) => string | null) {
   return { status: 200, body: { ok: true, configured: true, saved: { date, ...metrics } } };
 }
 
-// ── Apple Pay spending sync ──────────────────────────────────────────────────
-// An iOS Shortcuts "Transaction" automation fires on every Apple Pay payment
-// and pushes amount + merchant here (keyed by a private per-device key, same
-// model as health-push). The app pulls on open and books the expenses.
-
-// Shortcuts sends amounts like "CHF 12.50", "12,50" or "-3.20" — extract the
-// number robustly, in either comma or dot decimal style.
-function parseMoney(v: string | null | undefined): number {
-  if (!v) return 0;
-  const cleaned = String(v).replace(/[^0-9.,-]/g, "");
-  const normalized = /,\d{1,2}$/.test(cleaned)
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned.replace(/,/g, "");
-  const n = Math.abs(parseFloat(normalized));
-  return isFinite(n) ? Math.round(n * 100) / 100 : 0;
-}
-
-const WALLET_MAX_TX = 300;
-const WALLET_MAX_AGE = 90 * 86400000;
-
-// Parse a payment notification's free text into amount + merchant + currency.
-// Android automations (MacroDroid watching Samsung Wallet / banking apps) send
-// the raw notification, which looks like "You paid CHF 12.50 at Migros",
-// "Kartenzahlung: CHF 8.90, Migros Zürich HB", "£4.20 at Pret A Manger" or
-// "Payment of 23.90 CHF with Visa •••• 5955 at Coop". Non-payment
-// notifications simply yield no amount and are dropped.
-const CUR_SYMBOLS: Record<string, string> = { "£": "GBP", "€": "EUR", "$": "USD" };
-function parseTxText(textRaw: string): { amount: number; merchant: string; currency: string } | null {
-  const t = String(textRaw || "").replace(/\s+/g, " ").trim().slice(0, 400);
-  if (!t) return null;
-  const NUM = "\\d{1,6}(?:['’\\u00A0]\\d{3})*(?:[.,]\\d{1,2})?";
-  let amount = 0;
-  let currency = "";
-  let m = t.match(new RegExp(`(CHF|EUR|USD|GBP|£|€|\\$)\\s?(${NUM})`, "i"));
-  if (m) {
-    currency = CUR_SYMBOLS[m[1]] || m[1].toUpperCase();
-    amount = parseMoney(m[2]);
-  } else {
-    m = t.match(new RegExp(`(${NUM})\\s?(CHF|EUR|USD|GBP)`, "i"));
-    if (m) { amount = parseMoney(m[1]); currency = m[2].toUpperCase(); }
-  }
-  if (!(amount > 0)) return null;
-  // Merchant: prefer "at/bei/chez/presso <name>", stopping at punctuation or
-  // trailing card/date chatter.
-  let merchant = "";
-  const mm = t.match(/\b(?:at|bei|chez|presso|@)\s+([A-Za-zÀ-ž0-9&*'’.\- ]{2,48}?)(?=$|[.,;:!()]|\s(?:with|mit|on|am|um|for|für|per|via|le|il|approved|declined|successful|completed|genehmigt|bestätigt|abgelehnt|erfolgt)\b)/i);
-  if (mm) merchant = mm[1].trim();
-  if (!merchant) {
-    // Fall back to what's after the amount, cleaned of card noise.
-    const after = t.slice((m?.index ?? 0) + (m?.[0].length ?? 0));
-    merchant = after.replace(/[•*]{2,}\s?\d{2,4}/g, " ").replace(/\b(?:visa|mastercard|amex|debit|credit|karte|card|paid|payment|zahlung|kartenzahlung|erfolgt|successful|approved)\b/gi, " ")
-      .replace(/[^A-Za-zÀ-ž0-9&'’.\- ]/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 4).join(" ");
-  }
-  return { amount, merchant: merchant.slice(0, 80), currency };
-}
-
-async function moneyPush(key: string, get: (k: string) => string | null) {
-  if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
-  if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { ok: false, error: "bad key" } };
-  let amount = parseMoney(get("amount"));
-  let merchant = (get("merchant") || get("name") || "").slice(0, 80);
-  let currency = (get("currency") || "").toUpperCase().slice(0, 5);
-  // Notification mode: no structured fields, just the raw notification text.
-  if (!(amount > 0)) {
-    const parsed = parseTxText(get("text") || "");
-    if (!parsed) return { status: 200, body: { ok: false, skipped: true, error: "no amount found" } };
-    amount = parsed.amount;
-    if (!merchant) merchant = parsed.merchant;
-    if (!currency) currency = parsed.currency;
-  }
-  const tx = {
-    id: `t${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
-    at: Date.now(),
-    amount,
-    merchant,
-    card: (get("card") || "").slice(0, 40),
-    currency,
-  };
-  let list: any[] = [];
-  try { const raw = await kv(["GET", `wallet:${key}`]); if (raw) list = JSON.parse(raw); } catch { list = []; }
-  if (!Array.isArray(list)) list = [];
-  const cutoff = Date.now() - WALLET_MAX_AGE;
-  list = [tx, ...list.filter((t) => t && t.at > cutoff)].slice(0, WALLET_MAX_TX);
-  await kv(["SET", `wallet:${key}`, JSON.stringify(list)]);
-  return { status: 200, body: { ok: true, saved: { amount: tx.amount, merchant: tx.merchant } } };
-}
-
-async function moneyPull(key: string) {
-  if (!kvConfigured()) return { status: 200, body: { configured: false, txs: [] } };
-  if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { configured: true, error: "bad key", txs: [] } };
-  let list: any[] = [];
-  try { const raw = await kv(["GET", `wallet:${key}`]); if (raw) list = JSON.parse(raw); } catch { list = []; }
-  return { status: 200, body: { configured: true, txs: Array.isArray(list) ? list.slice(0, WALLET_MAX_TX) : [] } };
-}
-
 async function healthPull(key: string) {
   if (!kvConfigured()) return { status: 200, body: { configured: false, days: [] } };
   if (!HEALTH_KEY_RE.test(key)) return { status: 400, body: { configured: true, error: "bad key", days: [] } };
@@ -2388,7 +2293,7 @@ export async function handleApi(
       if (aiLocked() && typeof given === "string" && given !== "" && !codeMatches(given)) {
         await kvBump(`bad:${ip}`, BAD_CODE_WINDOW);
       }
-    } else if (route === "health-push" || route === "money-push") {
+    } else if (route === "health-push") {
       if ((await kvBump(`hp:${ip}`, PUSH_WINDOW)) > PUSH_LIMIT) {
         return { status: 429, body: { ok: false, error: "rate limited" } };
       }
@@ -2524,36 +2429,6 @@ export async function handleApi(
 
     if (route === "health-pull") {
       return await healthPull(search.get("key") || ctx.body?.key || "");
-    }
-
-    if (route === "money-push") {
-      const body = ctx.body || {};
-      const key = search.get("key") || body.key || "";
-      const get = (k: string): string | null => {
-        const q = search.get(k);
-        if (q != null) return q;
-        return body[k] != null ? String(body[k]) : null;
-      };
-      return await moneyPush(String(key), get);
-    }
-
-    if (route === "money-pull") {
-      return await moneyPull(search.get("key") || ctx.body?.key || "");
-    }
-
-    if (route === "sync-wipe") {
-      // Delete this device's synced copies (health metrics + wallet
-      // transactions) from KV. Local data on the phones is untouched; future
-      // Shortcut pushes would repopulate only from that moment on.
-      if (!kvConfigured()) return { status: 200, body: { ok: false, configured: false } };
-      const hk = str(ctx.body?.healthKey);
-      const wk = str(ctx.body?.walletKey);
-      const keys: string[] = [];
-      if (HEALTH_KEY_RE.test(hk)) keys.push(`health:${hk}`);
-      if (HEALTH_KEY_RE.test(wk)) keys.push(`wallet:${wk}`);
-      if (!keys.length) return { status: 400, body: { ok: false, error: "no keys" } };
-      const deleted = Number(await kv(["DEL", ...keys])) || 0;
-      return { status: 200, body: { ok: true, deleted } };
     }
 
     if (route === "transfer-up") return await transferUp(ctx.body || {});
