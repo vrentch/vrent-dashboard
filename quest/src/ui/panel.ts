@@ -255,8 +255,6 @@ export interface HitSpec {
 /** Registered when a press lands on the panel but not on any control. */
 export const BACKDROP_ID = "__backdrop";
 
-export type Easing = (t: number) => number;
-
 // ── Gfx: the drawing surface handed to widgets ──────────────────────────────
 
 export interface Gfx {
@@ -488,7 +486,12 @@ export class Panel {
       this.slide = this.targetSlide;
       this.applyMeshTransition();
     }
-    if (visible) this.group.visible = true;
+    if (visible) {
+      this.group.visible = true;
+      // Redraws are skipped while hidden, so anything that changed in the
+      // meantime has to be repainted before the panel comes back.
+      this.dirty = true;
+    }
   }
 
   get visible(): boolean {
@@ -501,6 +504,9 @@ export class Panel {
    */
   transition(swap: () => void): void {
     swap();
+    // A new screen starts settled: without this, a control that was hovered
+    // when you left would animate its highlight away on the way back in.
+    this.anims.clear();
     this.dirty = true;
     this.opacity = 0;
     this.slide = -0.022;
@@ -517,6 +523,10 @@ export class Panel {
 
     if (!this.hidden && this.opacity > 0.05) this.resolveInput(pointers);
     else this.clearInput();
+
+    // A fully hidden panel is never repainted — a background screen whose props
+    // keep updating would otherwise burn a full texture upload per change.
+    if (this.hidden && this.opacity === 0) return;
 
     this.sinceDraw += dt;
     if (this.dirty) {

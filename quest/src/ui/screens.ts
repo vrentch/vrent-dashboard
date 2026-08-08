@@ -320,6 +320,9 @@ export function createUi(engine: Engine, deps: UiDeps): Ui {
   panel.setVisible(false, false);
 
   const hud = createHud(engine, { parent, watermarkText: brand.name });
+  // Seeded from the edition so `main.ts` cannot forget to gate the watermark;
+  // its own `hud.set()` calls merge over the top of this.
+  hud.set({ watermark: features.watermark });
   const toasts = createToastLayer(engine);
 
   // ── State ───────────────────────────────────────────────────────────────
@@ -1705,7 +1708,9 @@ export function createUi(engine: Engine, deps: UiDeps): Ui {
     if (!p.connected) tag(g, tx, r.y + r.h / 2, "Offline", "danger");
 
     if (o.canKick) {
-      const btn: Rect = { x: r.x + r.w - 50, y: r.y + (r.h - 42) / 2, w: 42, h: 42 };
+      // 48 design px ≈ 1.4° at reading distance — the smallest target in the
+      // product, and still above the 44 CSS-px equivalent floor.
+      const btn: Rect = { x: r.x + r.w - 56, y: r.y + (r.h - 48) / 2, w: 48, h: 48 };
       if (iconButton(g, btn, { id: `${o.id}:kick`, icon: "cross", label: p.isAi ? "Remove" : "Kick", tone: palette.danger })) {
         return true;
       }

@@ -15,15 +15,14 @@
  */
 
 import * as THREE from "three";
-import { palette, rgba, seatColors, text as ink, tokens } from "../../shared/brand.ts";
+import { palette, rgba, text as ink, tokens } from "../../shared/brand.ts";
 import type { GameMode } from "../../shared/game.ts";
 import { EMOTES } from "../../shared/protocol.ts";
 import type { EmoteId, PlayerView } from "../../shared/protocol.ts";
 import type { Engine, NetStatus, PointerState } from "../contracts.ts";
 import type { Gfx, Rect } from "./panel.ts";
-import { Panel, colsIn, cutRight, gridIn, inset, theme } from "./panel.ts";
+import { Panel, colsIn, gridIn, theme } from "./panel.ts";
 import {
-  CONTROL,
   avatar,
   connectionPip,
   formatDuration,
@@ -817,6 +816,3 @@ function buildEmoteTexture(glyph: string, label: string): THREE.CanvasTexture {
   tex.minFilter = THREE.LinearFilter;
   return tex;
 }
-
-/** Re-exported so screens can lay out around the same control metrics. */
-export const HUD_METRICS = { HUD_W, HUD_H, CONTROL, cutRight, inset, seatColors } as const;

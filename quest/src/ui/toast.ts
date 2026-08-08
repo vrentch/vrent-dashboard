@@ -16,7 +16,7 @@ import { palette, rgba, tokens } from "../../shared/brand.ts";
 import type { Engine } from "../contracts.ts";
 import type { Gfx, Rect } from "./panel.ts";
 import { Panel, inset, theme } from "./panel.ts";
-import { CONTROL, icon, toneColor, toneIcon } from "./widgets.ts";
+import { icon, toneColor, toneIcon } from "./widgets.ts";
 import type { Tone } from "./widgets.ts";
 
 export interface ToastOptions {
@@ -301,6 +301,3 @@ export function createToastLayer(engine: Engine, init: ToastOptionsInit = {}): T
     },
   };
 }
-
-/** Convenience matching the widget tone vocabulary. */
-export const toastMetrics = { CARD_H, CARD_GAP, MAX_VISIBLE, CONTROL } as const;
