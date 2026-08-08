@@ -25,7 +25,6 @@ import {
   GAME_MODES,
   isValidRoomCode,
   normaliseRoomCode,
-  presetForPairs,
 } from "../../shared/game.ts";
 import type { GameMode, GameSettings, MatchResult } from "../../shared/game.ts";
 import type { LeaderboardEntry, LeaderboardScope, PlayerView } from "../../shared/protocol.ts";
@@ -45,7 +44,7 @@ import {
   rowsIn,
   theme,
 } from "./panel.ts";
-import type { IconName, LockInfo, SheetOptions, Tone } from "./widgets.ts";
+import type { IconName, LockInfo, SheetOptions } from "./widgets.ts";
 import {
   CONTROL,
   avatar,
@@ -62,7 +61,6 @@ import {
   header,
   icon,
   iconButton,
-  initialsOf,
   keypad,
   listRow,
   lockBadge,
@@ -1841,7 +1839,3 @@ function titleCase(s: string): string {
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
     .join(" ");
 }
-
-/** Re-exported so `main.ts` can describe a board without importing game.ts twice. */
-export { presetForPairs, initialsOf };
-export type { GameSettings, MatchResult, PlayerView, LeaderboardEntry, Tone };

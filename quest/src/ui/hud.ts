@@ -763,11 +763,16 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
 // ── Emote texture ───────────────────────────────────────────────────────────
 
 /**
- * Emotes are drawn white on transparent so a single texture per emote can be
- * tinted to the sender's seat colour by the material — five small textures for
- * eight players, instead of forty.
+ * Emotes are drawn as an untinted mask on transparent, so one texture per emote
+ * can be coloured to the sender's seat by the material — five small textures
+ * for eight players, instead of forty.
+ *
+ * The mask colour is `text.onPrimary` rather than a literal white: it is the
+ * palette's "reads on a saturated fill" value, so a re-skin carries through
+ * here like everywhere else.
  */
 function buildEmoteTexture(glyph: string, label: string): THREE.CanvasTexture {
+  const mask = ink.onPrimary;
   const w = 304;
   const h = 192;
   const canvas = document.createElement("canvas");
@@ -783,9 +788,9 @@ function buildEmoteTexture(glyph: string, label: string): THREE.CanvasTexture {
     ctx.arcTo(8, h - 46, 8, 8, r);
     ctx.arcTo(8, 8, w - 8, 8, r);
     ctx.closePath();
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillStyle = rgba(mask, 0.16);
     ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.strokeStyle = rgba(mask, 0.9);
     ctx.lineWidth = 3;
     ctx.stroke();
 
@@ -795,10 +800,10 @@ function buildEmoteTexture(glyph: string, label: string): THREE.CanvasTexture {
     ctx.lineTo(w / 2, h - 12);
     ctx.lineTo(w / 2 + 20, h - 48);
     ctx.closePath();
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillStyle = rgba(mask, 0.9);
     ctx.fill();
 
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = mask;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `600 74px ${tokens.font.display}`;

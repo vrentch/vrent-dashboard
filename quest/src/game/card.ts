@@ -746,7 +746,9 @@ export function createCard(res: CardResources, index: number): CardView {
 
     setFaceUp(up, animate = true) {
       const target = up ? 1 : 0;
-      if (target === flipTarget && flipElapsed < 0) return;
+      // Already there, or already on the way there. Re-issuing a flip must not
+      // restart it — that would show as a hitch mid-turn.
+      if (target === flipTarget && (flipElapsed >= 0 || flipValue === target)) return;
       flipTarget = target;
       if (!animate) {
         flipValue = target;

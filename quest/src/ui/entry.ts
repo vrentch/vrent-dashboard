@@ -17,7 +17,7 @@
  */
 
 import "./entry.css";
-import { applyBrandCssVars, brand, tokens } from "../../shared/brand.ts";
+import { applyBrandCssVars, brand, text as ink, tokens } from "../../shared/brand.ts";
 import { EDITIONS } from "../../shared/editions.ts";
 import type { EditionId, EditionSpec } from "../../shared/editions.ts";
 
@@ -421,12 +421,15 @@ function editionLabel(id: EditionId): string {
 // ── Token bridge ────────────────────────────────────────────────────────────
 
 /**
- * `applyBrandCssVars` publishes the colours and fonts. Radii and motion live in
- * `tokens`, so publish those too and the stylesheet never hardcodes a number
- * the design system owns.
+ * `applyBrandCssVars` publishes the palette and fonts. Radii, motion and the
+ * two "reads on a saturated fill" ink values live in `tokens` and `text`, so
+ * publish those too — then the stylesheet never hardcodes a value the design
+ * system owns, and a re-skin still needs no CSS edit.
  */
 function applyTokenCssVars(target: HTMLElement = document.documentElement): void {
   const set = (k: string, v: string) => target.style.setProperty(k, v);
+  set("--vr-on-primary", ink.onPrimary);
+  set("--vr-on-accent", ink.onAccent);
   set("--vr-radius-sm", `${tokens.radius.sm}px`);
   set("--vr-radius-md", `${tokens.radius.md}px`);
   set("--vr-radius-lg", `${tokens.radius.lg}px`);

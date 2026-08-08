@@ -69,6 +69,8 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
 
   let placement: Placement = "room";
   let layout: BoardLayout | null = null;
+  /** The grid the current deck was built with — reused on a placement change. */
+  let preset: BoardPreset | null = null;
   let resources: CardResources | null = null;
   let atlas: SymbolAtlas | null = null;
   let cards: CardView[] = [];
@@ -151,6 +153,7 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
     atlas?.dispose();
     atlas = null;
     layout = null;
+    preset = null;
     hoverIndex = null;
     intentIndex = null;
     armed.clear();
@@ -159,12 +162,15 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
   function build(settings: GameSettings, deck: readonly Card[]): void {
     teardown();
 
-    const preset = gridFor(deck.length, settings.pairs);
+    preset = gridFor(deck.length, settings.pairs);
     const next = computeLayout(preset, placement);
     const spec = getEnvironment(settings.environmentId);
     ambient = spec.ambient;
 
-    atlas = buildSymbolAtlas(settings.symbolSetId, Math.max(1, settings.pairs), { anisotropy });
+    // Size the atlas from the deck as well as the settings: a tile shortfall
+    // would wrap two different pairs onto the same face.
+    const symbolCount = Math.max(1, settings.pairs, Math.ceil(deck.length / 2));
+    atlas = buildSymbolAtlas(settings.symbolSetId, symbolCount, { anisotropy });
     resources = createCardResources(next, atlas, {
       anisotropy,
       rim: hex(spec.tint),
@@ -358,9 +364,14 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
 
     markMatched(indices, seat) {
       seatColor(seat, _seat);
+      let budget = MAX_ACTIVE_ANIMATIONS - busyCount();
       for (const index of indices) {
         const card = cards[index];
         if (!card) continue;
+        // A match always ends face-up. Normally it already is; forcing it here
+        // means an out-of-order network message self-heals instead of leaving
+        // a claimed card showing its back.
+        if (!card.faceUp()) card.setFaceUp(true, budget-- > 0);
         card.markMatched(_seat);
         if (hoverIndex === index) setHover(null, -1);
         if (intentIndex === index) intentIndex = null;
@@ -402,8 +413,8 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
     setPlacement(next) {
       if (next === placement) return;
       placement = next;
-      if (!layout) return;
-      resize(computeLayout(gridFor(cards.length, Math.floor(cards.length / 2)), placement));
+      if (!layout || !preset) return;
+      resize(computeLayout(preset, placement));
     },
 
     dispose() {

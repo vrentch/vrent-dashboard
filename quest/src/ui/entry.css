@@ -247,13 +247,13 @@
 
 .vr-btn--primary {
   --btn-bg: var(--vr-primary);
-  --btn-fg: #fff;
-  --btn-line: color-mix(in srgb, #fff 26%, transparent);
+  --btn-fg: var(--vr-on-primary);
+  --btn-line: color-mix(in srgb, var(--vr-on-primary) 26%, transparent);
 }
 
 .vr-btn--primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--vr-primary) 86%, var(--vr-text));
-  border-color: color-mix(in srgb, #fff 44%, transparent);
+  border-color: color-mix(in srgb, var(--vr-on-primary) 44%, transparent);
 }
 
 .vr-btn__icon {

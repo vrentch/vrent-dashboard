@@ -733,8 +733,9 @@ export function createRegistry(options: RegistryOptions): Registry {
     const outcome = applyFlip(state, playerIndex, index);
 
     if (outcome.kind === "rejected") {
-      const code: ErrorCode = outcome.reason === "no-such-card" ? "invalid" : "invalid";
-      return { ok: false, code, message: rejectionMessage(outcome.reason) };
+      // The protocol has no dedicated code for a bad flip; the reason the
+      // shared rules gave us goes in the message so the headset can say it.
+      return { ok: false, code: "invalid", message: rejectionMessage(outcome.reason) };
     }
 
     member.flips++;
@@ -806,11 +807,15 @@ export function createRegistry(options: RegistryOptions): Registry {
     // Re-resolve the index: a seat may have gone away during the peek.
     const playerIndex = state.players.findIndex((p) => p.id === playerId);
 
-    resolveMiss(state, playerIndex);
+    // Act on the phase `resolveMiss` reports, not on a re-read of the state it
+    // just mutated: in Sudden Death this call can eliminate the last player and
+    // end the match, and the guard above has already narrowed `phase` for the
+    // rest of this function.
+    const phase = resolveMiss(state, playerIndex);
     room.selectionOwner = null;
     broadcast(room, { t: "hidden", indices: [...indices] });
 
-    if (state.phase === "finished") {
+    if (phase === "finished") {
       finishMatch(room, "sudden-death");
       return;
     }
