@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>VRENT Memory XR</title>
+    <meta
+      name="description"
+      content="A mixed-reality memory game for Meta Quest 3. Up to eight players, one room code, your own 360 environments."
+    />
+
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#05070F" />
+    <link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+    <!-- The headset browser reports a desktop-class UA; this keeps the page
+         out of any mobile reformatting path. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <meta property="og:title" content="VRENT Memory XR" />
+    <meta property="og:description" content="Mixed-reality memory, built for your room." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vrent.ch" />
+
+    <style>
+      /* Only what must exist before the bundle parses — the rest lives in
+         entry.css, which is imported by the app so it ships in one request. */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #05070f;
+        color: #eaf0ff;
+        overscroll-behavior: none;
+      }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #xr-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #61729a;
+      }
+      noscript {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="xr-canvas"></canvas>
+    <div id="ui-root"></div>
+    <div id="boot">Loading</div>
+    <noscript>
+      VRENT Memory XR needs JavaScript. Enable it, or open this page in the Meta Quest Browser.
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

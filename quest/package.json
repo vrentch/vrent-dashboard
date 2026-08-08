@@ -1,0 +1,35 @@
+{
+  "name": "vrent-memory-xr",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "VRENT Memory XR — a commercial mixed-reality memory game for Meta Quest 3.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:demo": "cross-env VITE_EDITION=demo vite build --outDir dist-demo",
+    "build:pro": "cross-env VITE_EDITION=pro vite build --outDir dist-pro",
+    "build:enterprise": "cross-env VITE_EDITION=enterprise vite build --outDir dist-enterprise",
+    "build:all": "npm run build:demo && npm run build:pro && npm run build:enterprise",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/gen-icons.mjs",
+    "environments": "node scripts/gen-environments.mjs",
+    "server": "node --experimental-strip-types server/index.ts",
+    "server:dev": "node --watch --experimental-strip-types server/index.ts"
+  },
+  "dependencies": {
+    "three": "^0.185.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/three": "^0.185.0",
+    "@types/ws": "^8.5.13",
+    "cross-env": "^7.0.3",
+    "sharp": "^0.34.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

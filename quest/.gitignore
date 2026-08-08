@@ -1,0 +1,23 @@
+node_modules
+dist
+dist-demo
+dist-pro
+dist-enterprise
+.vite
+
+# Realtime server state — leaderboard data is per-deployment, never committed.
+server/data
+
+# Signing material must never reach the repository. Losing it means losing the
+# ability to update a published app; committing it means anyone can forge one.
+*.keystore
+*.jks
+*.p12
+android/twa/
+android/*.apk
+android/*.aab
+
+.env
+.env.*
+!.env.example
+.DS_Store
