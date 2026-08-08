@@ -22,7 +22,7 @@
 
 import * as THREE from "three";
 import type { EnvScene, SceneContext, SceneLighting } from "./controller.ts";
-import { SceneAssets, defaultLighting, makeShader, GLSL_OUTPUT } from "./procedural.ts";
+import { SceneAssets, defaultLighting, makeShader, GLSL_NOISE, GLSL_OUTPUT } from "./procedural.ts";
 import { hex, palette, text as brandText } from "../../shared/brand.ts";
 
 const WHITE = new THREE.Color(hex(brandText.onPrimary));
@@ -71,6 +71,7 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
       }
     `,
       /* glsl */ `
+      ${GLSL_NOISE}
       uniform vec3 uTint;
       uniform float uTime, uStrength, uOpacity;
       varying vec2 vLocal;
@@ -78,12 +79,14 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
         float r = length(vLocal);
         // A bright hairline with a short falloff either side of it. Anything
         // wider stops reading as contact and starts reading as decoration.
-        float inner = exp(-pow((r - 0.60) * 34.0, 2.0));
-        float wash = exp(-pow((r - 0.60) * 7.0, 2.0)) * 0.10;
+        float inner = gauss(r - 0.60, 34.0);
+        float wash = gauss(r - 0.60, 7.0) * 0.10;
 
         // Twelve index marks, so the ring reads as an instrument, not a glow.
+        // Mask on distance to the mark, not to the middle of the gap.
         float a01 = atan(vLocal.y, vLocal.x) / 6.2831853 + 0.5;
-        float tick = 1.0 - smoothstep(0.0, 0.05, abs(fract(a01 * 12.0) - 0.5) - 0.455);
+        float t12 = fract(a01 * 12.0);
+        float tick = 1.0 - smoothstep(0.0, 0.055, min(t12, 1.0 - t12));
         float tickBand = (1.0 - smoothstep(0.63, 0.74, r)) * smoothstep(0.60, 0.63, r);
 
         float breathe = 0.86 + 0.14 * sin(uTime * 0.7);
@@ -118,7 +121,7 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
       varying vec2 vLocal;
       void main() {
         float r = length(vLocal);
-        float a = (1.0 - smoothstep(0.98, 1.5, r)) * smoothstep(0.98, 1.06, r);
+        float a = (1.0 - smoothstep(0.99, 1.22, r)) * smoothstep(0.98, 1.04, r);
         gl_FragColor = vec4(uTint, a * uStrength * uOpacity);
         ${GLSL_OUTPUT}
       }

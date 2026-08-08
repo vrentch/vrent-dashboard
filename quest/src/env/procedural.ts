@@ -199,6 +199,16 @@ float vFbm2(vec2 p) {
   for (int i = 0; i < 3; i++) { s += a * vNoise2(p); p = p * 2.03 + 17.3; a *= 0.5; }
   return s / 0.9625;
 }
+/**
+ * Gaussian falloff, width 1/k. Written as a multiply rather than as
+ * pow(x, 2.0): GLSL leaves pow() undefined for a negative base, and every
+ * signed distance in these shaders goes negative on one side. Some drivers
+ * return NaN there, which silently erases the whole fragment.
+ */
+float gauss(float x, float k) {
+  float t = x * k;
+  return exp(-t * t);
+}
 vec3 depthFade(vec3 col, vec3 world, vec3 fogColor, float density) {
   float d = length(world - cameraPosition) * density;
   return mix(col, fogColor, clamp(1.0 - exp(-d * d), 0.0, 1.0));
@@ -377,10 +387,10 @@ function scene(
 // 1. Neon Vault — a dark ribbed barrel vault lit from the springing line.
 // ════════════════════════════════════════════════════════════════════════════
 
-const VAULT_RADIUS = 3.95;
-const VAULT_SPRING = 1.35;
-const VAULT_LENGTH = 30;
-const VAULT_BAYS = 14;
+const VAULT_RADIUS = 3.4;
+const VAULT_SPRING = 1.25;
+const VAULT_LENGTH = 26;
+const VAULT_BAYS = 13;
 
 function neonVault(ctx: SceneContext): EnvScene {
   const assets = new SceneAssets();
@@ -393,16 +403,18 @@ function neonVault(ctx: SceneContext): EnvScene {
   lighting.keyColor = mixColor(WHITE, tint, 0.35);
   lighting.skyColor = mixColor(tint, WHITE, 0.15);
   lighting.groundColor = mixColor(INK, tint, 0.3);
-  lighting.fogColor = mixColor(INK, tint, 0.12);
-  // Dense enough that both ends of the vault fall away into the dark rather
-  // than reading as two lit portals.
+  // Fog and background are all but the same colour, so the open ends of the
+  // vault dissolve into the dark instead of reading as two lit portals.
+  lighting.fogColor = mixColor(INK, tint, 0.055);
   lighting.fogDensity = 0.115;
-  lighting.background = mixColor(INK, tint, 0.03);
+  lighting.background = mixColor(INK, tint, 0.045);
   lighting.shadowStrength = 0.62;
 
   const fogColor = lighting.fogColor;
   const stripY = VAULT_SPRING + 0.05;
   const stripX = VAULT_RADIUS - 0.22;
+  /** The apex line. Looking down the vault this is the strongest read. */
+  const crownY = VAULT_SPRING + VAULT_RADIUS - 0.16;
 
   // ── Shell: one cylinder, all the ribbing in the fragment shader.
   const shellGeo = assets.geom(
@@ -420,13 +432,15 @@ function neonVault(ctx: SceneContext): EnvScene {
         uTime,
         uBays: { value: VAULT_BAYS },
         uStripY: { value: stripY },
+        uStripX: { value: stripX },
+        uCrownY: { value: crownY },
         uRadius: { value: VAULT_RADIUS },
       },
       VERT_WORLD,
       /* glsl */ `
       ${GLSL_NOISE}
       uniform vec3 uBase, uTint, uFog;
-      uniform float uFogDensity, uTime, uBays, uStripY, uRadius, uOpacity;
+      uniform float uFogDensity, uTime, uBays, uStripY, uStripX, uCrownY, uRadius, uOpacity;
       varying vec3 vW;
       varying vec2 vUv;
       void main() {
@@ -449,11 +463,13 @@ function neonVault(ctx: SceneContext): EnvScene {
 
         vec3 col = uBase * shade;
 
-        // Cove light bleeding out of the strips at the springing line.
+        // Light bleeding out of the coves and off the apex line. Measured as a
+        // true distance in the vault's cross-section, so it wraps the curve.
         float pulse = 0.5 + 0.5 * sin(uTime * 0.5 - vW.z * 0.20);
         pulse *= pulse;
-        float side = smoothstep(0.28, 0.90, abs(vW.x) / uRadius);
-        float bleed = exp(-abs(vW.y - uStripY) * 1.7) * side;
+        float cove = exp(-length(vec2(abs(vW.x) - uStripX, vW.y - uStripY)) * 1.9);
+        float crown = exp(-length(vec2(vW.x, vW.y - uCrownY)) * 1.5);
+        float bleed = cove + crown * 0.9;
         col += uTint * bleed * (0.14 + 0.42 * pulse) * (0.45 + 0.55 * relief);
 
         col = depthFade(col, vW, uFog, uFogDensity);
@@ -495,9 +511,15 @@ function neonVault(ctx: SceneContext): EnvScene {
   assets.add(ribs);
 
   // ── Light strips: one segment per bay per side, each with its own phase.
-  const stripGeo = assets.geom(new THREE.BoxGeometry(0.07, 0.11, bayLength - 0.4));
+  const stripGeo = assets.geom(new THREE.BoxGeometry(0.12, 0.1, bayLength - 0.4));
   const stripPhase: number[] = [];
-  const stripCount = VAULT_BAYS * 2;
+  // Two cove runs plus the apex run: three lines converging down the vault.
+  const stripLanes: readonly (readonly [number, number])[] = [
+    [-stripX, stripY],
+    [stripX, stripY],
+    [0, crownY],
+  ];
+  const stripCount = VAULT_BAYS * stripLanes.length;
   const strips = new THREE.InstancedMesh(
     stripGeo,
     makeShader(
@@ -529,7 +551,7 @@ function neonVault(ctx: SceneContext): EnvScene {
       void main() {
         // The bar's own surface sits at r = 1..1.41, so the falloff has to
         // start inside that range or every face shades to nothing.
-        float r = length(vec2(vLocal.x / 0.035, vLocal.y / 0.055));
+        float r = length(vec2(vLocal.x / 0.06, vLocal.y / 0.05));
         float core = 1.0 - smoothstep(0.82, 1.48, r);
         float ends = 1.0 - smoothstep(0.74, 1.0, abs(vLocal.z) / ${((bayLength - 0.4) / 2).toFixed(3)});
         float pulse = 0.5 + 0.5 * sin(uTime * 0.5 + vPhase);
@@ -546,9 +568,9 @@ function neonVault(ctx: SceneContext): EnvScene {
   strips.frustumCulled = false;
   for (let i = 0; i < VAULT_BAYS; i++) {
     const z = -VAULT_LENGTH / 2 + (i + 0.5) * bayLength;
-    for (let s = 0; s < 2; s++) {
-      const index = i * 2 + s;
-      strips.setMatrixAt(index, m4.makeTranslation(s === 0 ? -stripX : stripX, stripY, z));
+    for (let s = 0; s < stripLanes.length; s++) {
+      const [lx, ly] = stripLanes[s];
+      strips.setMatrixAt(i * stripLanes.length + s, m4.makeTranslation(lx, ly, z));
       // Phase walks along the vault so the pulse reads as a slow travelling wave.
       stripPhase.push(-z * 0.2);
     }
@@ -566,12 +588,13 @@ function neonVault(ctx: SceneContext): EnvScene {
     hazeGeo,
     makeShader(
       assets,
-      { uTime, uTint: { value: mixColor(tint, WHITE, 0.25) }, uStrength: { value: 0.1 } },
+      { uTime, uTint: { value: mixColor(tint, WHITE, 0.12) }, uStrength: { value: 0.075 } },
       /* glsl */ `
       attribute float aSize;
       attribute float aPhase;
       varying vec2 vUv;
       varying float vPhase;
+      varying float vDepth;
       void main() {
         vUv = uv;
         vPhase = aPhase;
@@ -580,6 +603,7 @@ function neonVault(ctx: SceneContext): EnvScene {
           centre = instanceMatrix * centre;
         #endif
         centre = modelViewMatrix * centre;
+        vDepth = -centre.z;
         centre.xy += position.xy * aSize;
         gl_Position = projectionMatrix * centre;
       }
@@ -590,12 +614,16 @@ function neonVault(ctx: SceneContext): EnvScene {
       uniform float uTime, uStrength, uOpacity;
       varying vec2 vUv;
       varying float vPhase;
+      varying float vDepth;
       void main() {
         float d = length(vUv - 0.5) * 2.0;
-        float mask = 1.0 - smoothstep(0.15, 1.0, d);
+        float mask = 1.0 - smoothstep(0.10, 1.0, d);
         mask *= mask;
+        // Distant sheets pile up down the length of the vault and read as a
+        // bright plug in the far opening. Hold the haze close to the player.
+        float near = exp(-max(vDepth - 3.0, 0.0) * 0.30);
         float n = vFbm2(vUv * 2.6 + vec2(uTime * 0.017 + vPhase, uTime * 0.011));
-        gl_FragColor = vec4(uTint * (0.45 + 0.55 * n), mask * (0.3 + 0.7 * n) * uStrength * uOpacity);
+        gl_FragColor = vec4(uTint * (0.45 + 0.55 * n), mask * near * (0.3 + 0.7 * n) * uStrength * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,
@@ -605,9 +633,9 @@ function neonVault(ctx: SceneContext): EnvScene {
   );
   haze.frustumCulled = false;
   for (let i = 0; i < hazeCount; i++) {
-    const z = -11 + i * 4.4;
-    haze.setMatrixAt(i, m4.makeTranslation(i % 2 === 0 ? -1.6 : 1.8, 0.7, z));
-    hazeSize.push(5.5 + (i % 3) * 1.2);
+    const z = -6.5 + i * 2.6;
+    haze.setMatrixAt(i, m4.makeTranslation(i % 2 === 0 ? -1.5 : 1.7, 0.6, z));
+    hazeSize.push(3.6 + (i % 3) * 0.8);
     hazePhase.push(i * 1.7);
   }
   haze.instanceMatrix.needsUpdate = true;
@@ -680,8 +708,8 @@ const STAR_SHELL = 330;
  * and a body directly beneath begins far lower than that. Offset forward, its
  * limb rises above the railing and fills the view — which is the shot.
  */
-const PLANET_RADIUS = 130;
-const PLANET_CENTRE = new THREE.Vector3(0, -70, -200);
+const PLANET_RADIUS = 128;
+const PLANET_CENTRE = new THREE.Vector3(0, -96, -206);
 
 function orbitalDeck(ctx: SceneContext): EnvScene {
   const assets = new SceneAssets();
@@ -963,26 +991,32 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
         float ang = atan(p.y, p.x);
         float a01 = ang / 6.2831853 + 0.5;
 
-        // 24 radial bays with recessed seams, plus concentric rings.
+        // 24 radial bays with recessed seams, plus concentric rings. The mask
+        // is distance *to the boundary*, so the dark line lands on the joint.
         float bay = a01 * 24.0;
-        float seam = 1.0 - smoothstep(0.0, fwidth(bay) * 1.5 + 0.03, abs(fract(bay) - 0.5) - 0.44);
-        float ring = 1.0 - smoothstep(0.0, fwidth(r) * 1.5 + 0.02, abs(fract(r * 0.5) - 0.5) - 0.46);
+        float bayEdge = min(fract(bay), 1.0 - fract(bay));
+        float seam = 1.0 - smoothstep(0.0, fwidth(bay) * 1.5 + 0.035, bayEdge);
+        float ringU = r * 0.5;
+        float ringEdge = min(fract(ringU), 1.0 - fract(ringU));
+        float ring = 1.0 - smoothstep(0.0, fwidth(ringU) * 1.5 + 0.02, ringEdge);
 
         // Brushed finish. Frequency is measured along the arc, not in angle —
         // otherwise it collapses into a starburst at the centre of the plate.
-        float brush = (vNoise2(vec2(ang * max(r, 0.35) * 26.0, r * 1.6)) - 0.5) * 0.13;
-        vec3 col = uBase * (0.80 + brush);
-        col *= mix(1.0, 0.46, max(seam, ring * 0.6));
+        // Radial grain only. An angular frequency that rises towards the hub
+        // aliases into a starburst on a headset's screen-space derivatives.
+        float brush = (vNoise2(vec2(r * 7.0, a01 * 46.0)) - 0.5) * 0.09;
+        vec3 col = uBase * (0.85 + brush);
+        col *= mix(1.0, 0.42, max(seam, ring * 0.65));
 
         // Hard sun grazing the plate.
         vec3 lateral = normalize(vec3(p.x, 0.0, p.y) + 1e-5);
-        float graze = pow(max(dot(lateral, normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0), 6.0);
-        col += uEdge * graze * (0.05 + brush * 0.35);
+        float graze = pow(max(dot(lateral, normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0), 8.0);
+        col += uEdge * graze * (0.022 + brush * 0.22);
 
         // Glowing rim and a soft pool of deck light under the board.
         float rim = exp(-abs(r - ${(DECK_RADIUS - 0.14).toFixed(2)}) * 18.0);
         col += uEdge * rim * (0.60 + 0.22 * sin(uTime * 0.4));
-        col += uTint * exp(-r * r * 0.09) * 0.11;
+        col += uTint * exp(-r * r * 0.10) * 0.028;
 
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
@@ -1075,7 +1109,7 @@ function quantumLab(ctx: SceneContext): EnvScene {
   // Bright, but a stop or two below paper white: shafts of light only read
   // against something they can be brighter than, and a full-white room in a
   // headset is fatiguing after two minutes.
-  const paper = mixColor(INK, PAPER, 0.62);
+  const paper = mixColor(INK, PAPER, 0.4);
   const lighting = defaultLighting(ctx.spec, tint);
   lighting.keyDirection.set(0.2, 0.94, 0.28).normalize();
   lighting.keyColor = mixColor(WHITE, tint, 0.1);
@@ -1095,20 +1129,23 @@ function quantumLab(ctx: SceneContext): EnvScene {
     makeShader(
       assets,
       {
-        uHorizon: { value: mixColor(paper, tint, 0.2) },
-        uZenith: { value: mixColor(PAPER, WHITE, 0.35) },
-        uSeam: { value: mixColor(paper, tint, 0.55).multiplyScalar(0.55) },
+        // The volume sits below the floor in value. Shafts of light can only
+        // read against something they are brighter than.
+        uHorizon: { value: mixColor(paper, tint, 0.16) },
+        uZenith: { value: mixColor(paper, PAPER, 0.22) },
+        uPanel: { value: mixColor(PAPER, WHITE, 0.5) },
+        uSeam: { value: mixColor(paper, INK, 0.5) },
       },
       VERT_DOME,
       /* glsl */ `
-      uniform vec3 uHorizon, uZenith, uSeam;
+      uniform vec3 uHorizon, uZenith, uPanel, uSeam;
       uniform float uOpacity;
       varying vec3 vDir;
       varying vec2 vUv;
       void main() {
         float h = clamp(vDir.y * 0.5 + 0.5, 0.0, 1.0);
         vec3 col = mix(uHorizon, uZenith, pow(h, 0.8));
-        col = mix(col * 0.74, col, smoothstep(0.30, 0.54, h));
+        col = mix(col * 0.72, col, smoothstep(0.30, 0.54, h));
 
         // Ceiling light panels, projected onto a plane above the room.
         if (vDir.y > 0.10) {
@@ -1116,8 +1153,8 @@ function quantumLab(ctx: SceneContext): EnvScene {
           vec2 g = abs(fract(q) - 0.5);
           float seam = 1.0 - smoothstep(0.0, 0.05, min(g.x, g.y) - 0.03);
           float k = smoothstep(0.10, 0.42, vDir.y);
-          col = mix(col, uZenith * 1.12, (1.0 - seam) * 0.30 * k);
-          col = mix(col, uSeam, seam * 0.7 * k);
+          col = mix(col, uPanel, (1.0 - seam) * 0.62 * k);
+          col = mix(col, uSeam, seam * 0.75 * k);
         }
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
@@ -1136,7 +1173,7 @@ function quantumLab(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uBase: { value: mixColor(paper, PAPER, 0.55) },
+        uBase: { value: mixColor(paper, PAPER, 0.42) },
         uTint: { value: tint },
         uFog: { value: lighting.fogColor },
         uFogDensity: { value: lighting.fogDensity },
@@ -1181,12 +1218,14 @@ function quantumLab(ctx: SceneContext): EnvScene {
   assets.add(floor);
 
   // ── God rays.
-  const shaftGeo = assets.geom(new THREE.CylinderGeometry(0.3, 1.85, 6.4, 20, 1, true));
+  // Short and low: a seated player's field of view only reaches about 15°
+  // above the horizon, so a tall shaft puts all of its brightness off screen.
+  const shaftGeo = assets.geom(new THREE.CylinderGeometry(0.35, 2.2, 4.6, 20, 1, true));
   const shafts = new THREE.InstancedMesh(
     shaftGeo,
     makeShader(
       assets,
-      { uTime, uTint: { value: mixColor(WHITE, tint, 0.28) }, uStrength: { value: 0.34 } },
+      { uTime, uTint: { value: mixColor(WHITE, tint, 0.22) }, uStrength: { value: 0.5 } },
       /* glsl */ `
       attribute float aPhase;
       varying vec2 vUv;
@@ -1219,8 +1258,9 @@ function quantumLab(ctx: SceneContext): EnvScene {
         vec3 viewDir = normalize(cameraPosition - vW);
         // Brightest looking through the middle of the shaft, not at its edge.
         float body = pow(abs(dot(viewDir, vNormalW)), 1.7);
-        float along = mix(0.18, 1.0, vUv.y);
-        along *= 1.0 - smoothstep(0.93, 1.0, vUv.y);
+        // Bright the whole way down, so the shaft joins its pool on the floor.
+        float along = mix(0.72, 1.0, vUv.y);
+        along *= smoothstep(0.0, 0.10, vUv.y) * (1.0 - smoothstep(0.90, 1.0, vUv.y));
         float breathe = 0.82 + 0.18 * sin(uTime * 0.31 + vPhase);
         gl_FragColor = vec4(uTint, body * along * breathe * uStrength * uOpacity);
         ${GLSL_OUTPUT}
@@ -1234,7 +1274,7 @@ function quantumLab(ctx: SceneContext): EnvScene {
   const shaftPhase: number[] = [];
   const m4 = new THREE.Matrix4();
   LAB_SHAFTS.forEach(([x, z], i) => {
-    shafts.setMatrixAt(i, m4.makeTranslation(x, 3.15, z));
+    shafts.setMatrixAt(i, m4.makeTranslation(x, 2.25, z));
     shaftPhase.push(i * 1.31);
   });
   shafts.instanceMatrix.needsUpdate = true;
@@ -1328,9 +1368,11 @@ function quantumLab(ctx: SceneContext): EnvScene {
     [2.3, 1.9, -2.45, 1.05],
   ];
   const ringGeo = assets.geom(new THREE.TorusGeometry(0.3, 0.005, 4, 44));
+  // Normal blending, not additive: in a bright room a glow disappears and a
+  // dark line is what reads.
   const ringMat = makeShader(
     assets,
-    { uTime, uTint: { value: mixColor(tint, WHITE, 0.2) } },
+    { uTime, uTint: { value: mixColor(tint, INK, 0.35) } },
     /* glsl */ `
       ${GLSL_NOISE}
       attribute float aPhase;
@@ -1353,11 +1395,11 @@ function quantumLab(ctx: SceneContext): EnvScene {
       uniform float uOpacity;
       varying float vFade;
       void main() {
-        gl_FragColor = vec4(uTint, vFade * 0.85 * uOpacity);
+        gl_FragColor = vec4(uTint, (0.30 + 0.45 * vFade) * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,
-    { blending: THREE.AdditiveBlending, depthWrite: false },
+    { depthWrite: false },
   );
   const rings = new THREE.InstancedMesh(ringGeo, ringMat, ringPlacements.length);
   rings.frustumCulled = false;
@@ -1404,7 +1446,12 @@ function quantumLab(ctx: SceneContext): EnvScene {
 // 4. Cyber Atrium — rain on the curtain wall, signage bleeding into the dark.
 // ════════════════════════════════════════════════════════════════════════════
 
-const GLASS_RADIUS = 8.5;
+/**
+ * Close enough that rain on the curtain wall is legible. At nine or ten metres
+ * a runnel is a couple of pixels wide on a headset and the whole effect is
+ * wasted; at six and a half it is the thing you notice first.
+ */
+const GLASS_RADIUS = 6.6;
 
 function cyberAtrium(ctx: SceneContext): EnvScene {
   const assets = new SceneAssets();
@@ -1470,10 +1517,10 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
 
           // Windows: small, sparse and dim. A city at night is mostly dark.
           vec2 wc = vec2(floor(bf * 9.0) + bi * 7.0, floor(h * 420.0));
-          float lit = step(0.80, vHash12(wc));
+          float lit = step(0.88, vHash12(wc));
           float flicker = step(0.988, vHash12(wc + floor(uTime * 2.0)));
           vec3 windowColor = mix(uWindow, uWindowAlt, step(0.55, vHash12(wc + 3.7)));
-          block += windowColor * lit * (0.20 + 0.35 * flicker) * mix(0.55, 1.0, f);
+          block += windowColor * lit * (0.11 + 0.24 * flicker) * mix(0.5, 1.0, f);
 
           col = mix(col, block, mask);
         }
@@ -1501,7 +1548,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
   const bokehTone = new THREE.Color();
   for (let i = 0; i < bokehCount; i++) {
     const a = rand() * Math.PI * 2;
-    const radius = 12 + rand() * 11;
+    const radius = 11 + rand() * 11;
     bokehPos[i * 3] = Math.cos(a) * radius;
     bokehPos[i * 3 + 1] = -3.5 + Math.pow(rand(), 1.35) * 16;
     bokehPos[i * 3 + 2] = Math.sin(a) * radius;
@@ -1510,7 +1557,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
     bokehCol[i * 3] = bokehTone.r * gain;
     bokehCol[i * 3 + 1] = bokehTone.g * gain;
     bokehCol[i * 3 + 2] = bokehTone.b * gain;
-    bokehScale[i] = 0.5 + Math.pow(rand(), 2) * 2.4;
+    bokehScale[i] = 0.4 + Math.pow(rand(), 2.6) * 1.9;
     bokehPhase[i] = rand() * 6.2831853;
   }
   const bokehGeo = assets.geom(new THREE.BufferGeometry());
@@ -1523,7 +1570,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
     bokehGeo,
     makeShader(
       assets,
-      { uTime, uSize: { value: 20 * pixel } },
+      { uTime, uSize: { value: 11 * pixel } },
       /* glsl */ `
       attribute vec3 aColor;
       attribute float aScale;
@@ -1539,7 +1586,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         vGain = mix(breathe, step(0.35, fract(uTime * 2.3 + aPhase)) * 0.9 + 0.1, stutter);
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(uSize * aScale * (14.0 / max(-mv.z, 1.0)), 2.0, 90.0);
+        gl_PointSize = clamp(uSize * aScale * (14.0 / max(-mv.z, 1.0)), 2.0, 44.0);
       }
     `,
       /* glsl */ `
@@ -1549,10 +1596,10 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
       void main() {
         float d = length(gl_PointCoord - 0.5) * 2.0;
         // A real out-of-focus highlight: flat core, slightly brighter rim.
-        float disc = 1.0 - smoothstep(0.80, 1.0, d);
-        float rim = smoothstep(0.55, 0.94, d) * 0.5;
+        float disc = 1.0 - smoothstep(0.72, 1.0, d);
+        float rim = smoothstep(0.5, 0.9, d) * 0.28;
         float a = disc * (0.55 + rim);
-        gl_FragColor = vec4(vColor, a * vGain * 0.6 * uOpacity);
+        gl_FragColor = vec4(vColor, a * vGain * 0.55 * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,
@@ -1651,16 +1698,21 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         float lf = fract(lane);
         float seed = vHash12(vec2(li, 2.0));
         vec3 signCol = seed < 0.25 ? uSignA : seed < 0.5 ? uSignB : seed < 0.75 ? uSignC : uSignD;
-        float band = exp(-pow((lf - 0.5) * 4.2, 2.0));
-        float reach = smoothstep(1.4, 7.6, r);
-        float ripple = 0.62 + 0.38 * vNoise2(vec2(a01 * 120.0, r * 1.8 - uTime * 0.16));
-        float strength = pow(vHash12(vec2(li, 6.0)), 2.5);
-        col += signCol * band * reach * ripple * strength * 0.55;
+        float band = gauss(lf - 0.5, 4.2);
+        // Reflections of distant signage gather towards the far floor and die
+        // out under your feet, rather than radiating from you like spokes.
+        float reach = smoothstep(2.6, ${(GLASS_RADIUS - 1.0).toFixed(2)}, r)
+                    * (1.0 - smoothstep(${(GLASS_RADIUS - 0.7).toFixed(2)}, ${(GLASS_RADIUS + 0.5).toFixed(2)}, r));
+        float ripple = 0.45 + 0.55 * vNoise2(vec2(a01 * 120.0, r * 2.4 - uTime * 0.16));
+        float strength = pow(vHash12(vec2(li, 6.0)), 3.0);
+        col += signCol * band * reach * ripple * strength * 0.18;
 
         // A cool sheen so the stone still reads as stone.
         col += uTint * exp(-r * 0.5) * 0.04;
         col = depthFade(col, vW, uFog, uFogDensity);
-        gl_FragColor = vec4(col, uOpacity * (1.0 - smoothstep(7.4, 8.9, r)));
+        gl_FragColor = vec4(col, uOpacity * (1.0 - smoothstep(${(GLASS_RADIUS - 0.7).toFixed(
+          2,
+        )}, ${(GLASS_RADIUS + 0.45).toFixed(2)}, r)));
         ${GLSL_OUTPUT}
       }
     `,
@@ -1690,17 +1742,19 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
       void main() {
         // Runnels: one per column, each with its own speed and offset. Long
         // and thin, so they read as water tracking down glass, not as snow.
-        vec2 rc = vec2(vUv.x * 70.0, vUv.y * 2.4);
+        vec2 rc = vec2(vUv.x * 46.0, vUv.y * 3.2);
         float column = floor(rc.x);
         float cf = fract(rc.x);
-        float active = step(0.42, vHash12(vec2(column, 17.0)));
-        float speed = 0.16 + vHash12(vec2(column, 1.0)) * 0.55;
+        float active = step(0.30, vHash12(vec2(column, 17.0)));
+        float speed = 0.20 + vHash12(vec2(column, 1.0)) * 0.7;
         float y = fract(rc.y + uTime * speed + vHash12(vec2(column, 7.0)) * 9.0);
-        float width = 0.22 + vHash12(vec2(column, 3.0)) * 0.30;
-        float lateral = exp(-pow(abs(cf - 0.5) * 2.0 / width, 2.0) * 3.4);
-        float head = exp(-pow((y - 0.34) * 46.0, 2.0));
-        float tail = exp(-max(y - 0.34, 0.0) * 3.6) * step(0.34, y) * 0.55;
-        float runnel = lateral * (head * 1.4 + tail) * active;
+        float width = 0.30 + vHash12(vec2(column, 3.0)) * 0.40;
+        float lateral = gauss(abs(cf - 0.5) * 2.0 / width, 1.844);
+        float head = gauss(y - 0.22, 40.0);
+        // A long trail above the bead is what makes it read as rain on glass
+        // rather than as falling snow.
+        float tail = exp(-max(y - 0.22, 0.0) * 1.7) * step(0.22, y) * 0.62;
+        float runnel = lateral * (head * 1.5 + tail) * active;
 
         // Beads clinging between the runnels — small, and only a few of them.
         vec2 gc = vec2(vUv.x * 150.0, vUv.y * 42.0);
@@ -1713,14 +1767,18 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
 
         float wet = clamp(runnel + bead * 0.4, 0.0, 1.4);
 
-        // Mullions, so the glass has structure behind the water.
-        float mull = 1.0 - smoothstep(0.0, 0.012, abs(fract(vUv.x * 26.0) - 0.5) - 0.482);
-        float transom = 1.0 - smoothstep(0.0, 0.010, abs(fract(vUv.y * 6.0) - 0.5) - 0.485);
+        // Mullions, so the glass has structure behind the water. The mask is
+        // distance to the frame line, not to the middle of the pane.
+        float mx = fract(vUv.x * 18.0);
+        float my = fract(vUv.y * 5.0);
+        float mull = 1.0 - smoothstep(0.0, 0.055, min(mx, 1.0 - mx));
+        float transom = 1.0 - smoothstep(0.0, 0.030, min(my, 1.0 - my));
 
+        float frame = max(mull, transom);
         vec3 col = mix(uTint * 0.4, uHot, clamp(wet, 0.0, 1.0));
-        float a = (0.022 + wet * 0.5) * uOpacity;
-        col = mix(col, uMullion, max(mull, transom) * 0.9);
-        a = max(a, max(mull, transom) * 0.5 * uOpacity);
+        float a = (0.02 + wet * 0.85) * uOpacity;
+        col = mix(col, uMullion, frame * 0.92);
+        a = max(a, frame * 0.72 * uOpacity);
         gl_FragColor = vec4(col, a);
         ${GLSL_OUTPUT}
       }
@@ -1749,11 +1807,11 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
 const AURORA_RIBBONS: readonly (readonly [
   number, number, number, number, number, number, number, number,
 ])[] = [
-  [26, 2.4, 15, -3.5, 0.0, Math.PI - 0.75, 0.0, 0.55],
-  [34, 2.9, 21, -6.0, 1.7, Math.PI + 0.25, 0.35, 0.85],
-  [20, 1.7, 12, -1.5, 3.4, Math.PI - 1.85, 0.15, 0.4],
-  [41, 2.1, 25, -8.0, 5.1, Math.PI + 1.5, 0.6, 1.0],
-  [29, 1.4, 17, -4.5, 2.4, 0.35, 0.05, 0.7],
+  [26, 1.5, 15, -3.5, 0.0, Math.PI - 1.05, 0.0, 0.5],
+  [34, 1.8, 21, -6.0, 1.7, Math.PI - 0.3, 0.3, 0.85],
+  [20, 1.1, 12, -1.5, 3.4, Math.PI + 0.5, 0.12, 0.35],
+  [41, 1.3, 25, -8.0, 5.1, Math.PI + 1.3, 0.55, 1.0],
+  [29, 0.9, 17, -4.5, 2.4, Math.PI - 2.1, 0.05, 0.65],
 ];
 
 function auroraVoid(ctx: SceneContext): EnvScene {
@@ -1814,7 +1872,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const ribbonGeo = assets.geom(new THREE.PlaneGeometry(1, 1, 56, 22));
   const ribbonMat = makeShader(
     assets,
-    { uTime, uStrength: { value: 0.5 } },
+    { uTime, uStrength: { value: 0.34 } },
     /* glsl */ `
       attribute vec4 aParams;
       attribute vec2 aSeed;
@@ -1874,8 +1932,8 @@ function auroraVoid(ctx: SceneContext): EnvScene {
         float a = base * top * ends * rays * facing * uStrength;
         // Keep the ramp saturated: additive light that runs past 1.0 washes to
         // white, and a white aurora is just a light shaft.
-        vec3 col = mix(vColA, vColB, pow(v, 0.6));
-        gl_FragColor = vec4(col * (0.45 + 0.4 * rays), a * uOpacity);
+        vec3 col = mix(vColA, vColB, pow(v, 0.55));
+        gl_FragColor = vec4(col * (0.38 + 0.34 * rays), a * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,
@@ -1888,8 +1946,10 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const colA: number[] = [];
   const colB: number[] = [];
   const identity = new THREE.Matrix4();
-  const rampLow = mixColor(tint, ACCENT, 0.35);
-  const rampHigh = mixColor(ACCENT, VIOLET, 0.75);
+  // Mint at the base through teal to violet at the fray — kept saturated,
+  // because additive light that runs past 1.0 washes the hue straight out.
+  const rampLow = mixColor(tint, ACCENT, 0.6);
+  const rampHigh = VIOLET.clone();
   const tone = new THREE.Color();
   AURORA_RIBBONS.forEach(([radius, span, height, baseY, phase, bearing, ca, cb], i) => {
     ribbons.setMatrixAt(i, identity);
