@@ -274,12 +274,10 @@ function markSvg({ hero, second, tier, contentScale, px, simple = false }) {
     cardShape({ ...at(1, 1), kind: "face", hero, second, onHero, ink: pal.ink }),
   ].join("");
 
-  const s = 23; // match spark half-size
-  const sparkPath =
-    `M ${CENTER} ${CENTER - s} Q ${CENTER + s * 0.26} ${CENTER - s * 0.26} ${CENTER + s} ${CENTER} ` +
-    `Q ${CENTER + s * 0.26} ${CENTER + s * 0.26} ${CENTER} ${CENTER + s} ` +
-    `Q ${CENTER - s * 0.26} ${CENTER + s * 0.26} ${CENTER - s} ${CENTER} ` +
-    `Q ${CENTER - s * 0.26} ${CENTER - s * 0.26} ${CENTER} ${CENTER - s} Z`;
+  // Match marker: a rounded diamond where the four cards meet, turned to sit
+  // square to the tilted board, with a centre dot that rhymes with the glyph
+  // on the face cards.
+  const m = 19;
 
   const dots = Array.from({ length: 3 }, (_, i) => {
     const on = i < tier;
@@ -347,7 +345,13 @@ function markSvg({ hero, second, tier, contentScale, px, simple = false }) {
       ${cards}
     </g>
     <circle cx="${CENTER}" cy="${CENTER}" r="46" fill="url(#sparkGlow)"/>
-    <path d="${sparkPath}" fill="${spark}"/>
+    <g transform="rotate(${45 + BOARD_TILT} ${CENTER} ${CENTER})">
+      <rect x="${CENTER - m}" y="${CENTER - m}" width="${m * 2}" height="${m * 2}" rx="5"
+            fill="${spark}"/>
+      <rect x="${CENTER - m}" y="${CENTER - m}" width="${m * 2}" height="${m * 2}" rx="5"
+            fill="none" stroke="${rgba(shade(spark, 0.5), 0.75)}" stroke-width="1.6"/>
+    </g>
+    <circle cx="${CENTER}" cy="${CENTER}" r="5.5" fill="${rgba(pal.ink, 0.45)}"/>
     ${simple ? "" : dots}
   </g>
 </svg>

@@ -334,9 +334,9 @@ function makeShowroom(theme) {
         set3(scratch, blend(downlight, WHITE, 0.4));
         mul3(scratch, 0.95 - 0.22 * smoothstep(0.0, 1.7, r));
         // Lattice of coffer panels inside the light field.
-        const gx = Math.abs(px / 0.52 - Math.round(px / 0.52));
-        const gz = Math.abs(pz / 0.52 - Math.round(pz / 0.52));
-        mul3(scratch, 1 - 0.5 * (1 - smoothstep(0.035, 0.075, Math.min(gx, gz))));
+        const gx = Math.abs(px / 0.3 - Math.round(px / 0.3));
+        const gz = Math.abs(pz / 0.3 - Math.round(pz / 0.3));
+        mul3(scratch, 1 - 0.45 * (1 - smoothstep(0.05, 0.11, Math.min(gx, gz))));
         toward3(out, scratch, coffer);
       }
       add3(out, strip, 0.5 * Math.exp(-Math.pow((r - 1.7) / 0.04, 2)));
@@ -357,18 +357,26 @@ function makeShowroom(theme) {
       const pz = tFloor * dz;
       set3(out, floorBase);
       // Large slabs with tonal variation and fine joints.
-      const cx = Math.round(px / 1.15);
-      const cz = Math.round(pz / 1.15);
-      mul3(out, 0.85 + 0.4 * hash2(cx, cz));
-      const jx = Math.abs(px / 1.15 - cx);
-      const jz = Math.abs(pz / 1.15 - cz);
-      mul3(out, 1 - 0.45 * (1 - smoothstep(0.012, 0.03, Math.min(jx, jz))));
+      const cx = Math.round(px / 0.78);
+      const cz = Math.round(pz / 0.78);
+      mul3(out, 0.9 + 0.22 * hash2(cx, cz));
+      const jx = Math.abs(px / 0.78 - cx);
+      const jz = Math.abs(pz / 0.78 - cz);
+      mul3(out, 1 - 0.4 * (1 - smoothstep(0.012, 0.03, Math.min(jx, jz))));
       add3(out, downlight, 0.13 * Math.exp(-Math.pow(r / 2.2, 2)));
       // Inlay rings, deliberately low contrast.
       add3(out, strip, 0.34 * Math.exp(-Math.pow((r - 2.35) / 0.018, 2)));
       add3(out, strip, 0.18 * Math.exp(-Math.pow((r - 1.1) / 0.014, 2)));
-      wall(scratch, hyp, -dy, lon);
-      add3(out, scratch, (0.1 + 0.55 * smoothstep(0.8, 3.4, r)) * 0.6);
+      // Mirror image of the room. The mirrored ray only lands on the bays at
+      // shallow angles; nearer the nadir it points at the ceiling instead, so
+      // reflect that (much dimmer) rather than smearing wall light everywhere.
+      if (R / hyp < CEIL / -dy) {
+        wall(scratch, hyp, -dy, lon);
+        add3(out, scratch, (0.1 + 0.55 * smoothstep(0.8, 3.4, r)) * 0.6);
+      } else {
+        add3(out, ceilBase, 0.5);
+        add3(out, downlight, 0.05 * (1 - smoothstep(1.4, 1.75, (CEIL / -dy) * hyp)));
+      }
       // Contact shadow immediately under the viewer.
       mul3(out, 0.62 + 0.38 * smoothstep(0.15, 1.3, r));
       return;
@@ -394,8 +402,8 @@ function makeAlpine(theme) {
   const skyMid = blend(rgbOf(pal.primary), tint, 0.55);
   const haze = blend(tint, WHITE, 0.42);
   const sunCol = [1, 0.96, 0.86];
-  const rockDark = blend(rgbOf(pal.surfaceAlt), BLACK, 0.42);
-  const snow = blend(WHITE, tint, 0.12);
+  const rockDark = blend(rgbOf(pal.surfaceAlt), BLACK, 0.28);
+  const snow = blend(WHITE, tint, 0.2);
   const stone = blend(rgbOf(pal.surfaceAlt), WHITE, 0.66);
   const stoneWarm = blend(stone, rgbOf(pal.reward), 0.07);
   const cloudLit = blend(WHITE, rgbOf(pal.reward), 0.1);
@@ -408,9 +416,9 @@ function makeAlpine(theme) {
 
   // Three ridgelines, each a periodic elevation profile in radians. The far
   // range carries the peaks; the nearer ones are foothills in front of it.
-  const ridgeFar = (u01) => 0.05 + 0.54 * ridged(u01, 0.5, 3, 4, 11);
-  const ridgeMid = (u01) => 0.03 + 0.24 * ridged(u01, 2.5, 5, 3, 907);
-  const ridgeNear = (u01) => 0.012 + 0.1 * ridged(u01, 4.5, 8, 3, 4211);
+  const ridgeFar = (u01) => 0.05 + 0.5 * ridged(u01, 0.5, 6, 4, 11);
+  const ridgeMid = (u01) => 0.03 + 0.22 * ridged(u01, 2.5, 9, 4, 907);
+  const ridgeNear = (u01) => 0.012 + 0.09 * ridged(u01, 4.5, 13, 3, 4211);
 
   function shadeRidge(out, lat, lon, u01, ridge, hazeAmt, seed) {
     const s = clamp01(lat / Math.max(ridge, 1e-4));
@@ -421,8 +429,8 @@ function makeAlpine(theme) {
     mul3(out, 1 + 0.07 * Math.sin(u01 * TAU * 70 + seed) * (1 - s * 0.5));
     mul3(out, 1 + 0.05 * Math.sin(u01 * TAU * 23 + seed * 3));
     // Snow above the snowline, only on peaks that reach it.
-    const snowAmt = smoothstep(0.42, 0.85, s) * smoothstep(0.1, 0.2, ridge);
-    toward3(out, snow, snowAmt * 0.92);
+    const snowAmt = smoothstep(0.72, 0.99, s) * smoothstep(0.16, 0.3, ridge);
+    toward3(out, snow, snowAmt * 0.9);
     // A tree line hugging the bottom of the nearest ridges.
     toward3(out, blend(rockDark, BLACK, 0.35), (1 - smoothstep(0.02, 0.2, s)) * (1 - hazeAmt) * 0.5);
     // Aerial perspective: distant layers wash out into the haze.
@@ -438,9 +446,9 @@ function makeAlpine(theme) {
 
     if (lat >= 0) {
       // ── sky ──────────────────────────────────────────────────────────
-      set3(out, haze);
-      toward3(out, skyMid, smoothstep(0.0, 0.42, lat));
-      toward3(out, zenith, smoothstep(0.22, 1.25, lat));
+      set3(out, blend(haze, WHITE, 0.35));
+      toward3(out, skyMid, smoothstep(-0.02, 0.3, lat));
+      toward3(out, zenith, smoothstep(0.2, 1.2, lat));
 
       const dot = dx * sunX + dy * sunY + dz * sunZ;
       const d2 = 2 * (1 - dot); // squared angular distance, cheaply
@@ -462,17 +470,17 @@ function makeAlpine(theme) {
       // ── ridgelines, nearest first ────────────────────────────────────
       const rn = ridgeNear(u01);
       if (lat < rn) {
-        shadeRidge(out, lat, lon, u01, rn, 0.18, 5.0);
+        shadeRidge(out, lat, lon, u01, rn, 0.14, 5.0);
         return;
       }
       const rm = ridgeMid(u01);
       if (lat < rm) {
-        shadeRidge(out, lat, lon, u01, rm, 0.42, 2.0);
+        shadeRidge(out, lat, lon, u01, rm, 0.32, 2.0);
         return;
       }
       const rf = ridgeFar(u01);
       if (lat < rf) {
-        shadeRidge(out, lat, lon, u01, rf, 0.66, 0.0);
+        shadeRidge(out, lat, lon, u01, rf, 0.36, 0.0);
       }
       return;
     }
@@ -492,8 +500,8 @@ function makeAlpine(theme) {
       const cx = Math.round(gx);
       const cz = Math.round(gz);
       set3(out, stone);
-      mul3(out, 0.92 + 0.16 * hash2(cx, cz));
-      mul3(out, 1 - 0.22 * (1 - smoothstep(0.014, 0.04, Math.min(Math.abs(gx - cx), Math.abs(gz - cz)))));
+      mul3(out, 0.94 + 0.1 * hash2(cx, cz));
+      mul3(out, 1 - 0.16 * (1 - smoothstep(0.014, 0.04, Math.min(Math.abs(gx - cx), Math.abs(gz - cz)))));
       // The parapet keeps direct sun off the deck, so it stays cool and even.
       mul3(out, 0.72 + 0.1 * clamp01(0.5 + 0.5 * Math.cos(Math.atan2(px, pz) - SUN_LON)));
       mul3(out, 0.72 + 0.28 * smoothstep(0.2, 1.9, rFloor));
@@ -502,13 +510,21 @@ function makeAlpine(theme) {
 
     const yInner = -k * PARAPET_IN;
     if (yInner < PARAPET_TOP) {
-      // Inner face of the parapet: in shadow, with a warm bounce at its foot.
-      const v = clamp01((yInner + EYE) / (EYE + PARAPET_TOP));
+      // Inner face of the parapet: coursed masonry in shadow, with a warm
+      // bounce off the deck at its foot.
+      const h = yInner + EYE; // metres above the deck
+      const v = clamp01(h / (EYE + PARAPET_TOP));
+      const course = Math.floor(h / 0.21);
+      const inCourse = h / 0.21 - course;
+      // Vertical joints, staggered half a block every other course.
+      const arc = (lon * PARAPET_IN) / 0.38 + (course % 2) * 0.5;
+      const seam = ((arc % 1) + 1) % 1;
       set3(out, stoneWarm);
-      mul3(out, 0.5 + 0.28 * v);
-      // A course line halfway up reads as masonry rather than a blank band.
-      mul3(out, 1 - 0.18 * Math.exp(-Math.pow((v - 0.52) / 0.02, 2)));
-      add3(out, stone, 0.12 * (1 - smoothstep(0.0, 0.25, v)));
+      mul3(out, 0.86 + 0.24 * hash2(course, Math.floor(arc)));
+      mul3(out, 0.5 + 0.3 * v);
+      mul3(out, 1 - 0.3 * (1 - smoothstep(0.03, 0.09, Math.min(inCourse, 1 - inCourse))));
+      mul3(out, 1 - 0.25 * (1 - smoothstep(0.02, 0.06, Math.min(seam, 1 - seam))));
+      add3(out, stone, 0.14 * (1 - smoothstep(0.0, 0.22, v)));
       return;
     }
 
@@ -525,13 +541,20 @@ function makeAlpine(theme) {
       return;
     }
 
-    // Beyond the parapet the ground falls away into the valley: layered haze
-    // with the suggestion of forested slopes far below.
-    const depth = smoothstep(0.0, -0.42, lat);
+    // Beyond the parapet the ground falls away, so what shows in the sliver
+    // above the coping is the valley: two hazy slopes stacked below the eye.
     set3(out, haze);
-    toward3(out, blend(rockDark, haze, 0.4), depth * 0.8);
-    mul3(out, 1 + 0.05 * Math.sin(u01 * TAU * 17 + lat * 40) * depth);
-    mul3(out, 1 - 0.2 * depth);
+    const slopeA = -0.035 - 0.045 * ridged(u01, 8.5, 6, 3, 77);
+    const slopeB = -0.1 - 0.06 * ridged(u01, 1.5, 4, 3, 613);
+    if (lat < slopeA) {
+      toward3(out, blend(rockDark, haze, 0.4), 0.9);
+      mul3(out, 1 + 0.05 * Math.sin(u01 * TAU * 40 + 1.3));
+    }
+    if (lat < slopeB) {
+      toward3(out, blend(rockDark, haze, 0.18), 0.85);
+      mul3(out, 1 + 0.06 * Math.sin(u01 * TAU * 26));
+    }
+    mul3(out, 1 - 0.18 * smoothstep(0.0, -0.2, lat));
   };
 }
 
@@ -548,21 +571,21 @@ function makeAtelier(theme) {
   const CEIL = 1.75;
 
   const tint = rgbOf(theme.tint);
-  const wood = blend(rgbOf(pal.surface), tint, 0.44);
+  const wood = blend(rgbOf(pal.surface), tint, 0.38);
   const woodDark = blend(wood, BLACK, 0.42);
-  const plaster = blend(blend(rgbOf(pal.surfaceAlt), WHITE, 0.7), tint, 0.3);
+  const plaster = blend(blend(rgbOf(pal.surfaceAlt), WHITE, 0.72), tint, 0.2);
   const plasterShade = blend(plaster, rgbOf(pal.ink), 0.3);
-  const ceilCol = blend(blend(plaster, WHITE, 0.22), tint, 0.06);
+  const ceilCol = blend(plaster, WHITE, 0.12);
   const daylight = [1, 0.97, 0.92];
   const frame = blend(rgbOf(pal.ink), rgbOf(pal.surfaceAlt), 0.5);
-  const canvasA = blend(rgbOf(pal.primary), WHITE, 0.35);
-  const canvasB = blend(rgbOf(pal.accent), WHITE, 0.45);
+  const canvasA = blend(blend(rgbOf(pal.primary), WHITE, 0.5), tint, 0.18);
+  const canvasB = blend(blend(rgbOf(pal.accent), WHITE, 0.55), tint, 0.22);
 
   // Key light comes through the window on the +Z wall, slightly from above.
   const LX = 0;
   const LY = 0.34;
   const LZ = 0.94;
-  const AMBIENT = 0.52 * clamp01(theme.ambient);
+  const AMBIENT = 0.62 * clamp01(theme.ambient);
 
   const scratch = new Float64Array(3);
 
@@ -592,7 +615,7 @@ function makeAtelier(theme) {
       mul3(out, 1 - 0.45 * (1 - smoothstep(0.03, 0.075, jx)));
       const ez = (pz + plank * 0.41) / 1.45;
       const jz = Math.abs(ez - Math.round(ez));
-      mul3(out, 1 - 0.35 * (1 - smoothstep(0.008, 0.02, jz)));
+      mul3(out, 1 - 0.22 * (1 - smoothstep(0.006, 0.016, jz)));
 
       // Light pool cast through the window, with the mullion cross in it.
       const pool = band(px, -1.3, 1.3, 0.5) * band(pz, 0.3, 2.9, 0.7);
@@ -613,7 +636,7 @@ function makeAtelier(theme) {
       const b = (pz + 0.8) / 1.6;
       const beam = 1 - smoothstep(0.06, 0.1, Math.abs(b - Math.round(b)));
       toward3(out, woodDark, beam * 0.85);
-      mul3(out, AMBIENT + 0.4 + 0.22 * smoothstep(Z, 0.0, Math.abs(pz)));
+      mul3(out, AMBIENT * 0.62 + 0.26 + 0.2 * smoothstep(Z, 0.0, Math.abs(pz)));
       mul3(out, 1 - 0.3 * smoothstep(0.55, 1.0, Math.abs(px) / X));
       return;
     }
@@ -667,8 +690,20 @@ function makeAtelier(theme) {
         if (inner > 0.002) {
           // A soft two-tone wash so the canvases are not flat rectangles.
           set3(scratch, dx > 0 ? canvasA : canvasB);
-          toward3(scratch, WHITE, clamp01(0.35 + 0.4 * (py - along * 0.35)));
-          mul3(scratch, 0.85 + 0.25 * clamp01(0.5 + 0.4 * (along + py)));
+          // Layered washes and a few broad strokes: enough variation that it
+          // reads as a painting rather than a switched-on screen.
+          toward3(scratch, WHITE, clamp01(0.22 + 0.34 * (py - along * 0.3)));
+          toward3(
+            scratch,
+            dx > 0 ? canvasB : canvasA,
+            clamp01(0.35 + 0.3 * Math.sin(along * 2.6 + py * 1.7)),
+          );
+          mul3(
+            scratch,
+            0.88 +
+              0.14 * Math.sin(along * 7.3 + py * 2.1) +
+              0.07 * Math.sin(along * 19 + py * 5.5),
+          );
           toward3(out, scratch, inner * 0.96);
         }
       }
@@ -681,7 +716,7 @@ function makeAtelier(theme) {
     toward3(out, woodDark, 0.75 * band(v, 0.0, 0.05, 0.006));
     toward3(out, woodDark, 0.4 * band(v, 0.86, 0.885, 0.004));
 
-    mul3(out, AMBIENT + 0.45 + 0.55 * lambert * theme.key);
+    mul3(out, AMBIENT + 0.38 + 0.34 * lambert * theme.key);
     // Distance falloff from the window plus corner darkening.
     mul3(out, 1 - 0.22 * smoothstep(0.4, 1.0, Math.abs(along) / (isZ ? X : Z)));
   };

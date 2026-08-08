@@ -108,7 +108,13 @@
     </g>
     </g>
     <circle cx="256" cy="256" r="46" fill="url(#sparkGlow)"/>
-    <path d="M 256 233 Q 261.98 250.02 279 256 Q 261.98 261.98 256 279 Q 250.02 261.98 233 256 Q 250.02 250.02 256 233 Z" fill="#FFB020"/>
+    <g transform="rotate(36 256 256)">
+      <rect x="237" y="237" width="38" height="38" rx="5"
+            fill="#FFB020"/>
+      <rect x="237" y="237" width="38" height="38" rx="5"
+            fill="none" stroke="rgba(255, 216, 144, 0.75)" stroke-width="1.6"/>
+    </g>
+    <circle cx="256" cy="256" r="5.5" fill="rgba(5, 7, 15, 0.45)"/>
     
   </g>
 </svg>
