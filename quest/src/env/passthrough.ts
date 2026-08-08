@@ -76,17 +76,18 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
       varying vec2 vLocal;
       void main() {
         float r = length(vLocal);
-        // Two soft bands: a bright inner edge and a wider falloff outside it.
-        float inner = exp(-pow((r - 0.56) * 26.0, 2.0));
-        float wash = (1.0 - smoothstep(0.55, 1.0, r)) * 0.16;
+        // A bright hairline with a short falloff either side of it. Anything
+        // wider stops reading as contact and starts reading as decoration.
+        float inner = exp(-pow((r - 0.60) * 34.0, 2.0));
+        float wash = exp(-pow((r - 0.60) * 7.0, 2.0)) * 0.10;
 
         // Twelve index marks, so the ring reads as an instrument, not a glow.
         float a01 = atan(vLocal.y, vLocal.x) / 6.2831853 + 0.5;
-        float tick = 1.0 - smoothstep(0.0, 0.055, abs(fract(a01 * 12.0) - 0.5) - 0.44);
-        float tickBand = (1.0 - smoothstep(0.60, 0.78, r)) * smoothstep(0.56, 0.60, r);
+        float tick = 1.0 - smoothstep(0.0, 0.05, abs(fract(a01 * 12.0) - 0.5) - 0.455);
+        float tickBand = (1.0 - smoothstep(0.63, 0.74, r)) * smoothstep(0.60, 0.63, r);
 
         float breathe = 0.86 + 0.14 * sin(uTime * 0.7);
-        float a = (inner * 0.55 + wash + tick * tickBand * 0.5) * breathe * uStrength * uOpacity;
+        float a = (inner * 0.55 + wash + tick * tickBand * 0.45) * breathe * uStrength * uOpacity;
         gl_FragColor = vec4(uTint, clamp(a, 0.0, 1.0));
         ${GLSL_OUTPUT}
       }
@@ -100,10 +101,10 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
 
   // ── An outer horizon line, a whisper, purely to widen the sense of contact.
   const halo = new THREE.Mesh(
-    assets.geom(new THREE.RingGeometry(0.98, 1.5, 96, 1)),
+    assets.geom(new THREE.RingGeometry(0.98, 1.22, 96, 1)),
     makeShader(
       assets,
-      { uTint: { value: tint }, uStrength: { value: 0.16 } },
+      { uTint: { value: tint }, uStrength: { value: 0.12 } },
       /* glsl */ `
       varying vec2 vLocal;
       void main() {

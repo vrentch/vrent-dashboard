@@ -1767,9 +1767,9 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   lighting.keyColor = mixColor(WHITE, tint, 0.3);
   lighting.skyColor = mixColor(tint, ACCENT, 0.4);
   lighting.groundColor = mixColor(INK, VIOLET, 0.4);
-  lighting.fogColor = mixColor(INK, VIOLET, 0.1);
+  lighting.fogColor = mixColor(INK, VIOLET, 0.08);
   lighting.fogDensity = 0.01;
-  lighting.background = mixColor(INK, VIOLET, 0.07);
+  lighting.background = mixColor(INK, VIOLET, 0.05);
   lighting.shadowColor = mixColor(INK, VIOLET, 0.25);
   lighting.shadowStrength = 0.4;
   lighting.poolStrength = 0;
@@ -1782,8 +1782,8 @@ function auroraVoid(ctx: SceneContext): EnvScene {
     makeShader(
       assets,
       {
-        uLow: { value: mixColor(INK, VIOLET, 0.14) },
-        uHigh: { value: mixColor(INK, PRIMARY, 0.16) },
+        uLow: { value: mixColor(INK, VIOLET, 0.13) },
+        uHigh: { value: mixColor(INK, PRIMARY, 0.1) },
         uStar: { value: mixColor(WHITE, ICE, 0.3) },
       },
       VERT_DOME,
@@ -1814,10 +1814,10 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const ribbonGeo = assets.geom(new THREE.PlaneGeometry(1, 1, 56, 22));
   const ribbonMat = makeShader(
     assets,
-    { uTime, uStrength: { value: 0.85 } },
+    { uTime, uStrength: { value: 0.5 } },
     /* glsl */ `
       attribute vec4 aParams;
-      attribute float aPhase;
+      attribute vec2 aSeed;
       attribute vec3 aColA;
       attribute vec3 aColB;
       uniform float uTime;
@@ -1836,15 +1836,17 @@ function auroraVoid(ctx: SceneContext): EnvScene {
         float span = aParams.y;
         float height = aParams.z;
         float baseY = aParams.w;
+        float phase = aSeed.x;
+        float bearing = aSeed.y;
 
-        float fold = sin(u * 10.05 + uTime * 0.20 + aPhase * 4.0) * 0.52
-                   + sin(u * 19.48 - uTime * 0.14 + aPhase * 7.0) * 0.26
+        float fold = sin(u * 10.05 + uTime * 0.20 + phase * 4.0) * 0.52
+                   + sin(u * 19.48 - uTime * 0.14 + phase * 7.0) * 0.26
                    + sin(u * 4.40 + uTime * 0.085) * 0.88;
         vFold = fold;
 
-        float ang = (u - 0.5) * span + aPhase * 0.35;
+        float ang = bearing + (u - 0.5) * span;
         float r = radius * (1.0 + fold * 0.055 + v * 0.03);
-        float y = baseY + v * height + sin(u * 6.91 + uTime * 0.10 + aPhase) * height * 0.09;
+        float y = baseY + v * height + sin(u * 6.91 + uTime * 0.10 + phase) * height * 0.09;
         vec3 pos = vec3(sin(ang) * r, y, cos(ang) * r);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       }
@@ -1865,13 +1867,15 @@ function auroraVoid(ctx: SceneContext): EnvScene {
 
         // Vertical rays: the structure that makes an aurora read as an aurora.
         float rays = vFbm2(vec2(u * 34.0 + uTime * 0.025, v * 1.1));
-        rays = 0.30 + 0.90 * smoothstep(0.34, 0.76, rays);
+        rays = 0.28 + 0.85 * smoothstep(0.34, 0.76, rays);
         // Folds facing us are brighter, as curtains stack in depth.
-        float facing = 0.65 + 0.35 * clamp(vFold * 0.6 + 0.5, 0.0, 1.0);
+        float facing = 0.62 + 0.38 * clamp(vFold * 0.6 + 0.5, 0.0, 1.0);
 
         float a = base * top * ends * rays * facing * uStrength;
-        vec3 col = mix(vColA, vColB, pow(v, 0.65));
-        gl_FragColor = vec4(col * (0.55 + 0.65 * rays), a * uOpacity);
+        // Keep the ramp saturated: additive light that runs past 1.0 washes to
+        // white, and a white aurora is just a light shaft.
+        vec3 col = mix(vColA, vColB, pow(v, 0.6));
+        gl_FragColor = vec4(col * (0.45 + 0.4 * rays), a * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,
@@ -1880,17 +1884,17 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const ribbons = new THREE.InstancedMesh(ribbonGeo, ribbonMat, AURORA_RIBBONS.length);
   ribbons.frustumCulled = false;
   const params: number[] = [];
-  const phases: number[] = [];
+  const seeds: number[] = [];
   const colA: number[] = [];
   const colB: number[] = [];
   const identity = new THREE.Matrix4();
-  const rampLow = mixColor(tint, ACCENT, 0.25);
-  const rampHigh = mixColor(ACCENT, VIOLET, 0.7);
+  const rampLow = mixColor(tint, ACCENT, 0.35);
+  const rampHigh = mixColor(ACCENT, VIOLET, 0.75);
   const tone = new THREE.Color();
-  AURORA_RIBBONS.forEach(([radius, span, height, baseY, phase, ca, cb], i) => {
+  AURORA_RIBBONS.forEach(([radius, span, height, baseY, phase, bearing, ca, cb], i) => {
     ribbons.setMatrixAt(i, identity);
     params.push(radius * reach, span, height * reach, baseY * reach);
-    phases.push(phase);
+    seeds.push(phase, bearing);
     tone.copy(MINT).lerp(rampLow, ca);
     colA.push(tone.r, tone.g, tone.b);
     tone.copy(rampLow).lerp(rampHigh, cb);
@@ -1898,7 +1902,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   });
   ribbons.instanceMatrix.needsUpdate = true;
   instanceAttr(ribbonGeo, "aParams", params, 4);
-  instanceAttr(ribbonGeo, "aPhase", phases);
+  instanceAttr(ribbonGeo, "aSeed", seeds, 2);
   instanceAttr(ribbonGeo, "aColA", colA, 3);
   instanceAttr(ribbonGeo, "aColB", colB, 3);
   assets.add(ribbons);
