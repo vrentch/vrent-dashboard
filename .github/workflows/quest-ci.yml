@@ -1,0 +1,129 @@
+# Continuous integration for the Quest app.
+#
+# Typechecks the source and builds all three editions, so a change that only
+# breaks one edition's feature gating cannot reach main unnoticed. It also
+# regenerates the packaging metadata and fails if the committed files differ,
+# which is what keeps manifest.webmanifest and the twa-manifests tied to
+# shared/editions.ts.
+#
+# No secrets are used here. The APK build lives in quest-apk.yml.
+
+name: Quest CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "quest/**"
+      - ".github/workflows/quest-ci.yml"
+  pull_request:
+    paths:
+      - "quest/**"
+      - ".github/workflows/quest-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quest-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck and build all editions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: quest/package-lock.json
+
+      - name: Install dependencies
+        working-directory: quest
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: quest
+        run: npm run typecheck
+
+      - name: Generate icons
+        working-directory: quest
+        run: npm run icons
+
+      - name: Generate environment panoramas
+        working-directory: quest
+        run: |
+          set -euo pipefail
+          if [ -f public/environments/showroom.jpg ]; then
+            echo "Panoramas already present, skipping render."
+          else
+            npm run environments
+          fi
+
+      - name: Check the packaging metadata is up to date
+        working-directory: quest
+        run: |
+          set -euo pipefail
+          # Defaults only: no domain or keystore overrides, so the three TWA
+          # manifests must come out byte-identical to what is committed.
+          node scripts/gen-manifests.mjs
+          DRIFT=$(git status --porcelain -- android/twa-manifest.demo.json android/twa-manifest.pro.json android/twa-manifest.enterprise.json)
+          if [ -n "$DRIFT" ]; then
+            echo "::error::TWA manifests are out of date or uncommitted. Run 'node scripts/gen-manifests.mjs' in quest/ and commit the result."
+            echo "$DRIFT"
+            git --no-pager diff -- android/
+            exit 1
+          fi
+          echo "TWA manifests match shared/editions.ts."
+
+      - name: Check the PWA manifest is valid for an immersive WebXR PWA
+        working-directory: quest
+        # Not a byte comparison: manifest.webmanifest is regenerated per edition
+        # before each build, so which edition is committed does not matter. What
+        # matters is that it stays installable and correctly shaped.
+        run: |
+          set -euo pipefail
+          node -e '
+            const m = JSON.parse(require("node:fs").readFileSync("public/manifest.webmanifest", "utf8"));
+            const fail = (why) => { console.log(`::error::manifest.webmanifest ${why}`); process.exitCode = 1; };
+            if (m.display !== "standalone") fail(`has display "${m.display}", expected "standalone"`);
+            if (m.orientation !== "landscape") fail(`has orientation "${m.orientation}", expected "landscape"`);
+            for (const k of ["name", "short_name", "start_url", "scope", "background_color", "theme_color"]) {
+              if (!m[k]) fail(`is missing "${k}"`);
+            }
+            const want = [["192x192", "any"], ["512x512", "any"], ["512x512", "maskable"]];
+            for (const [sizes, purpose] of want) {
+              const icon = (m.icons || []).find((i) => i.sizes === sizes && i.purpose === purpose);
+              if (!icon) fail(`has no ${sizes} icon with purpose "${purpose}"`);
+              else if (!require("node:fs").existsSync("public" + icon.src)) fail(`points at ${icon.src}, which does not exist`);
+            }
+            if (process.exitCode !== 1) console.log(`manifest.webmanifest OK (${m.name})`);
+          '
+
+      - name: Build demo
+        working-directory: quest
+        run: npm run build:demo
+
+      - name: Build pro
+        working-directory: quest
+        run: npm run build:pro
+
+      - name: Build enterprise
+        working-directory: quest
+        run: npm run build:enterprise
+
+      - name: Report bundle sizes
+        working-directory: quest
+        run: |
+          set -euo pipefail
+          for d in dist-demo dist-pro dist-enterprise; do
+            [ -d "$d" ] || continue
+            echo "$d: $(du -sh "$d" | cut -f1)"
+          done

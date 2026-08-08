@@ -1,0 +1,309 @@
+# Builds a signed Meta Quest APK for VRENT Memory XR.
+#
+# The app ships as a Trusted Web Activity: the APK is a native shell around the
+# live web app, so the site must already be deployed and publicly reachable
+# before this runs. `bubblewrap update` fetches the web app manifest and the
+# icons over HTTPS from the domain given below, and fails if they are not there.
+#
+# Triggers:
+#   workflow_dispatch  build one edition against a domain you choose
+#   push tag quest-v*  build all three editions against the default domain
+#
+# ---------------------------------------------------------------------------
+# REQUIRED REPOSITORY SECRETS
+#   QUEST_KEYSTORE_B64         release keystore, base64 encoded
+#                              (base64 -w0 vrent-release.keystore)
+#   QUEST_KEYSTORE_PASSWORD    keystore password (keytool -storepass)
+#   QUEST_KEY_PASSWORD         key password (keytool -keypass)
+#
+# OPTIONAL REPOSITORY SECRETS
+#   QUEST_KEY_ALIAS            key alias inside the keystore. Default: vrent
+#   HORIZON_APP_ID_DEMO        numeric Horizon app id for the Demo edition
+#   HORIZON_APP_ID_PRO         numeric Horizon app id for the Pro edition
+#   HORIZON_APP_ID_ENTERPRISE  numeric Horizon app id for the Enterprise edition
+#
+# The Horizon app ids default to "0", which builds an APK that sideloads but is
+# not valid for a Store submission. Set the real ids before Store work.
+#
+# The signing key is permanent: every future update of a package id must be
+# signed with the same key. See quest/android/README.md.
+#
+# Nothing in this workflow echoes a secret. Secrets are passed through the
+# environment, never on a command line, and the decoded keystore lives in
+# RUNNER_TEMP, which is destroyed with the job.
+# ---------------------------------------------------------------------------
+
+name: Quest APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: Edition to package
+        type: choice
+        required: true
+        default: pro
+        options: [demo, pro, enterprise]
+      deploy_domain:
+        description: Domain the app is deployed on, no scheme
+        type: string
+        required: true
+        default: quest.vrent.ch
+      deploy_base_path:
+        description: Path prefix if the app is not at the domain root
+        type: string
+        required: false
+        default: /
+  push:
+    tags:
+      - "quest-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quest-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan editions
+    runs-on: ubuntu-latest
+    outputs:
+      editions: ${{ steps.pick.outputs.editions }}
+      domain: ${{ steps.pick.outputs.domain }}
+      base_path: ${{ steps.pick.outputs.base_path }}
+    steps:
+      - name: Decide what to build
+        id: pick
+        env:
+          # A tag build packages the whole product line; a manual run packages
+          # whichever edition the operator asked for.
+          EVENT: ${{ github.event_name }}
+          EDITION: ${{ inputs.edition }}
+          DOMAIN: ${{ inputs.deploy_domain }}
+          BASE_PATH: ${{ inputs.deploy_base_path }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "editions=[\"$EDITION\"]" >> "$GITHUB_OUTPUT"
+            echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+            echo "base_path=${BASE_PATH:-/}" >> "$GITHUB_OUTPUT"
+          else
+            echo 'editions=["demo","pro","enterprise"]' >> "$GITHUB_OUTPUT"
+            echo "domain=quest.vrent.ch" >> "$GITHUB_OUTPUT"
+            echo "base_path=/" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build ${{ matrix.edition }} APK
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: ${{ fromJson(needs.plan.outputs.editions) }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: quest/package-lock.json
+
+      - name: Install dependencies
+        working-directory: quest
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: quest
+        run: npm run typecheck
+
+      - name: Generate icons
+        working-directory: quest
+        run: npm run icons
+
+      - name: Generate environment panoramas
+        working-directory: quest
+        # The placeholders are committed, so this only runs on a fresh tree.
+        # Rendering three 4096x2048 spheres takes about 15 seconds.
+        run: |
+          set -euo pipefail
+          if [ -f public/environments/showroom.jpg ]; then
+            echo "Panoramas already present, skipping render."
+          else
+            npm run environments
+          fi
+
+      - name: Generate PWA and TWA manifests
+        working-directory: quest
+        env:
+          EDITION: ${{ matrix.edition }}
+          DEPLOY_DOMAIN: ${{ needs.plan.outputs.domain }}
+          DEPLOY_BASE_PATH: ${{ needs.plan.outputs.base_path }}
+          # Absolute path so bubblewrap resolves it from any working directory.
+          KEYSTORE_PATH: ${{ runner.temp }}/vrent-release.keystore
+          KEYSTORE_ALIAS: ${{ secrets.QUEST_KEY_ALIAS || 'vrent' }}
+          # Version codes must strictly increase and may never be reused, which
+          # is exactly what the run number gives us.
+          APP_VERSION_CODE: ${{ github.run_number }}
+          HORIZON_APP_ID_DEMO: ${{ secrets.HORIZON_APP_ID_DEMO }}
+          HORIZON_APP_ID_PRO: ${{ secrets.HORIZON_APP_ID_PRO }}
+          HORIZON_APP_ID_ENTERPRISE: ${{ secrets.HORIZON_APP_ID_ENTERPRISE }}
+        run: node scripts/gen-manifests.mjs
+
+      - name: Build the web app
+        working-directory: quest
+        run: npm run build:${{ matrix.edition }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install build tools and platform
+        run: sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install bubblewrap
+        # Meta's fork. Google's upstream bubblewrap does not understand
+        # horizonOSAppMode or isMetaQuest.
+        run: npm install -g @meta-quest/bubblewrap-cli
+
+      - name: Point bubblewrap at the runner's JDK and SDK
+        # Without this bubblewrap tries to download its own toolchain and asks
+        # for confirmation on a TTY that does not exist here.
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.bubblewrap"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}\n' \
+            "$JAVA_HOME" "$ANDROID_SDK_ROOT" > "$HOME/.bubblewrap/config.json"
+          cat "$HOME/.bubblewrap/config.json"
+
+      - name: Decode the signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.QUEST_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "::error::QUEST_KEYSTORE_B64 is not set. See quest/android/README.md."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/vrent-release.keystore"
+          chmod 600 "$RUNNER_TEMP/vrent-release.keystore"
+          # Size only. Never print the file or its fingerprint source material.
+          echo "Keystore decoded: $(stat -c%s "$RUNNER_TEMP/vrent-release.keystore") bytes"
+
+      - name: Stage the TWA project
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/twa"
+          cp "quest/android/twa-manifest.${{ matrix.edition }}.json" \
+             "$RUNNER_TEMP/twa/twa-manifest.json"
+          echo "--- twa-manifest.json ---"
+          cat "$RUNNER_TEMP/twa/twa-manifest.json"
+
+      - name: Verify the deployment is reachable
+        env:
+          DOMAIN: ${{ needs.plan.outputs.domain }}
+          BASE_PATH: ${{ needs.plan.outputs.base_path }}
+        run: |
+          set -euo pipefail
+          BASE=$(printf '%s' "/${BASE_PATH#/}/" | sed 's#//*#/#g')
+          URL="https://${DOMAIN}${BASE}manifest.webmanifest"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$URL" || echo 000)
+          echo "$URL -> $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::$URL returned $CODE. bubblewrap reads the manifest from the live site, so deploy it before packaging."
+            exit 1
+          fi
+
+      - name: Build and sign the APK
+        working-directory: ${{ runner.temp }}/twa
+        env:
+          # bubblewrap has no password flags; these env var names are its API.
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.QUEST_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.QUEST_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUBBLEWRAP_KEYSTORE_PASSWORD:-}" ] || [ -z "${BUBBLEWRAP_KEY_PASSWORD:-}" ]; then
+            echo "::error::QUEST_KEYSTORE_PASSWORD and QUEST_KEY_PASSWORD must both be set."
+            exit 1
+          fi
+          bubblewrap update
+          bubblewrap build
+
+      - name: Verify the signature and the app mode
+        working-directory: ${{ runner.temp }}/twa
+        run: |
+          set -euo pipefail
+          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          echo "Using build-tools: $BT"
+          test -f app-release-signed.apk || { echo "::error::no signed APK was produced"; exit 1; }
+
+          echo "--- signing certificate ---"
+          "$BT/apksigner" verify --print-certs app-release-signed.apk | grep -i 'SHA-256' || true
+          "$BT/apksigner" verify --verbose app-release-signed.apk
+
+          echo "--- package metadata ---"
+          "$BT/aapt" dump badging app-release-signed.apk \
+            | grep -E '^package:|application-label|OCULUS_APP_ID|APP_MODE' || true
+
+      - name: Assert the app mode and read the version
+        id: version
+        working-directory: ${{ runner.temp }}/twa
+        run: |
+          set -euo pipefail
+          # An immersive WebXR app packaged as a 2D panel is Meta's most common
+          # packaging failure, and it is silent until someone puts the headset
+          # on. `bubblewrap update` rewrites this file, so check it afterwards.
+          node -e '
+            const fs = require("node:fs");
+            const m = JSON.parse(fs.readFileSync("twa-manifest.json", "utf8"));
+            if (m.horizonOSAppMode !== "immersive") {
+              console.log(`::error::horizonOSAppMode is "${m.horizonOSAppMode}", expected "immersive". This app is WebXR.`);
+              process.exit(1);
+            }
+            if (m.isMetaQuest !== true) {
+              console.log("::error::isMetaQuest is not true; the APK will not be a Horizon build.");
+              process.exit(1);
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${m.appVersionName}\n`);
+            console.log(`app mode immersive, package ${m.packageId}, version ${m.appVersionName} (${m.appVersionCode})`);
+          '
+
+      - name: Upload the signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: memoryxr-${{ matrix.edition }}-${{ steps.version.outputs.name }}-${{ github.run_number }}-apk
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/twa/app-release-signed.apk
+            ${{ runner.temp }}/twa/twa-manifest.json
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vrent-release.keystore"
+
+      - name: Next steps
+        run: |
+          cat <<'NOTE'
+          The APK is attached to this run as a build artifact.
+
+          Before it will launch on a headset, /.well-known/assetlinks.json on the
+          deploy domain must carry this package id and the signing certificate
+          SHA-256 printed above. See quest/android/README.md, step 6.
+
+          Sideload:  adb install -r app-release-signed.apk
+          Store:     ovr-platform-util upload-quest-build ... (done by a human,
+                     deliberately not automated here)
+          NOTE
