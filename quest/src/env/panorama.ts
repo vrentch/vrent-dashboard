@@ -23,7 +23,14 @@
 
 import * as THREE from "three";
 import type { EnvScene, SceneContext, SceneLighting } from "./controller.ts";
-import { SceneAssets, defaultLighting, makeShader, fitDistance, GLSL_OUTPUT } from "./procedural.ts";
+import {
+  SceneAssets,
+  defaultLighting,
+  makeShader,
+  mixColor,
+  fitDistance,
+  GLSL_OUTPUT,
+} from "./procedural.ts";
 import { hex, palette, rgba, text as brandText, tokens } from "../../shared/brand.ts";
 
 /** Give up on an image after this long — a demo cannot wait forever. */
@@ -304,10 +311,14 @@ export function createPanoramaScene(ctx: SceneContext): PanoramaScene {
   const domeRadius = fitDistance(ctx.camera, 500);
 
   // ── The holding dome. Up before anything downloads; never a black void.
+  //    Deliberately luminous: this is what a client sees while their own
+  //    photography is still coming down the wire, and a dark sphere is
+  //    indistinguishable from a crash.
+  const INK = new THREE.Color(hex(palette.ink));
   const holdUniforms: Record<string, THREE.IUniform> = {
     uTime,
-    uLow: { value: lighting.background ?? tint },
-    uHigh: { value: tint.clone().multiplyScalar(0.55) },
+    uLow: { value: mixColor(INK, tint, 0.16) },
+    uHigh: { value: mixColor(INK, tint, 0.5) },
     uFade: { value: 1 },
   };
   const holding = new THREE.Mesh(

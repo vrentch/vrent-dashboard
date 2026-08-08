@@ -52,7 +52,7 @@ const ICE = new THREE.Color(hex(seatColors[7]));
  * three times stronger than the number reads, and five rooms tinted that way
  * all come out as one loud colour.
  */
-function mixColor(a: THREE.Color, b: THREE.Color, k: number): THREE.Color {
+export function mixColor(a: THREE.Color, b: THREE.Color, k: number): THREE.Color {
   const from = a.clone().convertLinearToSRGB();
   const to = b.clone().convertLinearToSRGB();
   return from.lerp(to, k).convertSRGBToLinear();
@@ -1705,7 +1705,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
                     * (1.0 - smoothstep(${(GLASS_RADIUS - 0.7).toFixed(2)}, ${(GLASS_RADIUS + 0.5).toFixed(2)}, r));
         float ripple = 0.45 + 0.55 * vNoise2(vec2(a01 * 120.0, r * 2.4 - uTime * 0.16));
         float strength = pow(vHash12(vec2(li, 6.0)), 3.0);
-        col += signCol * band * reach * ripple * strength * 0.18;
+        col += signCol * band * reach * ripple * strength * 0.10;
 
         // A cool sheen so the stone still reads as stone.
         col += uTint * exp(-r * 0.5) * 0.04;
@@ -1745,16 +1745,18 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         vec2 rc = vec2(vUv.x * 46.0, vUv.y * 3.2);
         float column = floor(rc.x);
         float cf = fract(rc.x);
-        float active = step(0.30, vHash12(vec2(column, 17.0)));
+        // Named "running", never "active" — active is a reserved word in
+        // GLSL ES and the whole shader silently fails to compile with it.
+        float running = step(0.30, vHash12(vec2(column, 17.0)));
         float speed = 0.20 + vHash12(vec2(column, 1.0)) * 0.7;
         float y = fract(rc.y + uTime * speed + vHash12(vec2(column, 7.0)) * 9.0);
         float width = 0.30 + vHash12(vec2(column, 3.0)) * 0.40;
         float lateral = gauss(abs(cf - 0.5) * 2.0 / width, 1.844);
-        float head = gauss(y - 0.22, 40.0);
+        float head = gauss(y - 0.22, 62.0);
         // A long trail above the bead is what makes it read as rain on glass
         // rather than as falling snow.
-        float tail = exp(-max(y - 0.22, 0.0) * 1.7) * step(0.22, y) * 0.62;
-        float runnel = lateral * (head * 1.5 + tail) * active;
+        float tail = exp(-max(y - 0.22, 0.0) * 1.5) * step(0.22, y) * 0.5;
+        float runnel = lateral * (head * 0.9 + tail) * running;
 
         // Beads clinging between the runnels — small, and only a few of them.
         vec2 gc = vec2(vUv.x * 150.0, vUv.y * 42.0);
@@ -1762,7 +1764,9 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         vec2 gf = fract(gc) - 0.5;
         vec2 jitter = vec2(vHash12(gi), vHash12(gi + 41.0)) - 0.5;
         float rad = 0.05 + vHash12(gi + 9.0) * 0.13;
-        float bead = smoothstep(rad, rad * 0.25, length((gf - jitter * 0.7) * vec2(1.0, 1.5)));
+        // Edges in ascending order: smoothstep is undefined when edge0 >= edge1
+        // and some drivers hand back NaN, which poisons the whole fragment.
+        float bead = 1.0 - smoothstep(rad * 0.25, rad, length((gf - jitter * 0.7) * vec2(1.0, 1.5)));
         bead *= step(0.55, vHash12(gi + 23.0));
 
         float wet = clamp(runnel + bead * 0.4, 0.0, 1.4);
@@ -1775,10 +1779,10 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         float transom = 1.0 - smoothstep(0.0, 0.030, min(my, 1.0 - my));
 
         float frame = max(mull, transom);
-        vec3 col = mix(uTint * 0.4, uHot, clamp(wet, 0.0, 1.0));
-        float a = (0.02 + wet * 0.85) * uOpacity;
+        vec3 col = mix(uTint * 0.4, uHot, clamp(wet * 0.8, 0.0, 1.0));
+        float a = (0.02 + wet * 0.6) * uOpacity;
         col = mix(col, uMullion, frame * 0.92);
-        a = max(a, frame * 0.72 * uOpacity);
+        a = max(a, frame * 0.7 * uOpacity);
         gl_FragColor = vec4(col, a);
         ${GLSL_OUTPUT}
       }
@@ -1872,7 +1876,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const ribbonGeo = assets.geom(new THREE.PlaneGeometry(1, 1, 56, 22));
   const ribbonMat = makeShader(
     assets,
-    { uTime, uStrength: { value: 0.34 } },
+    { uTime, uStrength: { value: 0.3 } },
     /* glsl */ `
       attribute vec4 aParams;
       attribute vec2 aSeed;
@@ -1919,9 +1923,11 @@ function auroraVoid(ctx: SceneContext): EnvScene {
       void main() {
         float u = vRib.x;
         float v = vRib.y;
-        float base = smoothstep(0.0, 0.05, v);
-        float top = 1.0 - smoothstep(0.30, 1.0, v);
-        float ends = smoothstep(0.0, 0.13, u) * (1.0 - smoothstep(0.87, 1.0, u));
+        // A long ramp at the base: a hard bottom edge turns the gap between two
+        // curtains into a rectangular hole in the sky.
+        float base = smoothstep(0.0, 0.22, v);
+        float top = 1.0 - smoothstep(0.32, 1.0, v);
+        float ends = smoothstep(0.0, 0.16, u) * (1.0 - smoothstep(0.84, 1.0, u));
 
         // Vertical rays: the structure that makes an aurora read as an aurora.
         float rays = vFbm2(vec2(u * 34.0 + uTime * 0.025, v * 1.1));
@@ -1932,8 +1938,10 @@ function auroraVoid(ctx: SceneContext): EnvScene {
         float a = base * top * ends * rays * facing * uStrength;
         // Keep the ramp saturated: additive light that runs past 1.0 washes to
         // white, and a white aurora is just a light shaft.
-        vec3 col = mix(vColA, vColB, pow(v, 0.55));
-        gl_FragColor = vec4(col * (0.38 + 0.34 * rays), a * uOpacity);
+        // Hold the mint base over most of the curtain and let only the fray go
+        // violet — an early crossover averages the two into grey.
+        vec3 col = mix(vColA, vColB, pow(v, 1.6));
+        gl_FragColor = vec4(col * (0.42 + 0.30 * rays), a * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,

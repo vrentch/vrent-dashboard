@@ -19,6 +19,7 @@ import type { BoardPreset, Card, GameSettings } from "../../shared/game.ts";
 import { presetForPairs } from "../../shared/game.ts";
 import { hex, seatColors } from "../../shared/brand.ts";
 import { getEnvironment } from "../../shared/environments.ts";
+import { currentTint } from "../env/controller.ts";
 import { buildSymbolAtlas, type SymbolAtlas } from "./symbols.ts";
 import { computeLayout, type BoardLayout, type Placement } from "./layout.ts";
 import {
@@ -402,6 +403,12 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
     },
 
     update(dt, now, pointers) {
+      // Track the environment's live tint rather than the one captured at
+      // build time. The board is not rebuilt when the player changes room, so
+      // reading it once left the cards rimmed in the previous environment's
+      // colour; following it here also inherits the 600ms cross-fade for free.
+      if (resources) resources.shared.uRim.value.copy(currentTint());
+
       for (let i = 0; i < cards.length; i++) cards[i].update(dt, now);
       if (!interactive || pointers.length === 0) {
         if (hoverIndex !== null) setHover(null, -1);

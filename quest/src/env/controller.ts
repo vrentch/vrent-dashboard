@@ -161,6 +161,7 @@ class Environment implements EnvironmentSystem {
   private anchorRadius = DEFAULT_ANCHOR_RADIUS;
 
   private readonly tintScratch = new THREE.Color();
+  private readonly veilScratch = new THREE.Color();
   private readonly bgColor = new THREE.Color();
 
   private active: Layer | null = null;
@@ -452,6 +453,16 @@ class Environment implements EnvironmentSystem {
 
     this.outgoing?.scene.update(step, this.elapsed);
     this.active?.scene.update(step, this.elapsed);
+
+    // Between transitions the active scene stays in charge of the light. A
+    // panorama that finishes downloading after its cross-fade has ended grades
+    // the room off its own photograph, and this is what picks that up.
+    if (!this.fading && this.active) {
+      this.copyLighting(this.active.scene.lighting);
+      this.setExposure(this.active.spec.ambient, this.active.spec.key);
+      this.pushLighting();
+      this.pushBackground(this.active.scene.lighting);
+    }
   }
 
   dispose(): void {
@@ -624,8 +635,14 @@ class Environment implements EnvironmentSystem {
 
       // Veil: deep brand ink carrying a trace of the room. Peaks short of
       // solid, so the dissolve stays visible under it and no frame goes black.
+      // Blended in sRGB — a linear blend with a saturated tint turns the whole
+      // transition into a colour flash rather than a dip.
       this.veilMaterial.opacity = Math.pow(Math.sin(Math.PI * t), 1.25) * VEIL_PEAK;
-      this.veilMaterial.color.set(hex(palette.ink)).lerp(this.tint, 0.16);
+      this.veilMaterial.color
+        .set(hex(palette.ink))
+        .convertLinearToSRGB()
+        .lerp(this.veilScratch.copy(this.tint).convertLinearToSRGB(), 0.14)
+        .convertSRGBToLinear();
 
       this.lerpLighting(from.scene.lighting, to.scene.lighting, k);
       this.setExposure(
