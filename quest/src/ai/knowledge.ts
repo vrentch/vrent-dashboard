@@ -163,7 +163,9 @@ export const KNOWLEDGE: readonly KnowledgeEntry[] = [
       return (
         "Open Environment and pick one. It changes immediately, mid-game included, and the board does not move.\n\n" +
         lines.join("\n") +
-        "\n\nIn a room game the host chooses, and everyone sees the same place."
+        (ctx.edition.features.onlineMultiplayer
+          ? "\n\nIn a room game the host chooses, and everyone sees the same place."
+          : "")
       );
     },
     followUps: ["How do I switch to mixed reality?", "Can I use my own 360 photos?"],
@@ -181,7 +183,7 @@ export const KNOWLEDGE: readonly KnowledgeEntry[] = [
       if (ctx.edition.features.custom360) return base;
       return (
         `Your own 360 photography becomes a playable room — your showroom, your office, a site you have shot. That is an Enterprise feature, and this build is ${ctx.edition.name}.\n\n` +
-        `On an Enterprise build: ${base.charAt(0).toLowerCase()}${base.slice(1)}\n\n` +
+        `On an Enterprise build it works like this. ${base}\n\n` +
         `To have it enabled, write to ${brand.contactEmail}.`
       );
     },
@@ -197,9 +199,16 @@ export const KNOWLEDGE: readonly KnowledgeEntry[] = [
       const usable = BOARD_PRESETS.filter((p) => p.pairs <= max);
       const smallest = usable[0];
       const largest = usable[usable.length - 1];
+
+      // Only ever describe sizes this build can actually select.
+      const notes = ["12 cards is a 30-second round and the right size for a queue."];
+      if (max >= 10) notes.push("20 is the everyday game.");
+      if (max >= 18) notes.push("36 and up is a long, genuinely hard match and is better with two or more players sharing the board.");
+      else notes.push(`${largest.label} is the longest match this build offers.`);
+
       return (
         `Board sizes run from ${smallest.label} to ${largest.label} on this build, set in the lobby.\n\n` +
-        "12 cards is a 30-second round and the right size for a queue. 20 is the everyday game. 36 and up is a long, genuinely hard match and works best with two or more players sharing the board.\n\n" +
+        `${notes.join(" ")}\n\n` +
         "Every layout is wider than it is tall on purpose: turning your head sideways is comfortable, tipping it up and down is not."
       );
     },
@@ -387,7 +396,7 @@ export const KNOWLEDGE: readonly KnowledgeEntry[] = [
   {
     id: "trouble-passthrough",
     title: "Passthrough is black or missing",
-    keywords: ["black", "blank", "grey", "gray", "dark", "passthrough", "problem", "broken", "work", "nothing", "missing", "permission", "fail", "blocked"],
+    keywords: ["black", "blank", "grey", "gray", "dark", "passthrough", "problem", "broken", "work", "nothing", "missing", "permission", "fail", "blocked", "cannot"],
     screens: ["settings", "environments", "game"],
     body:
       "Three things, in order:\n\n" +
@@ -412,7 +421,7 @@ export const KNOWLEDGE: readonly KnowledgeEntry[] = [
   {
     id: "trouble-connection",
     title: "Lost connection mid-game",
-    keywords: ["disconnect", "drop", "lost", "connection", "reconnect", "lag", "freeze", "frozen", "kick", "offline", "red", "problem", "stuck"],
+    keywords: ["disconnect", "drop", "lost", "connection", "reconnect", "lag", "freeze", "frozen", "kick", "offline", "red", "problem", "stuck", "cannot"],
     screens: ["game", "lobby"],
     body:
       "It reconnects on its own and puts you back in the same seat with your score intact. Give it about ten seconds. Your turn is skipped rather than stalling the room and comes back round to you.\n\n" +

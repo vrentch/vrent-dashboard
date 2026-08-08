@@ -1,0 +1,38 @@
+# Signing keys must NEVER reach the repository. Losing control of the release
+# keystore means someone else can ship an update that Horizon will accept as
+# genuine, and there is no way to rotate it — the key is bound to the package
+# id for the life of the app.
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.der
+keystore.properties
+key.properties
+
+# Base64 exports of the keystore, as pasted into the QUEST_KEYSTORE_B64 secret.
+*.keystore.b64
+*.jks.b64
+
+# Generated Android project. `bubblewrap update` recreates all of it from
+# twa-manifest.<edition>.json, so none of it belongs in version control.
+build/
+app/
+gradle/
+.gradle/
+gradlew
+gradlew.bat
+build.gradle
+settings.gradle
+gradle.properties
+local.properties
+twa-manifest.json
+store_icon.png
+*.apk
+*.aab
+*.idsig
+output.json
+
+# Everything else in this folder is checked in: README.md, .gitignore and the
+# generated twa-manifest.<edition>.json files, which are the packaging inputs.

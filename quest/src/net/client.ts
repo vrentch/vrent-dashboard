@@ -83,6 +83,8 @@ export function createNetClient(url: string, events: NetEvents, options: NetClie
 
   let stopped = true;
   let lastRoom: RoomView | null = null;
+  /** Has this socket already had a welcome? Tells a resume from a seat grant. */
+  let welcomedThisSocket = false;
   /** Replayed once the socket is up: the room we intend to be in. */
   let pendingIntent: ClientMessage | null = null;
   let joinedCode: string | null = null;
@@ -176,6 +178,7 @@ export function createNetClient(url: string, events: NetEvents, options: NetClie
   function open(): void {
     if (stopped || !endpoint) return;
     closeSocket();
+    welcomedThisSocket = false;
     setStatus(attempt === 0 ? "connecting" : "reconnecting");
 
     let ws: WebSocket;
@@ -336,6 +339,10 @@ export function createNetClient(url: string, events: NetEvents, options: NetClie
 
         const resumed = playerId !== null && playerId === msg.playerId;
         const previousId = playerId;
+        // A second `welcome` on the same socket is the server handing over a
+        // seat token (after createRoom/joinRoom), not a reconnect.
+        const reclaimed = resumed && !welcomedThisSocket;
+        welcomedThisSocket = true;
         playerId = msg.playerId;
         if (msg.resumeToken) {
           resumeToken = msg.resumeToken;
@@ -345,7 +352,7 @@ export function createNetClient(url: string, events: NetEvents, options: NetClie
         attempt = 0;
         setStatus("online");
         finishConnect(null);
-        logger("info", "net.welcome", `${msg.playerId} (server ${msg.serverVersion}${resumed ? ", resumed" : ""})`);
+        logger("info", "net.welcome", `${msg.playerId} (server ${msg.serverVersion}${reclaimed ? ", seat reclaimed" : ""})`);
 
         if (pendingIntent) {
           const intent = pendingIntent;

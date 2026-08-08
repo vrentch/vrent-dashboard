@@ -69,6 +69,8 @@ export interface SceneLighting {
   background: THREE.Color | null;
   shadowColor: THREE.Color;
   shadowStrength: number;
+  /** Wider light pool on the floor beneath the board. 0 in floorless rooms. */
+  poolStrength: number;
 }
 
 /** One built world. Created by `procedural.ts`, `panorama.ts`, `passthrough.ts`. */
@@ -167,6 +169,9 @@ class Environment implements EnvironmentSystem {
   /** Working lighting state, lerped every frame during a transition. */
   private readonly live: SceneLighting;
   private readonly tint = new THREE.Color(hex(palette.accent));
+
+  private exposureAmbient = 1;
+  private exposureKey = 1;
 
   private fadeT = 1;
   private fading = false;
@@ -342,20 +347,16 @@ class Environment implements EnvironmentSystem {
 
   /** Copies `live` onto the actual lights, fog and clear state. */
   private pushLighting(): void {
-    const spec = this.active?.spec ?? this.outgoing?.spec;
-    const ambient = spec ? spec.ambient : 1;
-    const key = spec ? spec.key : 1;
-
     this.hemi.color.copy(this.live.skyColor);
     this.hemi.groundColor.copy(this.live.groundColor);
-    this.hemi.intensity = ambient * this.live.ambientScale;
+    this.hemi.intensity = this.exposureAmbient * this.live.ambientScale;
 
     this.key.color.copy(this.live.keyColor);
-    this.key.intensity = key * this.live.keyScale;
+    this.key.intensity = this.exposureKey * this.live.keyScale;
     this.key.position.copy(this.live.keyDirection).multiplyScalar(12);
 
     this.fill.color.copy(this.live.skyColor);
-    this.fill.intensity = key * this.live.keyScale * 0.22;
+    this.fill.intensity = this.exposureKey * this.live.keyScale * 0.22;
     this.fill.position.set(-this.live.keyDirection.x, 0.35, -this.live.keyDirection.z).multiplyScalar(10);
 
     this.fog.color.copy(this.live.fogColor);
@@ -364,7 +365,14 @@ class Environment implements EnvironmentSystem {
     this.shadowUniforms.uColor.value = this.live.shadowColor;
     this.shadowUniforms.uStrength.value = this.live.shadowStrength;
     this.poolUniforms.uColor.value = this.live.skyColor;
-    this.poolUniforms.uStrength.value = this.live.shadowStrength * 0.16;
+    this.poolUniforms.uStrength.value = this.live.shadowStrength * this.live.poolStrength * 0.2;
+    this.floorPool.visible = this.live.poolStrength > 0.002;
+  }
+
+  /** Exposure comes from the catalogue entry and cross-fades with the room. */
+  private setExposure(ambient: number, key: number): void {
+    this.exposureAmbient = ambient;
+    this.exposureKey = key;
   }
 
   /** Hard-swaps background and clear alpha. Only ever called under the veil. */
@@ -395,6 +403,7 @@ class Environment implements EnvironmentSystem {
     l.ambientScale = a.ambientScale + (b.ambientScale - a.ambientScale) * k;
     l.fogDensity = a.fogDensity + (b.fogDensity - a.fogDensity) * k;
     l.shadowStrength = a.shadowStrength + (b.shadowStrength - a.shadowStrength) * k;
+    l.poolStrength = a.poolStrength + (b.poolStrength - a.poolStrength) * k;
     l.background = k < 0.5 ? a.background : b.background;
   }
 
@@ -574,6 +583,7 @@ class Environment implements EnvironmentSystem {
     if (!this.outgoing) {
       // First environment of the session: bring it straight up, no veil.
       this.copyLighting(layer.scene.lighting);
+      this.setExposure(layer.spec.ambient, layer.spec.key);
       this.pushBackground(layer.scene.lighting);
       this.pushLighting();
       this.tint.set(hex(layer.spec.tint));
@@ -618,8 +628,16 @@ class Environment implements EnvironmentSystem {
     this.veilMaterial.opacity = Math.pow(Math.sin(Math.PI * t), 1.25) * VEIL_PEAK;
     this.veilMaterial.color.set(hex(palette.ink)).lerp(this.tint, 0.16);
 
-    if (from) this.lerpLighting(from.scene.lighting, to.scene.lighting, k);
-    else this.copyLighting(to.scene.lighting);
+    if (from) {
+      this.lerpLighting(from.scene.lighting, to.scene.lighting, k);
+      this.setExposure(
+        from.spec.ambient + (to.spec.ambient - from.spec.ambient) * k,
+        from.spec.key + (to.spec.key - from.spec.key) * k,
+      );
+    } else {
+      this.copyLighting(to.scene.lighting);
+      this.setExposure(to.spec.ambient, to.spec.key);
+    }
     this.pushLighting();
 
     if (!this.swapped && t >= 0.5) {
@@ -643,6 +661,7 @@ class Environment implements EnvironmentSystem {
     if (to) {
       to.scene.setOpacity(1);
       this.copyLighting(to.scene.lighting);
+      this.setExposure(to.spec.ambient, to.spec.key);
       this.tint.set(hex(to.spec.tint));
       if (!this.swapped) {
         this.swapped = true;

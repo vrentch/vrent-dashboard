@@ -57,12 +57,12 @@ export interface MemoryTuning {
 export const MEMORY_PROFILES: Record<AiLevel, MemoryTuning> = {
   easy: {
     capacity: 3,
-    decay: 0.26,
-    reinforce: 0.55,
-    confusion: 0.45,
+    decay: 0.22,
+    reinforce: 0.7,
+    confusion: 0.4,
     floor: 0.06,
     crowding: 0.35,
-    focus: 0.85,
+    focus: 0.95,
   },
   medium: {
     capacity: 8,

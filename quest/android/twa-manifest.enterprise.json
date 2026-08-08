@@ -1,0 +1,28 @@
+{
+  "packageId": "ch.vrent.memoryxr.enterprise",
+  "applicationId": "0",
+  "host": "quest.vrent.ch",
+  "name": "Memory XR",
+  "launcherName": "Memory XR",
+  "display": "standalone",
+  "orientation": "landscape",
+  "themeColor": "#0C1222",
+  "backgroundColor": "#05070F",
+  "startUrl": "/",
+  "iconUrl": "https://quest.vrent.ch/icons/enterprise/icon-512.png",
+  "maskableIconUrl": "https://quest.vrent.ch/icons/enterprise/icon-512-maskable.png",
+  "webManifestUrl": "https://quest.vrent.ch/manifest.webmanifest",
+  "signingKey": {
+    "path": "./vrent-release.keystore",
+    "alias": "vrent"
+  },
+  "appVersion": "1.0.0",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "fallbackType": "customtabs",
+  "features": {},
+  "isMetaQuest": true,
+  "horizonOSAppMode": "immersive",
+  "fingerprints": [],
+  "minSdkVersion": 23
+}

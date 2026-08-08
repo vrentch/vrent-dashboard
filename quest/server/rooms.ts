@@ -474,12 +474,12 @@ export function createRegistry(options: RegistryOptions): Registry {
     broadcast(room, { t: "playerLeft", playerId, reason });
     log("info", "player.left", { room: room.code, player: playerId, reason, seats: state.players.length });
 
-    if (room.hostId === playerId) promoteHost(room);
-
     if (room.members.size === 0) {
       closeRoom(room, "empty");
       return;
     }
+    if (room.hostId === playerId) promoteHost(room);
+    if (room.closed) return; // promoteHost closes a room with no humans left
 
     if (state.phase === "playing" || state.phase === "countdown") {
       if (!hasActivePlayer(state)) {
@@ -737,17 +737,22 @@ export function createRegistry(options: RegistryOptions): Registry {
     member.flips++;
     touch(room);
 
+    // Every accepted flip turns exactly one card face-up, so every accepted
+    // flip gets a `revealed`. This matters for the *second* card of a pair:
+    // neither `missed` nor `NetEvents.onMatched` carries a symbol, so without
+    // this the headset would have nothing to draw on the card it just turned.
+    const flipped = state.cards[index];
+    broadcast(room, { t: "revealed", index, symbol: flipped.symbol, by: member.player.id });
+    room.ai.observe(index, flipped.symbol);
+
     if (outcome.kind === "revealed") {
       room.selectionOwner = member.player.id;
-      broadcast(room, { t: "revealed", index: outcome.index, symbol: outcome.symbol, by: member.player.id });
-      room.ai.observe(outcome.index, outcome.symbol);
       room.ai.poke();
       return { ok: true };
     }
 
     if (outcome.kind === "matched") {
       room.selectionOwner = null;
-      const [a, b] = outcome.indices;
       broadcast(room, {
         t: "matched",
         indices: outcome.indices,
@@ -756,8 +761,6 @@ export function createRegistry(options: RegistryOptions): Registry {
         score: member.player.score,
         streak: outcome.streak,
       });
-      room.ai.observe(a, outcome.symbol);
-      room.ai.observe(b, outcome.symbol);
       room.ai.forget(outcome.indices);
 
       // `applyFlip` sets the phase to "finished" the moment the last pair
@@ -777,12 +780,6 @@ export function createRegistry(options: RegistryOptions): Registry {
 
     // Miss: show the pair for `peekMs`, then hide it and move on — measured by
     // the server's clock, never by a client telling us time has passed.
-    const [a, b] = outcome.indices;
-    const symbolA = state.cards[a]?.symbol;
-    const symbolB = state.cards[b]?.symbol;
-    if (symbolA !== undefined) room.ai.observe(a, symbolA);
-    if (symbolB !== undefined) room.ai.observe(b, symbolB);
-
     const peekMs = clamp(state.settings.peekMs, 300, 5000);
     const hideAt = now() + peekMs;
     broadcast(room, { t: "missed", indices: outcome.indices, by: member.player.id, hideAt });
@@ -1420,11 +1417,10 @@ export function createRegistry(options: RegistryOptions): Registry {
       if (member.session !== session) return; // superseded by a newer connection
       log("debug", "conn.detach", { conn: session.conn.id, player: session.playerId, room: room.code, reason });
 
-      if (room.state.phase === "lobby" && room.members.size === 1) {
-        // Last person out of an unstarted room; no point holding a seat.
-        removeMember(room, member.player.id, "dropped");
-        return;
-      }
+      // Every drop holds the seat, including the host alone in a lobby: a
+      // headset that naps between "here's the code" and the first guest
+      // arriving must find its room still standing when it wakes. The 90s
+      // timer tears down the room if nobody comes back.
       markDropped(room, member);
     },
 

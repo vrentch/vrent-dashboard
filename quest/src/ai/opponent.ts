@@ -50,6 +50,8 @@ export interface AiProfile {
   slip: number;
   /** Chance it reaches for a card it has seen and since forgotten, 0-1. */
   revisit: number;
+  /** Chance it commits a whole turn to two cards it has already been shown. */
+  wrongPair: number;
   /** Chance it opens on an unseen card when it has nothing better, 0-1. */
   explore: number;
   /** How many remembered pairs it will reach for before giving up on the turn. */
@@ -62,10 +64,11 @@ export const AI_PROFILES: Record<AiLevel, AiProfile> = {
     name: "Easy",
     blurb: "Forgets quickly and turns over the same card twice. A good first game.",
     thinkMs: [1400, 2600],
-    slip: 0.45,
-    revisit: 0.4,
+    slip: 0.3,
+    revisit: 0.35,
+    wrongPair: 0.18,
     explore: 0.35,
-    pairAttempts: 1,
+    pairAttempts: 2,
   },
   medium: {
     level: "medium",
@@ -74,6 +77,7 @@ export const AI_PROFILES: Record<AiLevel, AiProfile> = {
     thinkMs: [1000, 2000],
     slip: 0.22,
     revisit: 0.15,
+    wrongPair: 0.04,
     explore: 0.75,
     pairAttempts: 3,
   },
@@ -84,6 +88,7 @@ export const AI_PROFILES: Record<AiLevel, AiProfile> = {
     thinkMs: [600, 1400],
     slip: 0.07,
     revisit: 0,
+    wrongPair: 0,
     explore: 1,
     pairAttempts: 3,
   },
@@ -190,9 +195,11 @@ export function createAiOpponent(playerId: string, level: AiLevel, seed?: number
           ? 0.45 + rnd() * 0.55
           : rnd();
     const jitter = 1 + (rnd() - 0.5) * 0.08;
-    const first = decisions === 0 ? 220 : 0;
-    const ms = (lo + t * (hi - lo)) * jitter + first;
-    return Math.round(Math.min(hi + 260, Math.max(lo * 0.9, ms)));
+    // A touch longer on the opening move, while staying inside the window the
+    // level advertises — the range is a promise, the position in it is texture.
+    const settle = decisions === 0 ? (hi - lo) * 0.15 : 0;
+    const ms = (lo + t * (hi - lo)) * jitter + settle;
+    return Math.round(Math.min(hi, Math.max(lo, ms)));
   }
 
   function pick(from: readonly number[]): number {
@@ -258,8 +265,9 @@ export function createAiOpponent(playerId: string, level: AiLevel, seed?: number
     plan = null;
 
     // The classic blunder: two cards it was shown and has since lost. It reads
-    // as "did we not just do those?" from the other side of the table.
-    if (profile.revisit > 0 && rnd() < profile.revisit) {
+    // as "did we not just do those?" from the other side of the table. Kept
+    // rare on purpose — it is a garnish, not a strategy.
+    if (profile.wrongPair > 0 && rnd() < profile.wrongPair) {
       const faded = memory.faded().filter(allowed);
       if (faded.length >= 2) {
         const a = pick(faded);
