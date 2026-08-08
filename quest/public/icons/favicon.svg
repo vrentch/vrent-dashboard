@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>VRENT Memory XR</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="34%" r="82%">
+      <stop offset="0%" stop-color="#172d5e"/>
+      <stop offset="46%" stop-color="#0d172f"/>
+      <stop offset="100%" stop-color="#05070F"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0%" y1="0%" x2="76%" y2="100%">
+      <stop offset="0%" stop-color="rgba(30, 107, 255, 0.16)"/>
+      <stop offset="52%" stop-color="rgba(30, 107, 255, 0)"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="50%" cy="50%" r="72%">
+      <stop offset="58%" stop-color="rgba(5, 7, 15, 0)"/>
+      <stop offset="100%" stop-color="rgba(5, 7, 15, 0.72)"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(30, 107, 255, 0.34)"/>
+      <stop offset="55%" stop-color="rgba(30, 107, 255, 0.12)"/>
+      <stop offset="100%" stop-color="rgba(30, 107, 255, 0)"/>
+    </radialGradient>
+    <linearGradient id="cardBack" x1="0%" y1="0%" x2="30%" y2="100%">
+      <stop offset="0%" stop-color="#2c354a"/>
+      <stop offset="100%" stop-color="#0a0f1d"/>
+    </linearGradient>
+    <linearGradient id="cardFace" x1="12%" y1="0%" x2="88%" y2="100%">
+      <stop offset="0%" stop-color="#548fff"/>
+      <stop offset="58%" stop-color="#1E6BFF"/>
+      <stop offset="100%" stop-color="#1447a8"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.2)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <radialGradient id="sparkGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(255, 176, 32, 0.6)"/>
+      <stop offset="100%" stop-color="rgba(255, 176, 32, 0)"/>
+    </radialGradient>
+    <clipPath id="belowHorizon">
+      <rect x="0" y="274" width="512" height="238"/>
+    </clipPath>
+  </defs>
+
+  <!-- Opaque, full-bleed ground. The maskable variant depends on this. -->
+  <rect width="512" height="512" fill="#05070F"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#sweep)"/>
+  
+  <rect width="512" height="512" fill="url(#vignette)"/>
+
+  <g transform="translate(256 256) scale(0.94) translate(-256 -256)">
+    <circle cx="256" cy="256" r="232" fill="url(#glow)"/>
+    
+    <g>
+      <circle cx="256" cy="256" r="218" fill="none"
+              stroke="rgba(0, 229, 199, 0.13)" stroke-width="1.6"/>
+      <circle cx="256" cy="256" r="206" fill="none"
+              stroke="rgba(30, 107, 255, 0.42)" stroke-width="3"
+              stroke-dasharray="388.3 71.2 181.2 71.2" stroke-linecap="round"
+              transform="rotate(-36 256 256)"/>
+      <line x1="256.0" y1="32.0" x2="256.0" y2="20.0"
+                    stroke="rgba(30, 107, 255, 0.5)" stroke-width="4" stroke-linecap="round"/><line x1="480.0" y1="256.0" x2="492.0" y2="256.0"
+                    stroke="rgba(30, 107, 255, 0.5)" stroke-width="4" stroke-linecap="round"/><line x1="256.0" y1="480.0" x2="256.0" y2="492.0"
+                    stroke="rgba(30, 107, 255, 0.5)" stroke-width="4" stroke-linecap="round"/><line x1="32.0" y1="256.0" x2="20.0" y2="256.0"
+                    stroke="rgba(30, 107, 255, 0.5)" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g transform="rotate(-9 256 256)">
+      
+    <g>
+      <rect x="130" y="100" width="118" height="148" rx="16" fill="url(#cardFace)"/>
+      <rect x="137" y="107" width="104" height="62.16" rx="11"
+            fill="url(#sheen)"/>
+      <rect x="131" y="101" width="116" height="146" rx="15"
+            fill="none" stroke="rgba(131, 174, 255, 0.85)" stroke-width="2"/>
+      <path d="M 189.0 141.0 L 217.6 157.5 L 217.6 190.5 L 189.0 207.0 L 160.4 190.5 L 160.4 157.5 Z" fill="none" stroke="rgba(255, 255, 255, 0.9)" stroke-width="8"
+            stroke-linejoin="round"/>
+      <circle cx="189" cy="174" r="10.5" fill="rgba(255, 255, 255, 0.92)"/>
+      <circle cx="189" cy="174" r="10.5" fill="none" stroke="rgba(5, 7, 15, 0.25)" stroke-width="1"/>
+    </g>
+    <g>
+      <rect x="264" y="100" width="118" height="148" rx="16" fill="url(#cardBack)"/>
+      <rect x="264.9" y="100.9" width="116.2" height="146.2" rx="15"
+            fill="none" stroke="rgba(0, 229, 199, 0.34)" stroke-width="1.8"/>
+      <rect x="273" y="109" width="100" height="130" rx="10"
+            fill="none" stroke="rgba(0, 229, 199, 0.14)" stroke-width="1.4"/>
+      <path d="M 296 154 L 323 196 L 350 154" fill="none" stroke="rgba(0, 229, 199, 0.62)" stroke-width="11"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g>
+      <rect x="130" y="264" width="118" height="148" rx="16" fill="url(#cardBack)"/>
+      <rect x="130.9" y="264.9" width="116.2" height="146.2" rx="15"
+            fill="none" stroke="rgba(0, 229, 199, 0.34)" stroke-width="1.8"/>
+      <rect x="139" y="273" width="100" height="130" rx="10"
+            fill="none" stroke="rgba(0, 229, 199, 0.14)" stroke-width="1.4"/>
+      <path d="M 162 318 L 189 360 L 216 318" fill="none" stroke="rgba(0, 229, 199, 0.62)" stroke-width="11"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g>
+      <rect x="264" y="264" width="118" height="148" rx="16" fill="url(#cardFace)"/>
+      <rect x="271" y="271" width="104" height="62.16" rx="11"
+            fill="url(#sheen)"/>
+      <rect x="265" y="265" width="116" height="146" rx="15"
+            fill="none" stroke="rgba(131, 174, 255, 0.85)" stroke-width="2"/>
+      <path d="M 323.0 305.0 L 351.6 321.5 L 351.6 354.5 L 323.0 371.0 L 294.4 354.5 L 294.4 321.5 Z" fill="none" stroke="rgba(255, 255, 255, 0.9)" stroke-width="8"
+            stroke-linejoin="round"/>
+      <circle cx="323" cy="338" r="10.5" fill="rgba(255, 255, 255, 0.92)"/>
+      <circle cx="323" cy="338" r="10.5" fill="none" stroke="rgba(5, 7, 15, 0.25)" stroke-width="1"/>
+    </g>
+    </g>
+    <circle cx="256" cy="256" r="46" fill="url(#sparkGlow)"/>
+    <path d="M 256 233 Q 261.98 250.02 279 256 Q 261.98 261.98 256 279 Q 250.02 261.98 233 256 Q 250.02 250.02 256 233 Z" fill="#FFB020"/>
+    
+  </g>
+</svg>
