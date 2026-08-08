@@ -14,8 +14,8 @@
  * ENDPOINT CONTRACT
  *
  * The client POSTs to `VITE_ASSISTANT_URL`, or `/api/assistant` if that is not
- * set. The endpoint is not implemented in this repository yet; this block is
- * the specification for whoever writes it.
+ * set. That endpoint is implemented in this repository at `api/assistant.ts`;
+ * this block is the contract both sides are written against.
  *
  * Request  POST <endpoint>
  *          Content-Type: application/json
@@ -54,41 +54,21 @@
  *
  * SERVER NOTES
  *
- * The intended backend is the Anthropic API with model id `claude-sonnet-5`,
- * which is quick enough to answer inside a headset without the player feeling
- * they are waiting.
+ * See `api/assistant.ts` for the implementation. The parts that matter here:
  *
  *   - THE API KEY LIVES ONLY ON THE SERVER (`ANTHROPIC_API_KEY` in the server
  *     environment). It must never appear in this bundle, in a `VITE_` variable,
  *     or in any request this file makes. The client sends a question; it never
  *     sends credentials.
- *   - Set `thinking: { type: "disabled" }` explicitly. Claude Sonnet 5 runs
- *     adaptive thinking when the field is omitted, which costs latency this
- *     use case cannot spend, and `output_config: { effort: "low" }` is right
- *     for short product answers.
- *   - Do not send `temperature`, `top_p` or `top_k`. Claude Sonnet 5 rejects
- *     non-default sampling parameters with a 400; steer tone in the prompt.
- *   - `max_tokens` around 400. Answers longer than a short paragraph are
- *     unreadable on a floating panel.
- *   - Put the product brief and the house voice in the system prompt with
- *     `cache_control: { type: "ephemeral" }`. It is identical on every request,
- *     so it caches; the minimum cacheable prefix on Sonnet 5 is 1024 tokens.
- *   - Ground the model in `offline.text` and tell it to say it does not know
- *     rather than invent a feature. An invented setting is worse than no answer
- *     when a customer is standing next to the headset.
- *
- * Sketch (Node, `@anthropic-ai/sdk` — a server dependency, not a client one):
- *
- *   const msg = await anthropic.messages.create({
- *     model: "claude-sonnet-5",
- *     max_tokens: 400,
- *     thinking: { type: "disabled" },
- *     output_config: { effort: "low" },
- *     system: [{ type: "text", text: PRODUCT_BRIEF,
- *                cache_control: { type: "ephemeral" } }],
- *     messages: [{ role: "user", content: buildPrompt(body) }],
- *   });
- *   res.json({ answer: textOf(msg), model: "claude-sonnet-5" });
+ *   - The model is `claude-opus-5`, overridable per deployment with the
+ *     `ASSISTANT_MODEL` environment variable for an operator who would rather
+ *     trade some judgement for lower in-headset latency.
+ *   - The server grounds the model in `offline.text` and instructs it to say it
+ *     does not know rather than invent a feature. An invented setting is worse
+ *     than no answer when a customer is standing next to the headset.
+ *   - Every failure path there returns 200 with no `answer` field, because that
+ *     is what this client reads as "unavailable". The endpoint never returns an
+ *     error shape, so nothing it does can surface as one in the headset.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 

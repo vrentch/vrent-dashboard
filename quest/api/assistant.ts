@@ -1,17 +1,19 @@
 /**
  * Backend for the in-headset AI assistant.
  *
- * The headset never holds an API key. The client posts a question here, this
- * function asks Claude, and the answer goes back as plain text. If anything at
- * all goes wrong — no key configured, rate limited, upstream refusal, timeout —
- * we return `unavailable` and the client silently falls back to its offline
- * knowledge base. A customer demo must never surface a stack trace.
+ * Speaks the contract defined at the top of `src/ai/assistant.ts`. The headset
+ * never holds an API key: it posts a question plus the answer its on-device
+ * knowledge base would have given, and this function asks Claude to improve on
+ * that draft. If anything at all goes wrong — no key configured, rate limited,
+ * upstream refusal, timeout — we return a body with no `answer` field, which
+ * the client reads as "unavailable" and silently uses its offline answer. A
+ * customer demo must never surface a stack trace.
  *
  * Request   POST /api/assistant
- *   { "question": string, "context": { screen, edition, inGame, pairs, mode,
- *                                      environment, players } }
- * Response  200 { "text": string, "source": "model" }
- *           200 { "source": "unavailable", "reason": string }   ← client falls back
+ *   { v: 1, question, context: { edition, screen, inGame, settings, players },
+ *     offline: { matched, text } }
+ * Response  200 { answer, suggestions?, model }   ← client uses this
+ *           200 { unavailable: reason }           ← client falls back offline
  *
  * Deploy note: this file must not use relative imports. Vercel runs each API
  * file as native ESM, and extensionless cross-file imports do not resolve
@@ -25,13 +27,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 // lower in-headset latency can set ASSISTANT_MODEL=claude-sonnet-5.
 const MODEL = process.env.ASSISTANT_MODEL || "claude-opus-5";
 
-// Generous enough that adaptive thinking has room — max_tokens caps thinking
-// and reply together, and a tight cap here would truncate mid-sentence. The
-// reply itself stays short because the system prompt says so, not because the
-// ceiling forces it.
+// Answers are two or three sentences, but max_tokens caps thinking and reply
+// together — a tight ceiling would truncate mid-sentence. Brevity comes from
+// the system prompt, not from starving the budget.
 const MAX_TOKENS = 4096;
 
-const UPSTREAM_TIMEOUT_MS = 12_000;
+const UPSTREAM_TIMEOUT_MS = 9_000; // client gives up at 10s; fail before it does.
 
 const SYSTEM = `You are the built-in guide for VRENT Memory XR, a mixed-reality memory game for Meta Quest 3 sold by VRENT (vrent.ch) as a customisable product for business customers.
 
@@ -46,16 +47,19 @@ What the product is:
 - Editions: Demo (solo plus AI, works with no network), Pro (full multiplayer, all environments, leaderboard), Enterprise (customer branding, own 360 uploads, private rooms).
 - Input: Quest controllers or bare hand tracking. Pinch or trigger to turn a card.
 
+You will be given the answer the on-device knowledge base would have returned. Treat it as the product's own wording and the source of truth for facts. If it already answers the question, return it essentially as-is. Improve it only where the player asked something narrower, broader, or different from what that draft addresses.
+
 How to answer:
 - Two or three sentences. You are being read off a floating panel by someone wearing a headset, often mid-game.
-- Plain and specific. No marketing language, no exclamation marks, no emoji, no bullet lists.
-- If you do not know something, say so in one sentence and suggest contacting info@vrent.ch. Never invent a feature, a price, or a menu that does not exist.
+- Plain and specific. No marketing language, no exclamation marks, no emoji, no bullet lists, no headings.
+- Never invent a feature, a price, a menu or a button that is not described above. If you do not know, say so in one sentence and point to info@vrent.ch.
+- Respect the player's edition: do not describe something their build does not include.
 - Answer only about this product. If asked something unrelated, say briefly that you only cover Memory XR.`;
 
 // ── Tiny in-memory rate limit ───────────────────────────────────────────────
 // Serverless instances are short-lived, so this bounds a burst from one headset
-// rather than providing global accounting. It is a courtesy guard on spend, not
-// a security control.
+// rather than providing global accounting. A courtesy guard on spend, not a
+// security control.
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 20;
 const hits = new Map<string, number[]>();
@@ -69,28 +73,58 @@ function rateLimited(key: string): boolean {
   return recent.length > RATE_MAX;
 }
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// ── Wire types (mirror of the client's contract) ────────────────────────────
 
-interface AssistantContext {
-  screen?: string;
-  edition?: string;
-  inGame?: boolean;
+interface RequestSettings {
   pairs?: number;
   mode?: string;
-  environment?: string;
-  players?: number;
+  environmentId?: string;
+  turnSeconds?: number;
 }
 
-function describeContext(ctx: AssistantContext): string {
+interface RequestPlayer {
+  name?: string;
+  isAi?: boolean;
+  aiLevel?: string;
+}
+
+interface RequestContext {
+  edition?: string;
+  screen?: string;
+  inGame?: boolean;
+  settings?: RequestSettings;
+  players?: RequestPlayer[];
+}
+
+interface RequestBody {
+  v?: number;
+  question?: unknown;
+  context?: RequestContext;
+  offline?: { matched?: boolean; text?: string };
+}
+
+function describeContext(ctx: RequestContext): string {
   const bits: string[] = [];
-  if (ctx.edition) bits.push(`edition: ${ctx.edition}`);
-  if (ctx.screen) bits.push(`current screen: ${ctx.screen}`);
+  bits.push(`edition: ${ctx.edition || "unknown"}`);
+  if (ctx.screen) bits.push(`screen: ${ctx.screen}`);
   bits.push(ctx.inGame ? "a game is in progress" : "not currently in a game");
-  if (ctx.pairs) bits.push(`board: ${ctx.pairs * 2} cards`);
-  if (ctx.mode) bits.push(`mode: ${ctx.mode}`);
-  if (ctx.environment) bits.push(`environment: ${ctx.environment}`);
-  if (typeof ctx.players === "number") bits.push(`players: ${ctx.players}`);
-  return bits.join(", ");
+
+  const s = ctx.settings;
+  if (s) {
+    if (s.pairs) bits.push(`board: ${s.pairs * 2} cards`);
+    if (s.mode) bits.push(`mode: ${s.mode}`);
+    if (s.environmentId) bits.push(`environment: ${s.environmentId}`);
+    if (s.turnSeconds) bits.push(`turn timer: ${s.turnSeconds}s`);
+  }
+
+  const players = Array.isArray(ctx.players) ? ctx.players.slice(0, 8) : [];
+  if (players.length) {
+    const who = players
+      .map((p) => `${p.name || "player"}${p.isAi ? ` (AI, ${p.aiLevel || "unknown"})` : ""}`)
+      .join(", ");
+    bits.push(`players: ${who}`);
+  }
+  return bits.join("; ");
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -99,11 +133,11 @@ export async function handleAssistant(
   req: IncomingMessage & { body?: unknown },
   res: ServerResponse,
 ): Promise<void> {
-  const origin = process.env.ALLOWED_ORIGIN || "*";
-  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGIN || "*");
   res.setHeader("Access-Control-Allow-Headers", "content-type");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
@@ -111,15 +145,15 @@ export async function handleAssistant(
     return;
   }
   if (req.method !== "POST") {
-    send(res, 405, { source: "unavailable", reason: "method-not-allowed" });
+    unavailable(res, "method-not-allowed");
     return;
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    // Expected whenever the operator has not configured a key. The headset
-    // treats this as "use the offline answers" — not as an error.
-    send(res, 200, { source: "unavailable", reason: "not-configured" });
+    // Expected whenever the operator has not configured a key. Not an error —
+    // the headset just uses its offline answers.
+    unavailable(res, "not-configured");
     return;
   }
 
@@ -128,25 +162,34 @@ export async function handleAssistant(
     req.socket?.remoteAddress ||
     "unknown";
   if (rateLimited(ip)) {
-    send(res, 200, { source: "unavailable", reason: "rate-limited" });
+    unavailable(res, "rate-limited");
     return;
   }
 
-  let payload: { question?: unknown; context?: AssistantContext };
+  let payload: RequestBody;
   try {
-    payload = typeof req.body === "object" && req.body !== null
-      ? (req.body as typeof payload)
-      : JSON.parse(await readBody(req));
+    payload =
+      typeof req.body === "object" && req.body !== null
+        ? (req.body as RequestBody)
+        : (JSON.parse(await readBody(req)) as RequestBody);
   } catch {
-    send(res, 400, { source: "unavailable", reason: "bad-json" });
+    unavailable(res, "bad-json");
     return;
   }
 
   const question = typeof payload.question === "string" ? payload.question.trim() : "";
   if (question.length < 2 || question.length > 600) {
-    send(res, 400, { source: "unavailable", reason: "bad-question" });
+    unavailable(res, "bad-question");
     return;
   }
+
+  const offlineText =
+    typeof payload.offline?.text === "string" ? payload.offline.text.slice(0, 2000) : "";
+  const offlineMatched = payload.offline?.matched === true;
+
+  const draft = offlineMatched && offlineText
+    ? `The on-device knowledge base answered:\n"""\n${offlineText}\n"""`
+    : "The on-device knowledge base had no entry for this question.";
 
   const client = new Anthropic({ apiKey, timeout: UPSTREAM_TIMEOUT_MS, maxRetries: 1 });
 
@@ -166,33 +209,33 @@ export async function handleAssistant(
       messages: [
         {
           role: "user",
-          content: `Player context: ${describeContext(payload.context ?? {})}\n\nQuestion: ${question}`,
+          content: `Player context: ${describeContext(payload.context ?? {})}\n\n${draft}\n\nPlayer asked: ${question}`,
         },
       ],
     });
 
     if (response.stop_reason === "refusal") {
-      send(res, 200, { source: "unavailable", reason: "refused" });
+      unavailable(res, "refused");
       return;
     }
 
-    const text = response.content
+    const answer = response.content
       .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
       .map((b) => b.text)
       .join("")
       .trim();
 
-    if (!text) {
-      send(res, 200, { source: "unavailable", reason: "empty" });
+    if (!answer) {
+      unavailable(res, "empty");
       return;
     }
 
-    send(res, 200, { text, source: "model" });
+    send(res, 200, { answer, model: response.model });
   } catch (err) {
-    // Every upstream failure degrades to the offline path. We log for the
-    // operator but never leak the reason to the headset.
+    // Every upstream failure degrades to the offline path. Logged for the
+    // operator, never surfaced to the headset.
     console.error("[assistant]", classify(err), err instanceof Error ? err.message : err);
-    send(res, 200, { source: "unavailable", reason: classify(err) });
+    unavailable(res, classify(err));
   }
 }
 
@@ -205,6 +248,15 @@ function classify(err: unknown): string {
   return "unknown";
 }
 
+/**
+ * 200 with no `answer` field. The client's contract treats any body without a
+ * non-empty `answer` as unavailable, so this is the documented way to say
+ * "use your offline reply" without it ever looking like a failure.
+ */
+function unavailable(res: ServerResponse, reason: string): void {
+  send(res, 200, { unavailable: reason });
+}
+
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.end(JSON.stringify(body));
@@ -215,7 +267,7 @@ function readBody(req: IncomingMessage): Promise<string> {
     let data = "";
     req.on("data", (chunk) => {
       data += chunk;
-      // A question is a few hundred bytes; anything larger is not a question.
+      // A question plus context is a few KB; anything larger is not one.
       if (data.length > 64_000) reject(new Error("body-too-large"));
     });
     req.on("end", () => resolve(data || "{}"));
