@@ -21,3 +21,4 @@ android/*.aab
 .env.*
 !.env.example
 .DS_Store
+dist-single
