@@ -397,6 +397,12 @@ function refresh(): void {
     watermark: EDITION.features.watermark,
   });
 
+  // `current()` keeps reporting the last screen after `hide()`, so re-rendering
+  // it unconditionally re-opens the menu — which left it floating over the
+  // board for the whole match, because starting a game hides the menu and then
+  // immediately refreshes. The HUD above is always live; the menu only when shown.
+  if (!ui.visible()) return;
+
   switch (ui.current()) {
     case "home":
       ui.show("home", homeProps());
