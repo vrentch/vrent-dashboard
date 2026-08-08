@@ -84,6 +84,67 @@ export interface ActivityEntry {
   at: number;
 }
 
+// ── Activity catalog ─────────────────────────────────────────────────────────
+// MET (metabolic equivalent) values from the Compendium of Physical Activities,
+// used to estimate burn: kcal ≈ MET × body-weight-kg × hours. Grouped so the
+// picker reads like a menu instead of a wall of chips.
+export interface ActivityKind { label: string; emoji: string; met: number; group: string }
+export const ACTIVITIES: ActivityKind[] = [
+  // Cardio
+  { label: "Walk", emoji: "🚶", met: 3.5, group: "Cardio" },
+  { label: "Running", emoji: "🏃", met: 9.8, group: "Cardio" },
+  { label: "Cycling", emoji: "🚴", met: 7.5, group: "Cardio" },
+  { label: "Swimming", emoji: "🏊", met: 7.0, group: "Cardio" },
+  { label: "Hiking", emoji: "🥾", met: 6.0, group: "Cardio" },
+  { label: "Rowing", emoji: "🚣", met: 7.0, group: "Cardio" },
+  { label: "Elliptical", emoji: "🌀", met: 5.0, group: "Cardio" },
+  { label: "Stairs", emoji: "🪜", met: 8.0, group: "Cardio" },
+  // Studio & mind-body
+  { label: "Yoga", emoji: "🧘", met: 3.0, group: "Studio" },
+  { label: "Pilates", emoji: "🤸", met: 3.8, group: "Studio" },
+  { label: "Stretching", emoji: "🙆", met: 2.5, group: "Studio" },
+  { label: "Dance", emoji: "💃", met: 5.5, group: "Studio" },
+  { label: "Barre", emoji: "🩰", met: 4.0, group: "Studio" },
+  { label: "Spinning", emoji: "🚲", met: 8.5, group: "Studio" },
+  // Strength & intensity
+  { label: "Gym", emoji: "🏋️", met: 5.0, group: "Strength" },
+  { label: "Strength", emoji: "💪", met: 6.0, group: "Strength" },
+  { label: "HIIT", emoji: "⚡", met: 8.0, group: "Strength" },
+  { label: "CrossFit", emoji: "🔥", met: 8.5, group: "Strength" },
+  { label: "Boxing", emoji: "🥊", met: 9.0, group: "Strength" },
+  { label: "Climbing", emoji: "🧗", met: 8.0, group: "Strength" },
+  // Sports
+  { label: "Football", emoji: "⚽", met: 7.0, group: "Sports" },
+  { label: "Tennis", emoji: "🎾", met: 7.3, group: "Sports" },
+  { label: "Padel", emoji: "🏓", met: 6.5, group: "Sports" },
+  { label: "Basketball", emoji: "🏀", met: 6.5, group: "Sports" },
+  { label: "Volleyball", emoji: "🏐", met: 4.0, group: "Sports" },
+  { label: "Golf", emoji: "⛳", met: 4.8, group: "Sports" },
+  { label: "Skiing", emoji: "🎿", met: 7.0, group: "Sports" },
+  { label: "Snowboard", emoji: "🏂", met: 6.5, group: "Sports" },
+  { label: "Skating", emoji: "⛸️", met: 7.0, group: "Sports" },
+  { label: "Surfing", emoji: "🏄", met: 5.0, group: "Sports" },
+  // Everyday
+  { label: "Housework", emoji: "🧹", met: 3.3, group: "Everyday" },
+  { label: "Gardening", emoji: "🌱", met: 4.0, group: "Everyday" },
+  { label: "Other", emoji: "✨", met: 5.0, group: "Everyday" },
+];
+export const ACTIVITY_GROUPS = ["Cardio", "Studio", "Strength", "Sports", "Everyday"];
+
+export function activityByLabel(label: string): ActivityKind | undefined {
+  const l = (label || "").toLowerCase();
+  return ACTIVITIES.find((a) => a.label.toLowerCase() === l);
+}
+export function activityEmoji(label: string): string {
+  return activityByLabel(label)?.emoji || "✨";
+}
+/** kcal ≈ MET × kg × hours (falls back to 75 kg when weight is unknown). */
+export function estimateBurn(label: string, minutes: number, weightKg?: number | null): number {
+  const met = activityByLabel(label)?.met ?? 5;
+  const kg = weightKg && weightKg > 0 ? weightKg : 75;
+  return Math.max(0, Math.round(met * kg * (Math.max(0, minutes) / 60)));
+}
+
 export interface WeightEntry {
   id: string;
   date: string;

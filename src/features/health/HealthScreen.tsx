@@ -3,7 +3,7 @@ import { Camera, Plus, SlidersHorizontal, Sparkles, Flame, RefreshCw, ChevronRig
 import {
   useHealth, macrosOn, macroTargets, calorieTarget, todayKey, foodsOn, activitiesOn, stepsOn, burnOn,
   waterOn, sleepOn, latestWeight, removeActivity, removeFood, savePlan, saveCoach, recentSummary, toKey, weeklyStats, foodHints,
-  fastingStatus, markLastMeal, markFirstMeal, mealTypeOf, mealBreakdown, MEAL_META, type FoodEntry, type MealType,
+  fastingStatus, markLastMeal, markFirstMeal, mealTypeOf, mealBreakdown, MEAL_META, activityEmoji, type FoodEntry, type MealType,
 } from "../../lib/health";
 import SwipeRow from "../../components/SwipeRow";
 import { analyzeImage, aiPlan, aiCoach, type FoodEstimate } from "../../lib/api";
@@ -248,14 +248,19 @@ export default function HealthScreen() {
 
         {/* Quick stats — tap to log/amend */}
         <div className="grid grid-cols-4 gap-2">
-          <Stat icon={Footprints} label="Steps" value={steps ? steps.toLocaleString() : "—"} onClick={isToday ? () => openLog("steps") : undefined} />
-          <Stat icon={Droplets} label="Water" value={water ? `${(water / 1000).toFixed(1)}L` : "—"} onClick={isToday ? () => openLog("water") : undefined} />
-          <Stat icon={Moon} label="Sleep" value={sleep ? `${sleep}h` : "—"} onClick={isToday ? () => openLog("sleep") : undefined} />
-          <Stat icon={Scale} label="Weight" value={weight ? `${weight}kg` : "—"} onClick={isToday ? () => openLog("weight") : undefined} />
+          <Stat icon={Footprints} label="Steps" value={steps ? steps.toLocaleString() : "—"} onClick={() => openLog("steps")} />
+          <Stat icon={Droplets} label="Water" value={water ? `${(water / 1000).toFixed(1)}L` : "—"} onClick={() => openLog("water")} />
+          <Stat icon={Moon} label="Sleep" value={sleep ? `${sleep}h` : "—"} onClick={() => openLog("sleep")} />
+          <Stat icon={Scale} label="Weight" value={weight ? `${weight}kg` : "—"} onClick={() => openLog("weight")} />
         </div>
 
-        {isToday && (<>
-        {/* Actions — food goes in by photo OR by describing it; both one tap away */}
+        {/* Actions — food goes in by photo OR by describing it; both one tap away.
+            These work for the day you're viewing, so past days can be fixed up. */}
+        {!isToday && (
+          <p className="rounded-xl accent-gradient-soft text-brand-700 dark:text-brand-300 text-[12px] font-medium px-3 py-2">
+            Editing <b>{viewLabel}</b> — anything you add lands on that day.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => fileRef.current?.click()}
@@ -286,8 +291,9 @@ export default function HealthScreen() {
         </button>
 
         {/* One-tap common foods & drinks */}
-        <QuickAddFoods />
+        <QuickAddFoods date={viewDate} />
 
+        {isToday && (<>
         {/* Intermittent fasting */}
         {s.fasting.enabled ? (
           <section className="rounded-3xl glass p-4">
@@ -448,7 +454,8 @@ export default function HealthScreen() {
             <div className="flex flex-wrap gap-2">
               {acts.map((a) => (
                 <span key={a.id} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full glass-subtle text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  <Flame size={12} className="text-slate-400 dark:text-slate-500" /> {a.label}{a.minutes ? ` · ${a.minutes}m` : ""}
+                  <span className="text-[13px] leading-none">{activityEmoji(a.label || "")}</span>
+                  {a.label}{a.minutes ? ` · ${a.minutes}m` : ""}{a.calories ? ` · ${a.calories} kcal` : ""}
                   <button onClick={() => removeActivity(a.id)} className="grid place-items-center w-5 h-5 rounded-full text-slate-400 active:text-rose-500 active:bg-rose-500/10" aria-label="Remove">
                     <X size={12} />
                   </button>
@@ -512,9 +519,9 @@ export default function HealthScreen() {
       </div>
 
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
-      <LogSheet open={logOpen} onClose={() => setLogOpen(false)} initial={logMode} />
+      <LogSheet open={logOpen} onClose={() => setLogOpen(false)} initial={logMode} date={viewDate} />
       <PlanSheet open={planOpen} onClose={() => setPlanOpen(false)} plan={s.plan} />
-      <FoodConfirmSheet open={foodOpen} onClose={() => setFoodOpen(false)} loading={foodLoading} error={foodErr} estimate={foodEstimate} preview={foodPreview} />
+      <FoodConfirmSheet open={foodOpen} onClose={() => setFoodOpen(false)} loading={foodLoading} error={foodErr} estimate={foodEstimate} preview={foodPreview} date={viewDate} />
       <MealEditSheet open={!!editMeal} onClose={() => setEditMeal(null)} entry={editMeal} />
       <AppleHealthSheet open={appleOpen} onClose={() => setAppleOpen(false)} />
       <FastingSheet open={fastOpen} onClose={() => setFastOpen(false)} />

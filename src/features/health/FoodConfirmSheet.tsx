@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Check, Sparkles, X, Plus, Search, Globe } from "lucide-react";
 import Sheet from "../../components/Sheet";
-import { addFood, rememberFood, frequentFoods, useHealth, type LearnedFood } from "../../lib/health";
+import { addFood, rememberFood, frequentFoods, useHealth, todayKey, type LearnedFood } from "../../lib/health";
 import { aiNutrition, aiFoodLookup, type FoodEstimate } from "../../lib/api";
 
 // Units the user can pick — grams, countable pieces, and common household units.
@@ -30,6 +30,7 @@ export default function FoodConfirmSheet({
   error,
   estimate,
   preview,
+  date,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,9 +38,14 @@ export default function FoodConfirmSheet({
   error: string | null;
   estimate: FoodEstimate | null;
   preview: string | null;
+  /** Day this meal belongs to (YYYY-MM-DD) — defaults to today. */
+  date?: string;
 }) {
   const s = useHealth();
   const learned = frequentFoods(s, 10);
+  // Meals can be logged onto an earlier day from the day picker — say so.
+  const isToday = !date || date === todayKey();
+  const dayLabel = isToday ? "today" : new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
   const [name, setName] = useState("");
   const [items, setItems] = useState<EditItem[]>([]);
   const [recalcing, setRecalcing] = useState(false);
@@ -214,6 +220,7 @@ export default function FoodConfirmSheet({
       }
     });
     addFood({
+      date,
       name: name.trim() || "Meal",
       calories: Math.round(total.calories),
       protein_g: Math.round(total.protein_g),
@@ -231,11 +238,16 @@ export default function FoodConfirmSheet({
       footer={
         hasFood ? (
           <button onClick={log} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold active:scale-[0.98]">
-            <Check size={16} /> Add {Math.round(total.calories)} kcal to today
+            <Check size={16} /> Add {Math.round(total.calories)} kcal to {dayLabel}
           </button>
         ) : undefined
       }
     >
+      {!isToday && (
+        <p className="rounded-xl accent-gradient-soft text-brand-700 dark:text-brand-300 text-[12px] font-medium px-3 py-2 mb-4">
+          Logging to <b>{dayLabel}</b> — not today.
+        </p>
+      )}
       {preview && <img src={preview} alt="" className="w-full max-h-52 object-cover rounded-2xl mb-4" />}
 
       {loading ? (

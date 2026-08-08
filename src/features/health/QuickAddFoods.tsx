@@ -32,14 +32,14 @@ const ITEMS: QuickItem[] = [
   { emoji: "🍫", name: "Choc bar", kind: "food", kcal: 230, p: 3, c: 30, f: 12 },
 ];
 
-export default function QuickAddFoods() {
+export default function QuickAddFoods({ date }: { date?: string }) {
   const [added, setAdded] = useState<string | null>(null);
 
   function add(it: QuickItem) {
     if (it.kind === "water") {
-      addWater(it.ml || 0);
+      addWater(it.ml || 0, date);
     } else {
-      addFood({ name: it.name, calories: it.kcal || 0, protein_g: it.p || 0, carbs_g: it.c || 0, fat_g: it.f || 0 });
+      addFood({ date, name: it.name, calories: it.kcal || 0, protein_g: it.p || 0, carbs_g: it.c || 0, fat_g: it.f || 0 });
     }
     setAdded(it.name);
     window.setTimeout(() => setAdded((a) => (a === it.name ? null : a)), 1400);
