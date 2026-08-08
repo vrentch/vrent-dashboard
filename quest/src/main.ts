@@ -14,7 +14,13 @@
 
 import * as THREE from "three";
 
-import { applyBrandCssVars, brand } from "../shared/brand.ts";
+import {
+  applyBrandCssVars,
+  brand,
+  isThemeId,
+  setTheme,
+  type ThemeId,
+} from "../shared/brand.ts";
 import { allowsEnvironment, resolveEdition, type AiLevel } from "../shared/editions.ts";
 import {
   DEFAULT_SETTINGS,
@@ -63,6 +69,7 @@ interface Prefs {
   settings: GameSettings;
   placement: "table" | "room";
   aiLevel: AiLevel;
+  theme: ThemeId;
   toggles: Toggles;
 }
 
@@ -76,12 +83,23 @@ const DEFAULT_TOGGLES: Toggles = {
 
 const PREFS_KEY = "vrent-memory-xr.prefs";
 
+function prefersLight(): boolean {
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: light)").matches ?? false;
+  } catch {
+    return false;
+  }
+}
+
 function loadPrefs(): Prefs {
   const base: Prefs = {
     playerName: "",
     settings: { ...DEFAULT_SETTINGS },
     placement: "room",
     aiLevel: "medium",
+    // First run follows the operator's OS preference; after that their explicit
+    // choice wins, so a demo laptop set to light does not open dark.
+    theme: prefersLight() ? "light" : "dark",
     toggles: { ...DEFAULT_TOGGLES },
   };
   try {
@@ -91,6 +109,7 @@ function loadPrefs(): Prefs {
     return {
       ...base,
       ...saved,
+      theme: isThemeId(saved.theme) ? saved.theme : base.theme,
       settings: { ...base.settings, ...(saved.settings ?? {}) },
       toggles: { ...base.toggles, ...(saved.toggles ?? {}) },
     };
@@ -141,6 +160,7 @@ const app = {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 
+setTheme(prefs.theme);
 applyBrandCssVars();
 document.title = EDITION.name;
 
@@ -374,6 +394,7 @@ function settingsProps() {
   return {
     settings: prefs.settings,
     toggles: prefs.toggles,
+    theme: prefs.theme,
     placement: prefs.placement,
     symbolSets: SYMBOL_SETS.map((s) => ({ id: s.id, name: s.name })),
     version: `${EDITION.name} ${VERSION}`,
@@ -615,6 +636,14 @@ ui.onAction((action: UiAction) => {
       savePrefs(prefs);
       board.setPlacement(action.placement);
       ui.hud.setPlacement(action.placement);
+      refresh();
+      break;
+    case "setTheme":
+      prefs.theme = action.theme;
+      savePrefs(prefs);
+      // Everything that caches a derived colour rebuilds off the change event
+      // fired inside setTheme; nothing else to do here.
+      setTheme(action.theme);
       refresh();
       break;
     case "setToggle":
