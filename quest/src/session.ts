@@ -22,6 +22,7 @@ import {
   type GameSettings,
   type MatchResult,
   type MatchState,
+  type Phase,
   type Player,
 } from "../shared/game.ts";
 import { createAiOpponent } from "./ai/opponent.ts";
@@ -91,6 +92,30 @@ export function createLocalSession(events: LocalSessionEvents): LocalSession {
     events.onGameOver(summarise(match, flipsByPlayer));
   }
 
+  /**
+   * Turns the peeked cards back over and moves the game on.
+   *
+   * In Sudden Death `resolveMiss` can eliminate the last remaining player and
+   * end the match right here, so we act on the phase it reports back. Re-reading
+   * `match.phase` instead would look correct and silently never fire: the guard
+   * above narrows it to "playing" for the rest of the function, so the finished
+   * branch compiles away — which is how a timeout elimination came to hang with
+   * no results screen, `beginTurn` quietly returning on a finished match while
+   * nothing ever called `finish`.
+   */
+  function settleMiss(playerIndex: number, hidden: readonly number[]): void {
+    if (!match || match.phase !== "playing") return;
+
+    const phase: Phase = resolveMiss(match, playerIndex);
+    events.onHidden([...hidden]);
+
+    if (phase === "finished") {
+      finish();
+      return;
+    }
+    beginTurn();
+  }
+
   function beginTurn(): void {
     if (!match || match.phase !== "playing") return;
 
@@ -104,13 +129,11 @@ export function createLocalSession(events: LocalSessionEvents): LocalSession {
         // Out of time mid-turn: put back whatever is showing and move on.
         if (!match || match.phase !== "playing") return;
         if (match.selection.length > 0) {
-          const shown = [...match.selection];
-          resolveMiss(match, match.turn);
-          events.onHidden(shown);
+          settleMiss(match.turn, [...match.selection]);
         } else {
           advanceTurn(match);
+          beginTurn();
         }
-        beginTurn();
       }, match.settings.turnSeconds * 1000);
     } else {
       match.turnDeadline = 0;
@@ -213,16 +236,7 @@ export function createLocalSession(events: LocalSessionEvents): LocalSession {
 
         const hidden = [...outcome.indices];
         if (missTimer) clearTimeout(missTimer);
-        missTimer = setTimeout(() => {
-          if (!match || match.phase !== "playing") return;
-          resolveMiss(match, playerIndex);
-          events.onHidden(hidden);
-          if (match.phase === "finished") {
-            finish();
-            return;
-          }
-          beginTurn();
-        }, match.settings.peekMs);
+        missTimer = setTimeout(() => settleMiss(playerIndex, hidden), match.settings.peekMs);
         return true;
       }
     }

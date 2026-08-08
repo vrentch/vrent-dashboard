@@ -261,10 +261,11 @@ class Environment implements EnvironmentSystem {
     this.veil.matrixWorldAutoUpdate = false;
     this.veil.renderOrder = 100000;
     this.veil.visible = false;
-    // Far enough from the eye to sit outside the near plane, wide enough that
-    // no head rotation can uncover an edge.
-    this.veilOffset.makeTranslation(0, 0, -0.35);
-    this.veilOffset.scale(new THREE.Vector3(6, 6, 1));
+    // Outside whatever near plane the engine chose, and wide enough that no
+    // head rotation can uncover an edge.
+    const veilDistance = Math.max(0.25, engine.camera.near * 4);
+    this.veilOffset.makeTranslation(0, 0, -veilDistance);
+    this.veilOffset.scale(new THREE.Vector3(veilDistance * 18, veilDistance * 18, 1));
     this.veil.onBeforeRender = (_r, _s, cam) => {
       this.veil.matrixWorld.multiplyMatrices(cam.matrixWorld, this.veilOffset);
     };
@@ -580,25 +581,22 @@ class Environment implements EnvironmentSystem {
     layer.scene.setOpacity(0);
     this.engine.world.add(layer.scene.root);
 
-    if (!this.outgoing) {
-      // First environment of the session: bring it straight up, no veil.
+    const first = !this.outgoing;
+    if (first) {
+      // Nothing to dissolve from. Commit the room's light and clear colour up
+      // front and ease only the geometry in — a veil over an empty scene would
+      // read as a flash, which is the one thing a first impression cannot do.
       this.copyLighting(layer.scene.lighting);
       this.setExposure(layer.spec.ambient, layer.spec.key);
       this.pushBackground(layer.scene.lighting);
       this.pushLighting();
       this.tint.set(hex(layer.spec.tint));
-      layer.scene.setOpacity(1);
-      this.fadeT = 1;
-      this.fading = false;
-      this.swapped = true;
-      this.veil.visible = false;
-      return;
     }
 
     this.fadeT = 0;
     this.fading = true;
-    this.swapped = false;
-    this.veil.visible = true;
+    this.swapped = first;
+    this.veil.visible = !first;
   }
 
   private stepFade(dt: number): void {
@@ -620,15 +618,15 @@ class Environment implements EnvironmentSystem {
 
     const k = smoothstep(0.18, 0.82, t);
 
-    // The live tint carries the board and the spatial UI across the swap.
-    this.tint.set(hex(from ? from.spec.tint : to.spec.tint)).lerp(this.tintOf(to.spec), k);
-
-    // Veil: deep brand ink carrying a trace of the room. Peaks short of solid,
-    // so the dissolve stays visible underneath and no frame is ever black.
-    this.veilMaterial.opacity = Math.pow(Math.sin(Math.PI * t), 1.25) * VEIL_PEAK;
-    this.veilMaterial.color.set(hex(palette.ink)).lerp(this.tint, 0.16);
-
     if (from) {
+      // The live tint carries the board and the spatial UI across the swap.
+      this.tint.set(hex(from.spec.tint)).lerp(this.tintOf(to.spec), k);
+
+      // Veil: deep brand ink carrying a trace of the room. Peaks short of
+      // solid, so the dissolve stays visible under it and no frame goes black.
+      this.veilMaterial.opacity = Math.pow(Math.sin(Math.PI * t), 1.25) * VEIL_PEAK;
+      this.veilMaterial.color.set(hex(palette.ink)).lerp(this.tint, 0.16);
+
       this.lerpLighting(from.scene.lighting, to.scene.lighting, k);
       this.setExposure(
         from.spec.ambient + (to.spec.ambient - from.spec.ambient) * k,

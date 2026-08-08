@@ -1082,7 +1082,10 @@ export function codeSlots(
   const w = (r.w - totalGaps) / slots;
   const h = Math.min(r.h, w * 1.24);
   const y = r.y + (r.h - h) / 2;
-  const shake = (o.shake ?? 0) * Math.sin((o.shake ?? 0) * 34) * 10;
+  // A short, decaying lateral shake on rejection. Four cycles, ~11 px peak:
+  // enough to read as "no" without looking like a glitch.
+  const s = o.shake ?? 0;
+  const shake = s > 0 ? s * 26 * Math.sin(s * 60) : 0;
 
   let x = r.x + shake;
   for (let i = 0; i < slots; i++) {
@@ -1090,6 +1093,9 @@ export function codeSlots(
     const filled = ch !== undefined;
     const isNext = !filled && value.length === i;
     const box: Rect = { x, y, w, h };
+    // Tracked per slot so a character pops in as it lands, and resets when the
+    // slot is cleared with backspace.
+    const pop = g.anim(`slot${i}#pop`, filled ? 1 : 0, 150);
 
     const border =
       o.status === "invalid" ? palette.danger : o.status === "joined" ? palette.accent : isNext ? palette.accent : filled ? theme.lineStrong : theme.line;
@@ -1098,13 +1104,13 @@ export function codeSlots(
     g.strokeRound(box, tokens.radius.md, border, isNext || o.status !== "idle" ? 3 : 1);
 
     if (filled) {
-      const pop = g.anim(`slot${i}#pop`, 1, 140);
       g.text(ch, box.x + box.w / 2, box.y + box.h / 2 + 2, {
         role: "monoBig",
-        size: h * 0.52 * (0.9 + pop * 0.1),
+        size: h * 0.52 * (0.82 + pop * 0.18),
         align: "centre",
         color: o.status === "invalid" ? palette.danger : theme.fg,
         tracking: 0,
+        alpha: 0.35 + pop * 0.65,
       });
     } else {
       g.hairline(box.x + box.w * 0.28, box.y + box.h * 0.72, box.x + box.w * 0.72, box.y + box.h * 0.72, isNext ? rgba(palette.accent, 0.8) : theme.lineStrong);

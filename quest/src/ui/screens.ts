@@ -455,9 +455,9 @@ export function createUi(engine: Engine, deps: UiDeps): Ui {
     // Brand block.
     brandMark(g, area.x + 4, area.y + 6, 54);
     g.text(edition.name, area.x + 78, area.y + 26, { role: "h1", color: theme.fg });
-    g.text(edition.tagline, area.x + 80, area.y + 74, { role: "body", color: theme.fg2 });
+    g.text(edition.tagline, area.x + 80, area.y + 74, { role: "body", color: theme.fg2, maxWidth: area.w - 240 });
     if (edition.id !== "pro") {
-      tag(g, area.x + 78 + g.measure(edition.name, { role: "h1" }) + 18, area.y + 26, EDITION_LABEL[edition.id], "reward");
+      tag(g, area.x + area.w - 140, area.y + 26, EDITION_LABEL[edition.id], "reward");
     }
 
     const [, below] = cutTop(area, 132, 20);
@@ -1364,13 +1364,13 @@ export function createUi(engine: Engine, deps: UiDeps): Ui {
       subtitle: `${p.result.pairs} pairs · ${modeName(p.result.mode)} · ${formatDuration(p.result.durationMs)}`,
     });
 
-    const [top, bottom] = cutTop(body, 300, 20);
-    const [podiumArea, tableArea] = cutLeft(top, 520, 30);
+    const [top, bottom] = cutTop(body, 452, 20);
+    const [podiumArea, tableArea] = cutLeft(top, 540, 30);
     drawPodium(g, podiumArea, p);
 
     // Full standings.
-    const shown = results.slice(0, 5);
-    const rows = rowsIn(tableArea, 5, 8);
+    const shown = results.slice(0, 6);
+    const rows = rowsIn(tableArea, 6, 8);
     shown.forEach((res, i) => {
       const r = rows[i];
       const view = p.players.find((x) => x.id === res.playerId);
@@ -1398,7 +1398,8 @@ export function createUi(engine: Engine, deps: UiDeps): Ui {
     });
 
     // Stats and actions.
-    const [stats, actions] = cutTop(bottom, 118, 18);
+    const [stats, belowStats] = cutTop(bottom, 118, 20);
+    const [actions] = cutTop(belowStats, CONTROL.h, 0);
     const tiles = colsIn(stats, 4, 14);
     statTile(g, tiles[0], { label: "Duration", value: formatDuration(p.result.durationMs) });
     statTile(g, tiles[1], { label: "Board", value: `${p.result.pairs} pairs` });
@@ -1507,20 +1508,20 @@ export function createUi(engine: Engine, deps: UiDeps): Ui {
 
     if (o.locked) lockBadge(g, box.x + box.w - pad, badge.y + 20, o.locked.requires, "right");
 
-    g.text(o.title, box.x + pad, badge.y + badge.h + 44, {
+    g.text(o.title, box.x + pad, badge.y + badge.h + 38, {
       role: "h2",
       color: o.locked ? theme.fg2 : theme.fg,
       maxWidth: box.w - pad * 2,
     });
-    g.paragraph(o.body, { x: box.x + pad, y: badge.y + badge.h + 68, w: box.w - pad * 2 - 30, h: 86 }, {
+    g.paragraph(o.body, { x: box.x + pad, y: badge.y + badge.h + 64, w: box.w - pad * 2 - 30, h: 84 }, {
       role: "body",
       color: theme.fgMuted,
       lines: 2,
     });
     if (o.meta) {
-      g.text(o.meta, box.x + pad, box.y + box.h - 26, { role: "caption", color: theme.fg2 });
+      g.text(o.meta, box.x + pad, box.y + box.h - 24, { role: "caption", color: theme.fg2 });
     }
-    icon(g, "forward", box.x + box.w - pad - 4, box.y + box.h - 28, 18, hover > 0 ? theme.fg2 : theme.lineStrong, 2.4);
+    icon(g, "forward", box.x + box.w - pad - 4, box.y + box.h - 26, 18, hover > 0 ? theme.fg2 : theme.lineStrong, 2.4);
 
     g.hit({ id: o.id, rect: r });
     return g.clicked(o.id);

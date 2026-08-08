@@ -645,8 +645,9 @@ export class Panel {
     if (driver.held && this.activeId) {
       if (point && (point.x !== this.dragPoint?.x || point.y !== this.dragPoint?.y)) {
         this.dragPoint = point;
-        // Only the widget knows whether the new position changed anything, so
-        // it dirties the panel itself by way of a changed anim target.
+        // Take the throttled redraw path: a slider dragged with a controller
+        // ray needs to track the hand, but not at 90 texture uploads a second.
+        this.animDirty = true;
       }
     }
 
@@ -943,8 +944,14 @@ class GfxImpl implements Gfx {
   bounds: Rect = { x: 0, y: 0, w: 0, h: 0 };
   area: Rect = { x: 0, y: 0, w: 0, h: 0 };
   readonly theme = theme;
+  private readonly panel: Panel;
 
-  constructor(private readonly panel: Panel) {}
+  // Written out rather than using a parameter property: those are erasable-TS
+  // syntax that Node's type stripper rejects, and this file is worth keeping
+  // runnable outside the bundler.
+  constructor(panel: Panel) {
+    this.panel = panel;
+  }
 
   get ctx(): CanvasRenderingContext2D {
     return this.panel._ctx();
@@ -1253,11 +1260,14 @@ function buildPanelGeometry(w: number, h: number, radius: number): THREE.BufferG
     }
   }
   for (let i = 0; i < segs; i++) {
-    const a = i;
-    const b = i + 1;
-    const c = i + segs + 1;
-    const d = i + segs + 2;
-    indices.push(a, c, b, b, c, d);
+    const a = i; // bottom-left
+    const b = i + 1; // bottom-right
+    const c = i + segs + 1; // top-left
+    const d = i + segs + 2; // top-right
+    // Counter-clockwise seen from +Z, so the winding agrees with the +Z normals
+    // above. Get this backwards and `side: FrontSide` culls the panel away —
+    // it renders as nothing and every ray passes straight through it.
+    indices.push(a, b, c, b, d, c);
   }
 
   const geo = new THREE.BufferGeometry();

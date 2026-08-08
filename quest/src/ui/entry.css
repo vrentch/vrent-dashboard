@@ -39,10 +39,16 @@
   transition: opacity var(--vr-motion-base, 220ms) ease;
 }
 
+/* Fades out, then leaves the tab order and the accessibility tree entirely —
+   an invisible overlay you can still tab into is a real bug in a headset. */
 .vr-entry[hidden],
 .vr-entry.is-hidden {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
+  transition:
+    opacity var(--vr-motion-base, 220ms) ease,
+    visibility 0s linear var(--vr-motion-base, 220ms);
 }
 
 .vr-entry *,
@@ -338,6 +344,10 @@
   color: var(--vr-text-2);
 }
 
+.vr-url[hidden] {
+  display: none;
+}
+
 .vr-url {
   display: inline-block;
   margin-top: 12px;
@@ -398,6 +408,11 @@
 }
 
 /* ── Hero art: the board, in miniature ──────────────────────────────────── */
+
+/* The caption hangs below the frame, so reserve room for it. */
+.vr-hero__art {
+  padding-bottom: 42px;
+}
 
 .vr-art {
   position: relative;

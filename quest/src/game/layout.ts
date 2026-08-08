@@ -46,8 +46,10 @@ export interface PlacementSpec {
 export const PLACEMENTS: Readonly<Record<Placement, PlacementSpec>> = {
   table: {
     id: "table",
-    maxWidth: 0.78,
-    maxHeight: 0.46,
+    maxWidth: 0.72,
+    // Also the board's depth across the desk once tilted — 0.44 m keeps the
+    // far row inside a seated player's reach.
+    maxHeight: 0.44,
     maxCard: 0.125,
     distance: 0.6,
     height: 0.83,
@@ -57,7 +59,9 @@ export const PLACEMENTS: Readonly<Record<Placement, PlacementSpec>> = {
   },
   room: {
     id: "room",
-    maxWidth: 2.35,
+    // 2.20 × 1.34 at 2.05 m is 56° × 36° — inside the eyes-only comfort zone,
+    // so even the 48-card board never asks the player to turn their head.
+    maxWidth: 2.2,
     maxHeight: 1.34,
     maxCard: 0.36,
     distance: 2.05,
@@ -141,7 +145,7 @@ export function computeLayout(preset: BoardPreset, placement: Placement): BoardL
   const boardWidth = cols * pitchX - gapX;
   const boardHeight = rows * pitchY - gapY;
 
-  const cardThickness = Math.max(0.0022, Math.min(0.014, cardHeight * 0.052));
+  const cardThickness = Math.max(0.0025, Math.min(0.016, cardHeight * 0.05));
   const cornerRadius = cardHeight * 0.085;
   const bevel = Math.min(cardThickness * 0.42, cardHeight * 0.016);
 

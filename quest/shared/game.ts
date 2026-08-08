@@ -254,8 +254,16 @@ export function applyFlip(state: MatchState, playerIndex: number, index: number)
   return { kind: "missed", indices: [a, b], by: playerIndex };
 }
 
-/** Turns the two peeked cards back over and advances the turn. */
-export function resolveMiss(state: MatchState, playerIndex: number): void {
+/**
+ * Turns the two peeked cards back over and advances the turn.
+ *
+ * Returns the resulting phase. In Sudden Death this call can eliminate the last
+ * remaining player and end the match, and a caller that assumes the game is
+ * still running will hang without ever reporting a result — so the phase is
+ * returned rather than left to be re-read from the mutated state, where a
+ * caller's earlier `phase === "playing"` guard would have narrowed it.
+ */
+export function resolveMiss(state: MatchState, playerIndex: number): Phase {
   for (const i of state.selection) {
     const c = state.cards[i];
     if (c && !c.matched) c.faceUp = false;
@@ -268,11 +276,12 @@ export function resolveMiss(state: MatchState, playerIndex: number): void {
     const alive = state.players.filter((x) => !x.out);
     if (alive.length <= 1) {
       state.phase = "finished";
-      return;
+      return state.phase;
     }
   }
 
   if (state.settings.mode !== "timeattack") advanceTurn(state);
+  return state.phase;
 }
 
 export function advanceTurn(state: MatchState): void {
@@ -311,6 +320,8 @@ export interface PlayerResult {
   rank: number;
   /** Matches ÷ flips, 0-1. The stat that actually shows skill. */
   accuracy: number;
+  /** Eliminated in Sudden Death. Always false in the other modes. */
+  out: boolean;
 }
 
 export interface MatchResult {
@@ -322,15 +333,26 @@ export interface MatchResult {
 }
 
 export function summarise(state: MatchState, flipsByPlayer: Record<string, number> = {}): MatchResult {
-  const ranked = [...state.players].sort((a, b) => b.score - a.score);
+  // Sudden Death is won by surviving, not by scoring: being eliminated puts a
+  // player below every survivor whatever their score. Without this an eliminated
+  // player ties for first against a survivor on the same score, which is the
+  // opposite of what the mode promises.
+  const suddenDeath = state.settings.mode === "sudden";
+  const ranked = [...state.players].sort((a, b) => {
+    if (suddenDeath && a.out !== b.out) return a.out ? 1 : -1;
+    return b.score - a.score;
+  });
+
   let rank = 0;
-  let lastScore = Number.POSITIVE_INFINITY;
+  let lastKey = "";
 
   const results: PlayerResult[] = ranked.map((p, i) => {
-    // Equal scores share a rank; the next rank skips accordingly.
-    if (p.score < lastScore) {
+    // Players who are level on every ranking term share a rank; the next rank
+    // then skips past them.
+    const key = suddenDeath ? `${p.out ? 1 : 0}:${p.score}` : `${p.score}`;
+    if (key !== lastKey) {
       rank = i + 1;
-      lastScore = p.score;
+      lastKey = key;
     }
     // One "attempt" is a two-card turn, so accuracy is pairs found ÷ attempts.
     const attempts = (flipsByPlayer[p.id] ?? 0) / 2;
@@ -342,6 +364,7 @@ export function summarise(state: MatchState, flipsByPlayer: Record<string, numbe
       isAi: p.isAi,
       rank,
       accuracy: attempts > 0 ? Math.min(1, countMatches(state, p.seat) / attempts) : 0,
+      out: p.out,
     };
   });
 

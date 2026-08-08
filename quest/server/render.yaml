@@ -1,0 +1,50 @@
+# Render Blueprint for the VRENT Memory XR multiplayer server.
+#
+# Render only reads a blueprint named `render.yaml` at the repository root, so
+# copy this file up one level before pointing Render at the repo:
+#
+#   cp server/render.yaml ./render.yaml
+#   git add render.yaml && git commit -m "Add Render blueprint" && git push
+#
+# Then: Render dashboard → New → Blueprint → pick the repo → Apply.
+#
+# If this app lives in a subdirectory of a larger repo (as it does in the VRENT
+# monorepo), uncomment `rootDir` below so the paths resolve.
+
+services:
+  - type: web
+    name: vrent-memory-server
+    runtime: docker
+    # rootDir: quest
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: starter # Free instances sleep, which drops every websocket in the room.
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: true
+
+    # Scores live here. Without the disk, a redeploy wipes the leaderboard.
+    disk:
+      name: vrent-data
+      mountPath: /data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8787
+      - key: DATA_DIR
+        value: /data
+      # REQUIRED in production: the origin serving the headset app. Browser
+      # clients from anywhere else are refused. Comma-separated for several.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Unlocks per-room detail on /stats. Generated once, then kept.
+      - key: STATS_TOKEN
+        generateValue: true
+      - key: LOG_LEVEL
+        value: info
+      # The leaderboard's "today" scope follows this timezone.
+      - key: TZ
+        value: Europe/Zurich

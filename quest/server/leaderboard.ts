@@ -30,6 +30,9 @@ const MAX_ROOMS_TRACKED = 300;
 /** Coalesce bursts of writes (a whole room finishing at once) into one save. */
 const SAVE_DEBOUNCE_MS = 400;
 
+/** Give up on the disk after this many consecutive failed writes. */
+const MAX_SAVE_FAILURES = 3;
+
 const FILE_VERSION = 1;
 
 type Logger = (level: "debug" | "info" | "warn" | "error", event: string, fields?: Record<string, unknown>) => void;
@@ -101,6 +104,7 @@ export function createLeaderboard(options: LeaderboardOptions = {}): Leaderboard
   let dirty = false;
   let persistent = true;
   let warnedUnwritable = false;
+  let consecutiveFailures = 0;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let saving: Promise<void> = Promise.resolve();
   let disposed = false;
@@ -174,23 +178,32 @@ export function createLeaderboard(options: LeaderboardOptions = {}): Leaderboard
         await handle.close();
       }
       await rename(tmp, file);
+      consecutiveFailures = 0;
       log("debug", "leaderboard.saved", { file, bytes: payload.length });
     } catch (err) {
       dirty = true;
+      consecutiveFailures += 1;
       await unlink(tmp).catch(() => {});
       const code = errCode(err);
-      if (code === "EACCES" || code === "EPERM" || code === "EROFS") {
+      const unwritable = code === "EACCES" || code === "EPERM" || code === "EROFS";
+
+      // A permissions problem is settled on the first attempt; anything else
+      // gets a few tries in case it is transient (a volume still attaching).
+      // Either way we stop eventually: retrying a doomed write on every match
+      // would bury the log an operator is trying to read during an event.
+      if (unwritable || consecutiveFailures >= MAX_SAVE_FAILURES) {
         persistent = false;
         if (!warnedUnwritable) {
           warnedUnwritable = true;
           log("error", "leaderboard.readonly", {
             file,
             error: describe(err),
-            hint: "DATA_DIR is not writable by this user — scores are in memory only. chown the volume or set DATA_DIR to a writable path.",
+            attempts: consecutiveFailures,
+            hint: "DATA_DIR is not writable — scores are in memory only and will be lost on restart. chown the volume or point DATA_DIR somewhere writable.",
           });
         }
       } else {
-        log("error", "leaderboard.save-failed", { file, error: describe(err) });
+        log("error", "leaderboard.save-failed", { file, error: describe(err), attempt: consecutiveFailures });
       }
     }
   }

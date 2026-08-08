@@ -130,18 +130,27 @@ function brandAnchors(): Hsl[] {
   for (const src of sources) {
     const c = hexToHsl(src);
     if (c.s < 8) continue; // greys carry no hue to anchor with
-    if (out.some((o) => Math.abs(o.h - c.h) < 6)) continue;
+    // Anchors closer than this to one already taken would waste a slot in the
+    // ramp on a hue nobody can tell apart from its neighbour.
+    if (out.some((o) => hueGap(o.h, c.h) < 14)) continue;
     out.push(c);
   }
   out.sort((a, b) => a.h - b.h);
   return out;
 }
 
+/** Shortest distance between two hues around the wheel, 0-180. */
+function hueGap(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
 /**
- * Builds `count` maximally-separated hues by repeatedly halving the widest gap
- * between brand anchors. With 9 anchors and 24 symbols no two faces land within
- * roughly 10° of each other, which is the threshold below which players start
- * second-guessing a match.
+ * Builds `count` maximally-separated hues by repeatedly subdividing whichever
+ * arc between brand anchors is currently the widest. Greedily splitting the
+ * largest remaining interval is the optimal way to maximise the smallest gap,
+ * which at 24 symbols lands every face ~13° from its nearest neighbour — close
+ * to the 15° ceiling a 24-way split of the wheel allows.
  */
 function hueRamp(count: number): Hsl[] {
   const anchors = brandAnchors();
@@ -705,7 +714,16 @@ export function buildSymbolAtlas(
     const mark = shade(pure, 34, Math.min(88, pure.s));
     const wash = shade(pure, 62, Math.min(70, pure.s));
 
-    colors.push(new THREE.Color().setHSL(pure.h / 360, pure.s / 100, pure.l / 100));
+    // sRGB, to match what the canvas actually painted — `setHSL` would
+    // otherwise read the triple as linear-sRGB and shift the hue.
+    colors.push(
+      new THREE.Color().setHSL(
+        (((pure.h % 360) + 360) % 360) / 360,
+        Math.max(0, Math.min(1, pure.s / 100)),
+        Math.max(0, Math.min(1, pure.l / 100)),
+        THREE.SRGBColorSpace,
+      ),
+    );
 
     ctx.save();
     ctx.beginPath();

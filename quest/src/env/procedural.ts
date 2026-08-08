@@ -276,6 +276,19 @@ function instanceAttr(
   );
 }
 
+/**
+ * Clamps a backdrop distance to the engine's far plane.
+ *
+ * A sky dome or a planet placed beyond `camera.far` is clipped away entirely,
+ * which is precisely the black void this product must never show. Every scene
+ * sizes its distant geometry through here, so the composition survives whatever
+ * near/far the engine picks.
+ */
+export function fitDistance(camera: THREE.PerspectiveCamera, desired: number): number {
+  const limit = Math.max(12, (camera.far || desired) * 0.85);
+  return Math.min(desired, limit);
+}
+
 /** Points on a sphere, evenly spread by the golden angle. Deterministic. */
 function goldenSphere(index: number, count: number, target: THREE.Vector3): THREE.Vector3 {
   const y = 1 - ((index + 0.5) / count) * 2;
@@ -641,6 +654,7 @@ function neonVault(ctx: SceneContext): EnvScene {
 // ════════════════════════════════════════════════════════════════════════════
 
 const DECK_RADIUS = 8;
+const STAR_SHELL = 320;
 const PLANET_RADIUS = 118;
 
 function orbitalDeck(ctx: SceneContext): EnvScene {
@@ -648,6 +662,12 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
   assets.root.name = "env-orbital-deck";
   const tint = ctx.tint;
   const uTime: THREE.IUniform = { value: 0 };
+
+  // Everything beyond the deck is scaled about the player, which leaves every
+  // angle — and therefore the whole composition — untouched.
+  const reach = fitDistance(ctx.camera, STAR_SHELL) / STAR_SHELL;
+  const starShell = STAR_SHELL * reach;
+  const planetRadius = PLANET_RADIUS * reach;
 
   const sun = new THREE.Vector3(0.62, 0.3, -0.46).normalize();
 
@@ -677,9 +697,9 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
   const rand = mulberry32(0x5eed01);
   for (let i = 0; i < starCount; i++) {
     goldenSphere(i, starCount, dir);
-    starPos[i * 3] = dir.x * 320;
-    starPos[i * 3 + 1] = dir.y * 320;
-    starPos[i * 3 + 2] = dir.z * 320;
+    starPos[i * 3] = dir.x * starShell;
+    starPos[i * 3 + 1] = dir.y * starShell;
+    starPos[i * 3 + 2] = dir.z * starShell;
     const band = Math.exp(-Math.pow(dir.dot(bandAxis), 2) * 15);
     const r = rand();
     const bright = 0.28 + band * 0.55 + r * r * 0.5;
@@ -738,7 +758,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
   assets.add(stars);
 
   // ── Planet.
-  const planetGeo = assets.geom(new THREE.SphereGeometry(PLANET_RADIUS, 64, 44));
+  const planetGeo = assets.geom(new THREE.SphereGeometry(planetRadius, 64, 44));
   const planet = new THREE.Mesh(
     planetGeo,
     makeShader(
@@ -812,12 +832,12 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
     `,
     ),
   );
-  planet.position.set(0, -PLANET_RADIUS - 46, -30);
+  planet.position.set(0, (-PLANET_RADIUS - 46) * reach, -30 * reach);
   assets.add(planet);
 
   // ── Atmosphere halo just outside the limb.
   const halo = new THREE.Mesh(
-    assets.geom(new THREE.SphereGeometry(PLANET_RADIUS * 1.055, 48, 32)),
+    assets.geom(new THREE.SphereGeometry(planetRadius * 1.055, 48, 32)),
     makeShader(
       assets,
       { uSun: { value: sun }, uAtmo: { value: mixColor(tint, ICE, 0.5) } },
@@ -855,7 +875,11 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
     assets.geom(new THREE.PlaneGeometry(1, 1)),
     makeShader(
       assets,
-      { uSize: { value: 12 }, uCore: { value: WHITE }, uHalo: { value: mixColor(REWARD, WHITE, 0.5) } },
+      {
+        uSize: { value: 12 * reach },
+        uCore: { value: WHITE },
+        uHalo: { value: mixColor(REWARD, WHITE, 0.5) },
+      },
       /* glsl */ `
       uniform float uSize;
       varying vec2 vUv;
@@ -882,7 +906,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
       { blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false },
     ),
   );
-  sunDisc.position.copy(sun).multiplyScalar(290);
+  sunDisc.position.copy(sun).multiplyScalar(290 * reach);
   sunDisc.renderOrder = -5;
   sunDisc.frustumCulled = false;
   assets.add(sunDisc);
@@ -975,6 +999,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
   const postGeo = assets.geom(new THREE.CylinderGeometry(0.022, 0.022, 1.04, 6));
   const posts = new THREE.InstancedMesh(postGeo, railMat, 28);
   posts.frustumCulled = false;
+  const m4 = new THREE.Matrix4();
   for (let i = 0; i < 28; i++) {
     const a = (i / 28) * Math.PI * 2;
     posts.setMatrixAt(
@@ -1696,9 +1721,11 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   lighting.shadowStrength = 0.4;
   lighting.poolStrength = 0;
 
+  const reach = fitDistance(ctx.camera, 72) / 72;
+
   // ── Dome: a deep gradient with a dusting of far stars.
   const dome = new THREE.Mesh(
-    assets.geom(new THREE.SphereGeometry(72, 28, 18)),
+    assets.geom(new THREE.SphereGeometry(72 * reach, 28, 18)),
     makeShader(
       assets,
       {
@@ -1809,7 +1836,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const tone = new THREE.Color();
   AURORA_RIBBONS.forEach(([radius, span, height, baseY, phase, ca, cb], i) => {
     ribbons.setMatrixAt(i, identity);
-    params.push(radius, span, height, baseY);
+    params.push(radius * reach, span, height * reach, baseY * reach);
     phases.push(phase);
     tone.copy(MINT).lerp(rampLow, ca);
     colA.push(tone.r, tone.g, tone.b);

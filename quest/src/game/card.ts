@@ -64,11 +64,14 @@ export function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t:
 }
 
 /**
- * The flip curve. Slow to break inertia, quick through the middle, and a long
- * asymptotic settle — the signature of something with mass. No overshoot: a
- * bounce would read as a toy.
+ * The flip curve, tuned by the numbers rather than by feel: 11% turned at a
+ * quarter of the duration (the card is still breaking inertia), 74% at the
+ * halfway point (momentum), 96% at three quarters (friction taking over).
+ * Peak angular velocity lands at t≈0.41, just before the card goes edge-on,
+ * which is where the specular sweep crosses it. No overshoot — a bounce would
+ * read as a toy, and this is sold as a physical object.
  */
-export const EASE_FLIP = cubicBezier(0.32, 0.0, 0.14, 1.0);
+export const EASE_FLIP = cubicBezier(0.58, 0.0, 0.17, 1.0);
 /** Match lift: immediate, then decelerating. */
 export const EASE_OUT = cubicBezier(0.18, 0.72, 0.24, 1.0);
 /** Settling back down. */
@@ -76,7 +79,7 @@ export const EASE_SETTLE = cubicBezier(0.4, 0.0, 0.18, 1.0);
 
 const FLIP_MS = tokens.motion.flip;
 /** The lift outlasts the turn, so the card visibly lands. */
-const FLIP_LIFT_MS = FLIP_MS * 1.22;
+const FLIP_LIFT_MS = FLIP_MS * 1.18;
 const MISS_MS = tokens.motion.slow;
 const MATCH_MS = 820;
 const HOVER_TAU = 0.055;
@@ -118,7 +121,6 @@ export function buildCardGeometry(
   const ccx = [hw - r, -(hw - r), -(hw - r), hw - r];
   const ccy = [hh - r, hh - r, -(hh - r), -(hh - r)];
 
-  const ang = new Float64Array(n);
   const cosA = new Float64Array(n);
   const sinA = new Float64Array(n);
   const cIdx = new Uint8Array(n);
@@ -126,7 +128,6 @@ export function buildCardGeometry(
     for (let s = 0; s < segs; s++) {
       const i = c * segs + s;
       const a = ((c * 90 + (s * 90) / segs) * Math.PI) / 180;
-      ang[i] = a;
       cosA[i] = Math.cos(a);
       sinA[i] = Math.sin(a);
       cIdx[i] = c;
@@ -642,7 +643,7 @@ export function createCardResources(
     thickness: layout.cardThickness,
     // 8mm on the big board, proportionally less on a desk-sized one.
     hoverLift: Math.min(0.008, layout.cardHeight * 0.11),
-    flipLift: layout.cardHeight * 0.075,
+    flipLift: layout.cardHeight * 0.055,
     matchLift: layout.cardHeight * 0.19,
     claimSink: layout.cardThickness * 1.1,
     shakeAmp: layout.cardWidth * 0.05,
@@ -679,7 +680,8 @@ export interface CardView {
 
   setHover(on: boolean): void;
   hovered(): boolean;
-  markMatched(seat: THREE.Color): void;
+  /** `animate: false` lands straight in the claimed state, for state restore. */
+  markMatched(seat: THREE.Color, animate?: boolean): void;
   markMissed(): void;
   setIntent(on: boolean, seat: THREE.Color): void;
   /** Back to a fresh, face-down, unclaimed card. */
@@ -709,7 +711,7 @@ export function createCard(res: CardResources, index: number): CardView {
   let flipFrom = 0;
   let flipTarget = 0;
   let flipElapsed = -1;
-  let flipDuration = FLIP_MS;
+  let flipDuration: number = FLIP_MS;
 
   let hoverTarget = 0;
   let hoverValue = 0;
@@ -780,12 +782,26 @@ export function createCard(res: CardResources, index: number): CardView {
       return hoverTarget === 1;
     },
 
-    markMatched(seat) {
+    markMatched(seat, animate = true) {
       uniforms.uSeat.value.copy(seat);
       isMatched = true;
-      matchElapsed = 0;
       hoverTarget = 0;
       intentTarget = 0;
+      intentValue = 0;
+      if (animate) {
+        matchElapsed = 0;
+        return;
+      }
+      // Restoring a match already in the state (rejoin, placement change):
+      // land in the claimed pose without replaying the flourish.
+      matchElapsed = -1;
+      claimValue = 1;
+      hoverValue = 0;
+      flipValue = 1;
+      flipFrom = 1;
+      flipTarget = 1;
+      flipElapsed = -1;
+      applyStatic();
     },
 
     markMissed() {
@@ -840,7 +856,7 @@ export function createCard(res: CardResources, index: number): CardView {
         const tl = Math.min(1, flipElapsed / (flipDuration * (FLIP_LIFT_MS / FLIP_MS)));
         const bell = Math.pow(Math.sin(Math.PI * Math.pow(tl, 0.7)), 1.3);
         z += m.flipLift * bell;
-        scale += 0.038 * bell;
+        scale += 0.030 * bell;
         sweep = tr;
 
         if (tr >= 1 && tl >= 1) {

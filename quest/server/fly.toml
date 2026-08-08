@@ -1,0 +1,57 @@
+# Fly.io config for the VRENT Memory XR multiplayer server.
+#
+# Run from the app root (the directory holding `server/` and `shared/`), so the
+# Docker build context can see both:
+#
+#   fly launch --no-deploy --copy-config --config server/fly.toml
+#   fly volumes create vrent_data --size 1 --region fra
+#   fly secrets set ALLOWED_ORIGINS="https://play.vrent.ch" STATS_TOKEN="$(openssl rand -hex 16)"
+#   fly deploy --config server/fly.toml
+#
+# Change `app` to your own name before the first deploy — app names are global.
+
+app = "vrent-memory-xr"
+primary_region = "fra"
+
+[build]
+  dockerfile = "server/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+  DATA_DIR = "/data"
+  LOG_LEVEL = "info"
+  TZ = "Europe/Zurich"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # A websocket server must not be stopped between HTTP requests, and a machine
+  # cold-starting mid-match drops the whole room.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 400
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "4s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+# Persistent leaderboard. One volume per machine — keep min_machines_running at
+# 1 (or move to a shared store) so every player sees the same board.
+[[mounts]]
+  source = "vrent_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1

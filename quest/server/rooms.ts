@@ -581,7 +581,10 @@ export function createRegistry(options: RegistryOptions): Registry {
   }
 
   function resetTurnDeadline(state: MatchState): void {
-    state.turnDeadline = state.settings.turnSeconds > 0 ? now() + state.settings.turnSeconds * 1000 : 0;
+    // Time Attack is a free-for-all, so a per-turn deadline is meaningless
+    // there — leaving one set would draw a countdown ring nobody is racing.
+    const timed = state.settings.turnSeconds > 0 && state.settings.mode !== "timeattack";
+    state.turnDeadline = timed ? now() + state.settings.turnSeconds * 1000 : 0;
   }
 
   /** Turns any pending selection back over. Returns the indices hidden. */
