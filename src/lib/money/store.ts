@@ -54,8 +54,6 @@ export interface MoneySettings {
   currency: string;                // display currency (CHF, GBP, …)
   savingsMode: "amount" | "percent";
   savingsValue: number;            // amount/month or % of after-tax income
-  wakeTime: string;                // "HH:MM" when the waking window starts
-  wakingHours: number;             // hours awake per day (spending window)
   trackingSince: string;           // YYYY-MM-DD — accrual never starts earlier
                                    // (no phantom credit for pre-tracking days)
 }
@@ -123,7 +121,6 @@ function defaults(): Persisted {
       bankMonthly: 0, taxSystem: "CH", canton: "ZH", gemeinde: "", status: "single", taxPct: null,
       currency: "CHF",
       savingsMode: "amount", savingsValue: 0,
-      wakeTime: "06:00", wakingHours: 18,
       trackingSince: "",
     },
     expenses: [],
@@ -243,10 +240,6 @@ export function todayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function daysInMonth(d: Date): number { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
-function parseHM(s: string): number {
-  const [h, m] = (s || "06:00").split(":").map(Number);
-  return (h || 0) + (m || 0) / 60;
-}
 
 // ── Tax estimates (approximate — the slider / AI lookup refine them) ──────────
 
@@ -321,47 +314,20 @@ export function spendableMonthly(s: Persisted, now = new Date()): number {
 export function dailyAllowance(s: Persisted, now = new Date()): number {
   return spendableMonthly(s, now) / daysInMonth(now);
 }
-export function hourlyAllowance(s: Persisted, now = new Date()): number {
-  const wh = s.settings.wakingHours || 18;
-  return dailyAllowance(s, now) / wh;
-}
-
-// Waking hours accrued this month up to `now`. Accrual starts at the LATER of
-// the 1st of the month and `trackingSince` — days before tracking began earn
-// nothing (that money was spent untracked; crediting it would inflate the meter).
-//
-// Each day's window opens at `wakeTime` and runs `wakingHours`; it may cross
-// midnight (wake 22:00 + 8h ends 06:00 next day). Summing per-window elapsed
-// time keeps the drip continuous across midnight — no jump at 00:00, no frozen
-// stretch. The previous month's last window spills its tail into this month so
-// crossing windows still deliver ~the full monthly amount.
-function accruedHoursThisMonth(s: Persisted, now: Date): number {
-  const wh = s.settings.wakingHours || 18;
-  const wake = parseHM(s.settings.wakeTime);
+// Days of this month that count toward the budget: from the later of the 1st
+// and `trackingSince` through today (inclusive). Days before tracking began
+// earn nothing — that money was spent untracked, so crediting it would inflate
+// what's left.
+export function daysTracked(s: Persisted, now = new Date()): number {
   const ts = s.settings.trackingSince;
   let startDay = 1;
-  let trackedBeforeMonth = true; // no explicit start → treat month as tracked
   if (ts) {
     const [y, m, d] = ts.split("-").map(Number);
     const tsDate = new Date(y || 0, (m || 1) - 1, d || 1);
     if (tsDate > now) return 0; // tracking starts in the future
-    if (y === now.getFullYear() && m === now.getMonth() + 1) {
-      startDay = Math.max(1, d || 1);
-      trackedBeforeMonth = false;
-    }
+    if (y === now.getFullYear() && m === now.getMonth() + 1) startDay = Math.max(1, d || 1);
   }
-  const nowAbs = (now.getDate() - 1) * 24 + now.getHours() + now.getMinutes() / 60;
-  let total = 0;
-  // Tail of the previous month's last window that crosses into this month.
-  if (wake + wh > 24 && trackedBeforeMonth && startDay === 1) {
-    const spill = wake + wh - 24;
-    total += Math.max(0, Math.min(nowAbs, spill));
-  }
-  for (let d = startDay; d <= now.getDate(); d++) {
-    const startAbs = (d - 1) * 24 + wake;
-    total += Math.max(0, Math.min(nowAbs - startAbs, wh));
-  }
-  return total;
+  return Math.max(0, now.getDate() - startDay + 1);
 }
 
 export function spentInMonth(s: Persisted, ym: string): number {
@@ -371,41 +337,37 @@ export function spentOnDay(s: Persisted, date: string): number {
   return s.expenses.filter((e) => e.date === date).reduce((a, e) => a + (e.amount || 0), 0);
 }
 
-// The live "spend now" balance: what has accrued so far this month minus what
-// you've spent since tracking began. Rolls over between days; resets each month
-// with fresh salary. Expenses dated before `trackingSince` stay in the stats
-// but don't drain the meter (that era earned no accrual either).
+// What's left to spend today: every tracked day adds a full daily budget, and
+// whatever you didn't spend on earlier days rolls forward. Expenses dated
+// before `trackingSince` stay in the stats but don't drain it (those days
+// contributed no budget either).
 export function liveBalance(s: Persisted, now = new Date()): number {
-  const accrued = accruedHoursThisMonth(s, now) * hourlyAllowance(s, now);
+  const budget = dailyAllowance(s, now) * daysTracked(s, now);
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const ts = s.settings.trackingSince;
   const spent = s.expenses
     .filter((e) => e.date.startsWith(ym) && (!ts || e.date >= ts))
     .reduce((a, e) => a + (e.amount || 0), 0);
-  return accrued - spent;
+  return budget - spent;
 }
 
 export function isConfigured(s: Persisted): boolean {
   return s.settings.bankMonthly > 0;
 }
 
-// Transparent composition of the live meter, for display:
-// balance = (accrued today − spent today) + carryover from previous days.
+// Transparent composition of what's left today, for display:
+// balance = today's budget + carryover from earlier days − spent today.
 export function meterBreakdown(s: Persisted, now = new Date()) {
   const balance = liveBalance(s, now);
-  // "Flowed in today" = accrual during this calendar day — computed as a
-  // difference so it stays correct when the waking window crosses midnight.
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
-  const todayAccrued = Math.max(0, (accruedHoursThisMonth(s, now) - accruedHoursThisMonth(s, startOfDay)) * hourlyAllowance(s, now));
+  const tracked = daysTracked(s, now);
+  const todayBudget = tracked > 0 ? dailyAllowance(s, now) : 0;
   const dayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  // Same trackingSince filter as liveBalance, so the decomposition can't
-  // fabricate carryover out of pre-tracking expenses.
   const ts = s.settings.trackingSince;
   const todaySpent = s.expenses
     .filter((e) => e.date === dayKey && (!ts || e.date >= ts))
     .reduce((a, e) => a + (e.amount || 0), 0);
-  const carryover = balance - todayAccrued + todaySpent;
-  return { balance, todayAccrued, todaySpent, carryover };
+  const carryover = balance - todayBudget + todaySpent;
+  return { balance, todayBudget, todaySpent, carryover };
 }
 
 // Spending grouped by category for a set of expenses.

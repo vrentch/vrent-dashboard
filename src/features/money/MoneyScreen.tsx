@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Settings2, Plus, Wallet, TrendingDown, PiggyBank, Clock, Gift } from "lucide-react";
 import {
   useMoney, addExpense, removeExpense, isConfigured, afterTaxMonthly, estimatedTaxPct,
-  spendableMonthly, dailyAllowance, hourlyAllowance, liveBalance, meterBreakdown, spentOnDay, spentInMonth,
+  spendableMonthly, dailyAllowance, meterBreakdown, spentOnDay, spentInMonth,
   savingsMonthly, fixedMonthly, todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, expensesInMonth, categoryOf,
   extrasFor, removeExtra, boostFor,
 } from "../../lib/money/store";
@@ -30,9 +30,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const configured = isConfigured(s);
-  const balance = liveBalance(s, now);
   const daily = dailyAllowance(s, now);
-  const hourly = hourlyAllowance(s, now);
   const todaySpent = spentOnDay(s, todayKey());
   const monthSpent = spentInMonth(s, ym);
   const monthExpenses = useMemo(() => expensesInMonth(s, ym), [s, ym]);
@@ -69,66 +67,59 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
           <button onClick={() => setSetupOpen(true)} className="w-full text-left rounded-3xl p-5 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}>
             <Wallet size={26} className="mb-2 text-white/90" />
             <p className="text-lg font-bold">Set up Affordability</p>
-            <p className="text-[13px] text-white/80 mt-1">Enter what lands on your bank account, your canton and fixed costs — I'll reserve your taxes and work out what you can safely spend right now, per day and per hour.</p>
+            <p className="text-[13px] text-white/80 mt-1">Enter what lands on your bank account, your canton and your fixed costs — I'll reserve your taxes and work out a simple daily budget you can actually stick to.</p>
           </button>
         ) : (
           <>
-            {/* Today's budget — the number people actually think in */}
+            {/* Today's budget — one number, plainly explained */}
             {(() => {
               const bd = meterBreakdown(s, now);
               const carry = Math.abs(bd.carryover) >= 0.5 ? bd.carryover : 0;
-              const todayPool = Math.max(0, daily + carry);           // what today can absorb
-              const leftToday = todayPool - todaySpent;               // simple: budget − spent
+              const todayPool = Math.max(0, daily + carry);   // what today can absorb
+              const leftToday = todayPool - todaySpent;       // budget (± rollover) − spent
               const spentPct = todayPool > 0 ? Math.min(1, todaySpent / todayPool) : 1;
               const monthLeft = spendableMonthly(s) - monthSpent;
-              // The eating hours label, e.g. 06:00–24:00.
-              const [wh, wm] = (s.settings.wakeTime || "06:00").split(":").map(Number);
-              const endAbs = (wh || 6) + (wm || 0) / 60 + (s.settings.wakingHours || 18);
-              const endLabel = endAbs >= 24 && endAbs % 24 < 0.02 ? "24:00" : `${String(Math.floor(endAbs % 24)).padStart(2, "0")}:${String(Math.round((endAbs % 1) * 60)).padStart(2, "0")}`;
+              const daysLeft = Math.max(1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1);
+              const perDayRest = monthLeft / daysLeft;
+              const over = leftToday <= -0.005;
               return (
                 <section className="rounded-3xl p-5 text-white relative overflow-hidden accent-gradient shadow-accent">
                   <div className="absolute -right-8 -top-10 w-44 h-44 rounded-full bg-white/15 blur-2xl" />
                   <div className="relative">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">Left to spend today</p>
-                    <p className={`mt-1 text-[38px] leading-none font-extrabold display-num tabular-nums ${leftToday <= -0.005 ? "text-rose-200" : ""}`}>
+                    <p className={`mt-1 text-[40px] leading-none font-extrabold display-num tabular-nums ${over ? "text-rose-200" : ""}`}>
                       {fmt(leftToday)}
                     </p>
                     <p className="text-xs text-white/80 mt-1.5 tabular-nums">
-                      {fmt(daily)} daily budget
-                      {carry > 0 && <> + {fmt(carry)} saved from earlier days</>}
-                      {carry < 0 && <> − {fmt(-carry)} overspent earlier</>}
-                      {" "}− {fmt(todaySpent)} spent
+                      {fmt(daily)} a day
+                      {carry > 0 && <> + {fmt(carry)} saved up</>}
+                      {carry < 0 && <> − {fmt(-carry)} overspent before</>}
+                      {" "}− {fmt(todaySpent)} spent today
                     </p>
-                    {leftToday <= -0.005 && <p className="text-[11px] text-rose-200/90 mt-1">Over today's budget — tomorrow adds a fresh {fmt(daily)}.</p>}
-                    <div className="mt-3 h-2 rounded-full bg-white/20 overflow-hidden">
-                      <div className={`h-full rounded-full ${leftToday <= -0.005 ? "bg-rose-300" : "bg-white/90"}`} style={{ width: `${Math.round((1 - spentPct) * 100)}%` }} />
+                    <div className="mt-3 h-2.5 rounded-full bg-white/20 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-[width] duration-500 ${over ? "bg-rose-300" : "bg-white/90"}`}
+                        style={{ width: `${Math.round((over ? 0 : 1 - spentPct) * 100)}%` }}
+                      />
                     </div>
+                    <p className="text-[11px] text-white/70 mt-2">
+                      {over
+                        ? <>Over for today — tomorrow starts fresh with {fmt(daily)}.</>
+                        : <>Keep to about {fmt(perDayRest)} a day for the {daysLeft} day{daysLeft === 1 ? "" : "s"} left this month.</>}
+                    </p>
 
-                    {/* The live drip — secondary, clearly explained */}
-                    <div className="mt-3.5 rounded-2xl bg-white/12 px-3.5 py-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold text-white/80 inline-flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Unlocked so far
-                        </p>
-                        <p className={`text-[15px] font-bold tabular-nums ${balance <= -0.005 ? "text-rose-200" : ""}`}>{fmt(balance)}</p>
-                      </div>
-                      <p className="text-[10.5px] text-white/65 mt-0.5">
-                        Today's budget unlocks {fmt(hourly)}/hour while you're awake ({s.settings.wakeTime || "06:00"}–{endLabel}) — spend within this and you'll never get ahead of your day.
-                      </p>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl bg-white/12 px-2 py-2">
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-2xl bg-white/12 px-2 py-2.5">
                         <p className="text-[15px] font-bold tabular-nums">{fmt(daily)}</p>
-                        <p className="text-[10px] text-white/75">per day</p>
+                        <p className="text-[10px] text-white/75 mt-0.5">daily budget</p>
                       </div>
-                      <div className="rounded-xl bg-white/12 px-2 py-2">
-                        <p className="text-[15px] font-bold tabular-nums">{fmt(hourly)}</p>
-                        <p className="text-[10px] text-white/75">per hour awake</p>
+                      <div className="rounded-2xl bg-white/12 px-2 py-2.5">
+                        <p className="text-[15px] font-bold tabular-nums">{fmt(todaySpent)}</p>
+                        <p className="text-[10px] text-white/75 mt-0.5">spent today</p>
                       </div>
-                      <div className="rounded-xl bg-white/12 px-2 py-2">
+                      <div className="rounded-2xl bg-white/12 px-2 py-2.5">
                         <p className={`text-[15px] font-bold tabular-nums ${monthLeft <= -0.005 ? "text-rose-200" : ""}`}>{fmt(monthLeft)}</p>
-                        <p className="text-[10px] text-white/75">left this month</p>
+                        <p className="text-[10px] text-white/75 mt-0.5">left this month</p>
                       </div>
                     </div>
                   </div>

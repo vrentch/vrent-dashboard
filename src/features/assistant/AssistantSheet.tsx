@@ -83,7 +83,7 @@ export default function AssistantSheet({ open, onClose, onNavigate }: { open: bo
       money: moneyConfigured(money)
         ? {
             currency: money.settings.currency || "CHF",
-            can_spend_now: Math.round(liveBalance(money)),
+            left_to_spend_today: Math.round(liveBalance(money)),
             daily_allowance: Math.round(dailyAllowance(money)),
             spent_today: Math.round(moneySpentOn(money, moneyToday())),
             spent_this_month: Math.round(moneySpentInMonth(money, month)),

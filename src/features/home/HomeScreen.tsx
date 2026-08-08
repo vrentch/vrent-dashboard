@@ -12,7 +12,7 @@ import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
 import { ChevronRight as Chev, CalendarDays, Plus, Sparkles, ScanLine, HeartPulse, CalendarPlus, Wallet } from "lucide-react";
-import { useMoney, isConfigured as moneyConfigured, liveBalance, dailyAllowance, spentOnDay, meterBreakdown, todayKey as moneyToday } from "../../lib/money/store";
+import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, meterBreakdown, todayKey as moneyToday } from "../../lib/money/store";
 import { chf } from "../../lib/business/format";
 
 type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money";
@@ -150,7 +150,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">Left to spend today</p>
                         <p className={`text-[30px] leading-tight font-extrabold display-num tabular-nums ${leftToday <= -0.005 ? "text-rose-200" : ""}`}>{chf(leftToday, cur)}</p>
                         <p className="text-xs text-white/80">
-                          {chf(liveBalance(money), cur)} unlocked so far · {chf(daily, cur)}/day
+                          {chf(daily, cur)} a day · {chf(spentOnDay(money, moneyToday()), cur)} spent today
                         </p>
                       </>
                     );
@@ -162,7 +162,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
               <>
                 <div>
                   <p className="text-base font-bold">Money & Affordability</p>
-                  <p className="text-xs text-white/80 mt-0.5">Track all spending in one place — see what you can spend per day & hour.</p>
+                  <p className="text-xs text-white/80 mt-0.5">Track all spending in one place — see exactly what's left to spend today.</p>
                 </div>
                 <span className="grid place-items-center w-11 h-11 rounded-2xl bg-white/15 shrink-0"><Wallet size={20} /></span>
               </>

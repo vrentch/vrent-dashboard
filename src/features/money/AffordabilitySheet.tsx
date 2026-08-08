@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Trash2, Plus, Check, Landmark, Sparkles, Loader2 } from "lucide-react";
 import Sheet from "../../components/Sheet";
 import {
   useMoney, setSettings, addFixed, removeFixed, afterTaxMonthly, estimatedTaxPct, taxReserveMonthly,
-  spendableMonthly, dailyAllowance, hourlyAllowance, savingsMonthly, fixedMonthly,
+  spendableMonthly, dailyAllowance, savingsMonthly, fixedMonthly,
   CANTONS, type MaritalStatus, type TaxSystem,
 } from "../../lib/money/store";
 import { aiTaxLookup } from "../../lib/api";
@@ -26,19 +26,6 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
   const [looking, setLooking] = useState(false);
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [lookupErr, setLookupErr] = useState<string | null>(null);
-  // Draft for the waking-hours field: clamping on every keystroke made the
-  // input unusable (clearing it snapped to 18, typing "1" snapped to 8).
-  // Type freely; the value commits, clamped, when you leave the field.
-  const [whDraft, setWhDraft] = useState(String(s.settings.wakingHours));
-  useEffect(() => {
-    if (open) setWhDraft(String(s.settings.wakingHours));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-  function commitWakingHours() {
-    const n = Math.max(4, Math.min(24, Math.round(Number(whDraft.replace(",", ".")) || 0) || st.wakingHours || 18));
-    setWhDraft(String(n));
-    setSettings({ wakingHours: n });
-  }
 
   const sys = st.taxSystem || "CH";
   const cur = st.currency || "CHF";
@@ -237,28 +224,11 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
           </div>
         </section>
 
-        {/* Day shape */}
+        {/* When the budget starts counting */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Your day</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">Wake up</span>
-              <input type="time" value={st.wakeTime} onChange={(e) => setSettings({ wakeTime: e.target.value || "06:00" })} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">Waking hours</span>
-              <input
-                type="number" inputMode="numeric" min={4} max={24}
-                value={whDraft}
-                onChange={(e) => setWhDraft(e.target.value)}
-                onBlur={commitWakingHours}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                className={inputCls}
-              />
-            </label>
-          </div>
-          <label className="block mt-3">
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">Tracking since (meter starts counting here)</span>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Start tracking</h3>
+          <label className="block">
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">Counting from</span>
             <input
               type="date"
               value={st.trackingSince}
@@ -267,7 +237,9 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
               className={inputCls}
             />
           </label>
-          <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Money only "flows" while you're awake, and only from the day you started tracking — earlier days earn nothing.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+            Each day from here adds one daily budget, and whatever you don't spend rolls over to the next day.
+          </p>
         </section>
 
         {/* Summary */}
@@ -281,7 +253,6 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
             <div className="border-t border-white/20 my-1.5" />
             <Row k="Spendable / month" v={chf(spendableMonthly(s), cur)} bold />
             <Row k="Per day" v={chf(dailyAllowance(s), cur)} bold />
-            <Row k="Per waking hour" v={chf(hourlyAllowance(s), cur)} bold />
           </div>
         </section>
 
