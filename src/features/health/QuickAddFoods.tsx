@@ -26,6 +26,12 @@ const ITEMS: QuickItem[] = [
   { emoji: "🥤", name: "Cola", kind: "food", kcal: 140, p: 0, c: 39, f: 0 },
   { emoji: "🥤", name: "Diet cola", kind: "food", kcal: 1, p: 0, c: 0, f: 0 },
   { emoji: "🍺", name: "Beer", kind: "food", kcal: 150, p: 2, c: 13, f: 0 },
+  // Wine by the glass (1.5 dl) and the two apéro classics.
+  { emoji: "🍷", name: "Red wine", kind: "food", kcal: 125, p: 0, c: 4, f: 0 },
+  { emoji: "🥂", name: "White wine", kind: "food", kcal: 120, p: 0, c: 4, f: 0 },
+  { emoji: "🌸", name: "Rosé", kind: "food", kcal: 125, p: 0, c: 6, f: 0 },
+  { emoji: "🍹", name: "Aperol spritz", kind: "food", kcal: 175, p: 0, c: 17, f: 0 },
+  { emoji: "🍸", name: "Gin tonic", kind: "food", kcal: 170, p: 0, c: 16, f: 0 },
   { emoji: "🍌", name: "Banana", kind: "food", kcal: 105, p: 1, c: 27, f: 0 },
   { emoji: "🍎", name: "Apple", kind: "food", kcal: 95, p: 0, c: 25, f: 0 },
   { emoji: "🥚", name: "Egg", kind: "food", kcal: 78, p: 6, c: 1, f: 5 },
