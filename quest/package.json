@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "description": "VRENT Memory XR — a commercial mixed-reality memory game for Meta Quest 3.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -20,6 +22,7 @@
     "server:dev": "node --watch --experimental-strip-types server/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "three": "^0.185.1",
     "ws": "^8.18.0"
   },
