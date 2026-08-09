@@ -21,7 +21,14 @@ import {
   setTheme,
   type ThemeId,
 } from "../shared/brand.ts";
-import { allowsEnvironment, resolveEdition, type AiLevel } from "../shared/editions.ts";
+import {
+  EDITIONS,
+  allowsEnvironment,
+  resolveEdition,
+  type AiLevel,
+  type EditionFeatures,
+  type EditionId,
+} from "../shared/editions.ts";
 import {
   DEFAULT_SETTINGS,
   isValidRoomCode,
@@ -752,8 +759,35 @@ function screenPropsFor(screen: ScreenId): never {
   return map[screen] as never;
 }
 
-function upsell(feature: string): void {
-  ui.toasts.push(`Not included in ${EDITION.name}. ${brand.contactEmail} can enable ${feature}.`);
+/** Human wording for the features a locked control can point at. */
+const FEATURE_LABELS: Partial<Record<keyof EditionFeatures, string>> = {
+  onlineMultiplayer: "Multiplayer rooms",
+  custom360: "Your own 360 environments",
+  whiteLabel: "Your branding",
+  globalLeaderboard: "The shared leaderboard",
+};
+
+/**
+ * Names the cheapest edition that actually includes the feature and quotes its
+ * price, rather than telling the player what they cannot do. On a Demo kiosk
+ * this toast is the only sales surface in the headset, so it should answer
+ * "what would this cost me" in one line.
+ */
+function upsell(feature: keyof EditionFeatures): void {
+  const order: EditionId[] = ["demo", "pro", "enterprise"];
+  const target = order.map((id) => EDITIONS[id]).find((e) => Boolean(e.features[feature]));
+  const what = FEATURE_LABELS[feature] ?? "That";
+
+  if (!target) {
+    ui.toasts.push({ text: `${what} — talk to ${brand.contactEmail}`, key: `upsell:${feature}` });
+    return;
+  }
+
+  const price = [target.pricing.headline, target.pricing.unit].filter(Boolean).join(" ");
+  ui.toasts.push({
+    text: `${what} is part of ${target.name} — ${price}. ${brand.contactEmail}`,
+    key: `upsell:${feature}`,
+  });
 }
 
 async function hostRoom(): Promise<void> {

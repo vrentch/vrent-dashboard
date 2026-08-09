@@ -1,0 +1,97 @@
+# Publishes the playable game to GitHub Pages.
+#
+# This is the fastest route to a real HTTPS origin, which matters for more than
+# convenience: WebXR refuses to start outside a secure context, so a Quest 3
+# cannot enter VR or passthrough from a LAN address or a file:// path. Once this
+# has run, opening the Pages URL in the Quest Browser gives the full headset
+# experience with no APK, no keystore and no store submission.
+#
+# ONE-TIME SETUP
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+#   (Private repositories need GitHub Pro, Team or Enterprise for Pages.
+#    On a free private repo, use the Vercel or Netlify route in quest/README.md
+#    instead — same build output, same result.)
+#
+# Then run it from Actions -> "Quest web demo" -> Run workflow.
+
+name: Quest web demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: Which edition to publish
+        type: choice
+        options: [pro, demo, enterprise]
+        default: pro
+      server_url:
+        description: "Realtime server URL for multiplayer (blank = solo and AI only)"
+        type: string
+        default: ""
+  push:
+    branches: [main]
+    paths: ["quest/**", ".github/workflows/quest-pages.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two publishes race; always let the newer one win, but do not cancel
+# a deploy that is already mid-flight or Pages can be left half-updated.
+concurrency:
+  group: quest-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: quest/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build ${{ inputs.edition || 'pro' }}
+        env:
+          VITE_EDITION: ${{ inputs.edition || 'pro' }}
+          VITE_SERVER_URL: ${{ inputs.server_url }}
+        # `base: "./"` in vite.config.ts means the bundle works from any path,
+        # so this needs no knowledge of the repository name in the Pages URL.
+        run: npx vite build --outDir dist-web
+
+      - name: Add SPA fallback and disable Jekyll
+        run: |
+          cp dist-web/index.html dist-web/404.html
+          touch dist-web/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: quest/dist-web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Where it went
+        run: |
+          echo "### Playable at ${{ steps.deploy.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Open that URL in the Meta Quest Browser for the full headset experience." >> $GITHUB_STEP_SUMMARY
