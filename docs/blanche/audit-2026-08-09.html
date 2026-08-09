@@ -1,0 +1,774 @@
+<title>Blanche Beauty — Web Audit</title>
+<style>
+  :root {
+    --ground: #FBFAFC;
+    --surface: #F4F2F7;
+    --surface-2: #ECE9F1;
+    --ink: #1C1A22;
+    --ink-muted: #635D71;
+    --ink-faint: #8B8499;
+    --accent: #5B4B8A;
+    --accent-soft: #EDE8F6;
+    --line: #E2DEE8;
+    --line-strong: #CFC9DA;
+    --critical: #A81E14;
+    --critical-bg: #FBEAE8;
+    --warning: #7C5200;
+    --warning-bg: #FBF1DD;
+    --ok: #1B6047;
+    --ok-bg: #E4F2EC;
+    --shadow: 0 1px 2px rgba(28,26,34,.05), 0 8px 24px -12px rgba(28,26,34,.14);
+
+    --display: ui-serif, Charter, "Bitstream Charter", Georgia, "Times New Roman", serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141319;
+      --surface: #1D1B24;
+      --surface-2: #26232F;
+      --ink: #EEEBF3;
+      --ink-muted: #A9A2B7;
+      --ink-faint: #7D7689;
+      --accent: #AE9BDF;
+      --accent-soft: #2A2438;
+      --line: #2E2B38;
+      --line-strong: #403B4F;
+      --critical: #F0A79F;
+      --critical-bg: #33201E;
+      --warning: #E3B563;
+      --warning-bg: #2E2515;
+      --ok: #7FCFA8;
+      --ok-bg: #162A23;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #141319;
+    --surface: #1D1B24;
+    --surface-2: #26232F;
+    --ink: #EEEBF3;
+    --ink-muted: #A9A2B7;
+    --ink-faint: #7D7689;
+    --accent: #AE9BDF;
+    --accent-soft: #2A2438;
+    --line: #2E2B38;
+    --line-strong: #403B4F;
+    --critical: #F0A79F;
+    --critical-bg: #33201E;
+    --warning: #E3B563;
+    --warning-bg: #2E2515;
+    --ok: #7FCFA8;
+    --ok-bg: #162A23;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 24px 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 64px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: 20px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.08;
+    letter-spacing: -.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: clamp(17px, 2.2vw, 20px);
+    line-height: 1.5;
+    color: var(--ink-muted);
+    max-width: 62ch;
+    margin: 0;
+  }
+
+  /* ---------- verdict ---------- */
+  .verdict {
+    border: 1px solid var(--line-strong);
+    border-left: 4px solid var(--critical);
+    background: var(--surface);
+    border-radius: 4px;
+    padding: 24px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow);
+  }
+  .verdict-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--critical);
+  }
+  .verdict-line {
+    font-family: var(--display);
+    font-size: clamp(21px, 3.4vw, 28px);
+    line-height: 1.28;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .verdict p.sub { margin: 0; color: var(--ink-muted); font-size: 15px; max-width: 68ch; }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 22px; }
+  h2 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: clamp(24px, 3.6vw, 32px);
+    line-height: 1.2;
+    letter-spacing: -.015em;
+    margin: 0;
+  }
+  .sec-head { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 22px; }
+  .sec-head p { margin: 0; color: var(--ink-muted); max-width: 68ch; font-size: 15.5px; }
+
+  /* ---------- split comparison ---------- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+  .site-card {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .site-card.live { border-color: var(--line-strong); }
+  .site-tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .site-name { font-family: var(--display); font-size: 23px; line-height: 1.2; }
+  .site-url { font-family: var(--mono); font-size: 12.5px; color: var(--accent); word-break: break-all; }
+  .site-meta { font-size: 13.5px; color: var(--ink-muted); margin-top: 4px; }
+
+  /* ---------- tables ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.metric { font-weight: 600; }
+  .bad { color: var(--critical); font-weight: 600; }
+  .good { color: var(--ok); }
+  .warn { color: var(--warning); }
+  .nil { color: var(--ink-faint); }
+
+  /* ---------- findings ---------- */
+  .findings { display: flex; flex-direction: column; gap: 10px; }
+  .finding {
+    display: grid;
+    grid-template-columns: 116px 1fr;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  @media (max-width: 640px) { .finding { grid-template-columns: 1fr; } }
+  .sev {
+    padding: 16px 14px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    border-right: 1px solid var(--line);
+  }
+  @media (max-width: 640px) { .sev { border-right: none; border-bottom: 1px solid var(--line); } }
+  .sev-critical { background: var(--critical-bg); color: var(--critical); }
+  .sev-high { background: var(--warning-bg); color: var(--warning); }
+  .sev-medium { background: var(--surface-2); color: var(--ink-muted); }
+  .finding-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 7px; }
+  .finding-title { font-weight: 650; font-size: 16px; line-height: 1.35; }
+  .finding-body p { margin: 0; font-size: 14.5px; color: var(--ink-muted); max-width: 74ch; }
+  .evidence {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    background: var(--surface-2);
+    border-radius: 3px;
+    padding: 7px 10px;
+    align-self: flex-start;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ---------- recommendations ---------- */
+  .recs { display: flex; flex-direction: column; gap: 12px; counter-reset: rec; }
+  .rec {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 20px 22px;
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 4px 18px;
+    align-items: start;
+  }
+  .rec::before {
+    counter-increment: rec;
+    content: "R" counter(rec);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 3px;
+    padding: 5px 0;
+    text-align: center;
+    grid-row: span 3;
+  }
+  .rec h3 { margin: 0; font-size: 16.5px; font-weight: 650; line-height: 1.35; }
+  .rec p { margin: 0; font-size: 14.5px; color: var(--ink-muted); max-width: 72ch; }
+  .rec-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 4px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-muted);
+    white-space: nowrap;
+  }
+  .chip-block { color: var(--critical); border-color: var(--critical); }
+  .chip-safe { color: var(--ok); border-color: var(--ok); }
+  .chip-wait { color: var(--warning); border-color: var(--warning); }
+
+  /* ---------- needs ---------- */
+  .needs { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  .need { padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 5px; }
+  .need:last-child { border-bottom: none; }
+  .need strong { font-size: 15.5px; }
+  .need span { font-size: 14.5px; color: var(--ink-muted); max-width: 74ch; }
+
+  .method { font-size: 13.5px; color: var(--ink-faint); max-width: 74ch; }
+  .method code { font-family: var(--mono); font-size: 12.5px; }
+  a { color: var(--accent); }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  details summary { cursor: pointer; font-size: 14.5px; color: var(--accent); font-weight: 600; }
+  details[open] summary { margin-bottom: 14px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>Blanche Beauty</span>
+      <span>Web &amp; systems audit</span>
+      <span>9 August 2026</span>
+      <span>Read-only — nothing was changed</span>
+    </div>
+    <h1>The live site is the shopfront. The business is in the back room.</h1>
+    <p class="standfirst">
+      Blanche runs two Wix sites. The one customers reach — the premium one on the real
+      domain — has no booking, no address, no phone and the wrong time zone. The one nobody
+      is looking at holds all 302 customer records and all 39 treatments.
+    </p>
+  </header>
+
+  <div class="verdict">
+    <div class="verdict-label">Headline finding</div>
+    <p class="verdict-line">A customer cannot book an appointment on blanchebeautyuk.com. There are zero bookable services on it.</p>
+    <p class="sub">
+      Every treatment Blanche sells — all 39, with prices, durations and deposits — is configured
+      on the old free wixsite.com address instead. So is the customer list: 302 contacts there
+      against 10 on the live site.
+    </p>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>The two sites</h2>
+      <p>Both are published right now. Both are reachable by customers and by Google.</p>
+    </div>
+    <div class="split">
+      <div class="site-card live">
+        <div class="site-tag">Live · work happens here</div>
+        <div class="site-name">Blanche</div>
+        <div class="site-url">www.blanchebeautyuk.com</div>
+        <div class="site-meta">Premium · custom domain · classic Editor · Velo disabled · created Jan 2025</div>
+      </div>
+      <div class="site-card">
+        <div class="site-tag">Old · holds the data</div>
+        <div class="site-name">Blanchebeauty</div>
+        <div class="site-url">hello90650.wixsite.com/blanchebeauty</div>
+        <div class="site-meta">Free plan · classic Editor · Velo enabled · created Jun 2022</div>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Measured</th>
+            <th class="num">Live site</th>
+            <th class="num">Old site</th>
+            <th>What it means</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="metric">Bookable services</td>
+            <td class="num bad">0</td>
+            <td class="num good">39</td>
+            <td>Nobody can book on the site customers actually visit.</td>
+          </tr>
+          <tr>
+            <td class="metric">CRM contacts</td>
+            <td class="num bad">10</td>
+            <td class="num good">302</td>
+            <td>The customer database is on the free site. Ten years of nothing on the live one.</td>
+          </tr>
+          <tr>
+            <td class="metric">Site members</td>
+            <td class="num">5</td>
+            <td class="num">13</td>
+            <td>Both small; low migration risk.</td>
+          </tr>
+          <tr>
+            <td class="metric">Future bookings</td>
+            <td class="num nil">0</td>
+            <td class="num good">0</td>
+            <td>Verified — no customer is holding an appointment nobody is watching.</td>
+          </tr>
+          <tr>
+            <td class="metric">Time zone</td>
+            <td class="bad">Europe/Kyiv</td>
+            <td class="good">Europe/London</td>
+            <td>The live site thinks it is in Ukraine. Every date and time it prints is wrong.</td>
+          </tr>
+          <tr>
+            <td class="metric">Business address</td>
+            <td class="bad">empty</td>
+            <td class="good">61 Cleveland St, W1T 4JH</td>
+            <td>No address means no local search, no map, no Google presence.</td>
+          </tr>
+          <tr>
+            <td class="metric">Phone number</td>
+            <td class="bad">not set</td>
+            <td class="good">07831753970</td>
+            <td>The live site gives a customer no way to call.</td>
+          </tr>
+          <tr>
+            <td class="metric">Opening hours</td>
+            <td class="bad">not set</td>
+            <td class="bad">not set</td>
+            <td>Neither site tells anyone when Blanche is open.</td>
+          </tr>
+          <tr>
+            <td class="metric">Events</td>
+            <td class="num">1</td>
+            <td class="num nil">—</td>
+            <td>One ended, sold-out workshop from Dec 2025 — the only Events content.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What is broken</h2>
+      <p>Ordered by what costs money soonest, not by how hard it is to fix.</p>
+    </div>
+    <div class="findings">
+
+      <div class="finding">
+        <div class="sev sev-critical">Critical</div>
+        <div class="finding-body">
+          <div class="finding-title">No way to book on the live site</div>
+          <p>Wix Bookings is not installed on the live site and it has no services. A customer who
+          finds Blanche through the real domain has no path to an appointment at all — they must
+          find a phone number, which is also missing.</p>
+          <div class="evidence">POST /bookings/v2/services/count → {"count": 0}</div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-critical">Critical</div>
+        <div class="finding-body">
+          <div class="finding-title">302 customer records are stranded on the free site</div>
+          <p>The real customer list, with treatment history labels like <em>gel-polish-off-on</em>,
+          sits on the old wixsite.com property. The live site has 10 contacts, one of which is the
+          owner's own account. Any plan that retires the old site without migrating first destroys
+          the customer database.</p>
+          <div class="evidence">live: total 10  ·  old: total 302  (GET /contacts/v4/contacts)</div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-high">High</div>
+        <div class="finding-body">
+          <div class="finding-title">Live site time zone is set to Europe/Kyiv</div>
+          <p>A UK salon on a Ukrainian clock. This silently shifts every time the site generates —
+          event times, invoice dates, automated emails — by two to three hours depending on the
+          season. If booking is added before this is fixed, appointment times will be wrong from
+          day one.</p>
+          <div class="evidence">GET /site-properties/v4/properties → "timeZone": "Europe/Kyiv"</div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-high">High</div>
+        <div class="finding-body">
+          <div class="finding-title">The live site has no address, phone or opening hours</div>
+          <p>Every address field is an empty string and there is no phone at all. For a walk-in-radius
+          business in Fitzrovia this is the single biggest local-search handicap there is: Google has
+          nothing to place on a map, and a customer on a phone has nothing to tap.</p>
+          <div class="evidence">"address": {"street":"", "city":"", "zip":"", "googleFormattedAddress":""}
+"phone": absent · "businessSchedule": absent</div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-high">High</div>
+        <div class="finding-body">
+          <div class="finding-title">The business email address is bouncing</div>
+          <p>hello@blanchebeauty.co.uk is flagged as <code>BOUNCED</code> in the live site's own
+          contact record. Anything the site sends to that address — enquiries, notifications,
+          booking alerts — may not be arriving. Worth checking before relying on any email flow.</p>
+          <div class="evidence">"deliverabilityStatus": "BOUNCED"  ·  hello@blanchebeauty.co.uk</div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-high">High</div>
+        <div class="finding-body">
+          <div class="finding-title">The old site is still published and still competing</div>
+          <p>The free wixsite.com property remains live with the full service catalogue and an
+          active booking setup. Two public sites for one brand split search visibility, and a
+          customer who lands on the old one books into a calendar nobody is treating as current.
+          No future bookings exist today, but the door is open.</p>
+          <div class="evidence">hello90650.wixsite.com/blanchebeauty — status: Published</div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-medium">Medium</div>
+        <div class="finding-body">
+          <div class="finding-title">The only Events content is an ended workshop</div>
+          <p>"Blanche Christmas Wreath Atelier", 4 December 2025 — ended, and it sold out, which is
+          worth knowing. But it is the sole item in the Events app, and it was held at a Nine Elms
+          address, not the salon. Either retire it or use the app deliberately.</p>
+          <div class="evidence">status: ENDED · tickets.soldOut: true · Charles Clowes Walk, SW11</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What needs cleaning up</h2>
+      <p>The 39-service catalogue is complete and mostly well-built. These are the flaws in it.</p>
+    </div>
+    <div class="findings">
+
+      <div class="finding">
+        <div class="sev sev-medium">Medium</div>
+        <div class="finding-body">
+          <div class="finding-title">All 39 treatments sit in one undifferentiated category</div>
+          <p>Every service is filed under a single category literally named "Our Services". A customer
+          looking for a brow treatment has to read past manicures, pedicures, lashes and makeup.
+          The natural grouping — Nails, Lashes, Brows, Makeup — is already implicit in the names.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-medium">Medium</div>
+        <div class="finding-body">
+          <div class="finding-title">Deposits are inconsistent, sometimes absurdly so</div>
+          <p>Men's Manicure is £30 with a £25 deposit — 83% up front. Meanwhile Nail Extensions
+          Infills at £65 takes no deposit at all, and HD Brows at £40 takes none while the nearly
+          identical HD Brows (Shape and Tint) at £40 takes £25. The rule needs to be one rule.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-medium">Medium</div>
+        <div class="finding-body">
+          <div class="finding-title">Near-duplicate services blur the menu</div>
+          <p>"HD Brows" £40 and "HD Brows (Shape and Tint)" £40 are indistinguishable to a customer.
+          The brow lamination ladder — £50 plain, £60 with tint, £70 with tint and shape — is
+          sensible but needs to read as one choice with options, not three separate products.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div class="sev sev-medium">Medium</div>
+        <div class="finding-body">
+          <div class="finding-title">Three services have no duration set</div>
+          <p>Gel Polish Off &amp; On (£40), Brow Lamination (£50) and Lashes Take Off (£20) carry no
+          session duration. Without it, availability cannot be calculated correctly and the customer
+          cannot see how long to set aside.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <details>
+      <summary>The full catalogue as configured — 39 treatments, £3 to £115</summary>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Treatment</th><th class="num">Price</th><th class="num">Deposit</th><th class="num">Minutes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Mani &amp; Pedi with Gel Polish</td><td class="num">£115</td><td class="num">£50</td><td class="num">105</td></tr>
+            <tr><td>Extensions Eyelashes 4D</td><td class="num">£115</td><td class="num">£50</td><td class="num">195</td></tr>
+            <tr><td>Extensions Eyelashes 3D</td><td class="num">£100</td><td class="num">£50</td><td class="num">135</td></tr>
+            <tr><td>Evening Makeup</td><td class="num">£100</td><td class="num">£25</td><td class="num">120</td></tr>
+            <tr><td>Extensions Eyelashes 2D</td><td class="num">£85</td><td class="num">£25</td><td class="num">120</td></tr>
+            <tr><td>Mani &amp; Pedi with Nail Polish</td><td class="num">£85</td><td class="num">£50</td><td class="num">105</td></tr>
+            <tr><td>Nail Extensions New Full Set</td><td class="num">£85</td><td class="num">£25</td><td class="num">150</td></tr>
+            <tr><td>Eyelashes Extensions Natural Look</td><td class="num">£75</td><td class="num">£25</td><td class="num">90</td></tr>
+            <tr><td>Daytime Makeup</td><td class="num">£70</td><td class="num">£25</td><td class="num">60</td></tr>
+            <tr><td>Lash Lift &amp; Tint</td><td class="num">£70</td><td class="num">£25</td><td class="num">60</td></tr>
+            <tr><td>Brow Lamination, Tint &amp; Shape</td><td class="num">£70</td><td class="num">£25</td><td class="num">90</td></tr>
+            <tr><td>Nail Extensions infills</td><td class="num">£65</td><td class="num nil">none</td><td class="num">120</td></tr>
+            <tr><td>Classic Pedicure Gel Polish</td><td class="num">£60</td><td class="num">£25</td><td class="num">105</td></tr>
+            <tr><td>Brow Lamination &amp; Tint</td><td class="num">£60</td><td class="num">£25</td><td class="num">75</td></tr>
+            <tr><td>Classic Manicure with Gel + French Design</td><td class="num">£60</td><td class="num">£25</td><td class="num">120</td></tr>
+            <tr><td>Classic Pedicure with Polish</td><td class="num">£55</td><td class="num">£25</td><td class="num">90</td></tr>
+            <tr><td>Classic Manicure Gel Off &amp; On</td><td class="num">£50</td><td class="num">£25</td><td class="num">105</td></tr>
+            <tr><td>Brow Lamination</td><td class="num">£50</td><td class="num">£25</td><td class="num warn">not set</td></tr>
+            <tr><td>Lashes Infill up to 3 weeks</td><td class="num">£50</td><td class="num">£25</td><td class="num">90</td></tr>
+            <tr><td>Men's Pedicure</td><td class="num">£45</td><td class="num">£25</td><td class="num">60</td></tr>
+            <tr><td>Classic Manicure with Gel Polish</td><td class="num">£45</td><td class="num">£25</td><td class="num">90</td></tr>
+            <tr><td>Gel Polish Off &amp; On</td><td class="num">£40</td><td class="num">£25</td><td class="num warn">not set</td></tr>
+            <tr><td>HD Brows</td><td class="num">£40</td><td class="num nil">none</td><td class="num">60</td></tr>
+            <tr><td>HD Brows (Shape and Tint)</td><td class="num">£40</td><td class="num">£25</td><td class="num">60</td></tr>
+            <tr><td>File and Polish Gel</td><td class="num">£35</td><td class="num">£25</td><td class="num">45</td></tr>
+            <tr><td>Classic Manicure with Polish</td><td class="num">£35</td><td class="num">£25</td><td class="num">75</td></tr>
+            <tr><td>Men's Manicure</td><td class="num">£30</td><td class="num bad">£25</td><td class="num">45</td></tr>
+            <tr><td>Men's Eyebrows</td><td class="num">£30</td><td class="num">£25</td><td class="num">30</td></tr>
+            <tr><td>Brow Tint / Henna Tint</td><td class="num">£25</td><td class="num">£10</td><td class="num">30</td></tr>
+            <tr><td>Lashes Tint</td><td class="num">£25</td><td class="num">£10</td><td class="num">30</td></tr>
+            <tr><td>Brow Shape</td><td class="num">£20</td><td class="num">£10</td><td class="num">30</td></tr>
+            <tr><td>Nail Extensions Take Off</td><td class="num">£20</td><td class="num">£10</td><td class="num">45</td></tr>
+            <tr><td>File and Polish Nails</td><td class="num">£20</td><td class="num">£10</td><td class="num">30</td></tr>
+            <tr><td>Lashes Take Off</td><td class="num">£20</td><td class="num">£10</td><td class="num warn">not set</td></tr>
+            <tr><td>Mini Me Pedicure (up to age 12)</td><td class="num">£15</td><td class="num nil">none</td><td class="num">30</td></tr>
+            <tr><td>Kids Manicure</td><td class="num">£15</td><td class="num">£10</td><td class="num">30</td></tr>
+            <tr><td>Blanche Spa Manicure Upgrade</td><td class="num">£5</td><td class="num nil">none</td><td class="num">15</td></tr>
+            <tr><td>Nail Repair</td><td class="num">£5</td><td class="num nil">none</td><td class="num">15</td></tr>
+            <tr><td>Nail Art</td><td class="num">£3</td><td class="num nil">none</td><td class="num">15</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Recommended sequence</h2>
+      <p>In dependency order — each step assumes the one before it. Nothing here has been done;
+      all of it waits on your approval.</p>
+    </div>
+    <div class="recs">
+
+      <div class="rec">
+        <div>
+          <h3>Fix the live site's business identity</h3>
+          <p>Set the time zone to Europe/London, enter 61 Cleveland Street W1T 4JH, add the phone
+          number, set opening hours. Half an hour of work that unblocks local search and stops every
+          future time being wrong. Also worth confirming the bouncing email separately.</p>
+          <div class="rec-meta">
+            <span class="chip chip-safe">Low risk</span>
+            <span class="chip">No data touched</span>
+            <span class="chip">Do first</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <h3>Decide which system owns the calendar — Phorest or Wix</h3>
+          <p>This blocks everything else about booking. Running Phorest alongside Wix Bookings means
+          two calendars that cannot see each other, and double-bookings follow within a week. One
+          system owns availability; the other, at most, links to it.</p>
+          <div class="rec-meta">
+            <span class="chip chip-block">Blocking decision</span>
+            <span class="chip chip-wait">Needs your call</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <h3>Migrate the 302 contacts onto the live site</h3>
+          <p>Export from the old site, dedupe against the 10 already on the live one, import. The
+          treatment-history labels are worth carrying across — they are the basis of any future
+          rebooking campaign. Done before anything is retired, never after.</p>
+          <div class="rec-meta">
+            <span class="chip chip-wait">Medium risk</span>
+            <span class="chip">Dedupe required</span>
+            <span class="chip">Reversible</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <h3>Stand up booking on the live site</h3>
+          <p>Shape depends on R2. If Phorest owns the calendar, the site embeds or links to Phorest's
+          booking and Wix Bookings is never installed. If Wix owns it, the 39 services are rebuilt on
+          the live site — the catalogue is already fully specified, so this is transcription, not design.</p>
+          <div class="rec-meta">
+            <span class="chip chip-wait">Waits on R2</span>
+            <span class="chip">The revenue step</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <h3>Clean the catalogue as it is rebuilt</h3>
+          <p>Group into Nails / Lashes / Brows / Makeup, resolve the two HD Brows entries, turn the
+          brow lamination ladder into one service with options, set the three missing durations, and
+          apply one consistent deposit rule. Cheapest to do while rebuilding rather than after.</p>
+          <div class="rec-meta">
+            <span class="chip chip-safe">Low risk</span>
+            <span class="chip">Fold into R4</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <h3>Retire the old site behind a redirect</h3>
+          <p>Only once R3 and R4 are confirmed done. Redirect rather than delete, so the old links
+          and any residual search equity land on the real domain instead of a dead page.</p>
+          <div class="rec-meta">
+            <span class="chip chip-wait">Waits on R3 + R4</span>
+            <span class="chip chip-block">Irreversible if deleted</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <h3>Then, and only then, the design pass</h3>
+          <p>A redesign on top of a site that cannot take a booking is decoration. Once the plumbing
+          works, the design work has something to convert. The brand rules and QA agents for this are
+          already written and committed.</p>
+          <div class="rec-meta">
+            <span class="chip chip-wait">Waits on R4</span>
+            <span class="chip">Needs brand sign-off</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What I need from you</h2>
+      <p>Four things block work I would otherwise start now.</p>
+    </div>
+    <div class="needs">
+      <div class="need">
+        <strong>Open network access to the site, or check it yourself</strong>
+        <span>This environment blocks all outbound web traffic. blanchebeautyuk.com, wixsite.com and
+        phorest.com all return EGRESS_BLOCKED. I could read everything through Wix's API but I could
+        not load a single page — so nothing in this report describes how the site looks, and I could
+        not research Phorest's documentation at all. Allowlisting those domains unblocks both.</span>
+      </div>
+      <div class="need">
+        <strong>Confirm Phorest is definitely the system of record</strong>
+        <span>If Blanche's diary already lives in Phorest, that settles R2 and the website's job
+        becomes routing customers into Phorest cleanly. Tell me the plan tier and whether online
+        booking is switched on there, and I will work out the integration options properly.</span>
+      </div>
+      <div class="need">
+        <strong>Which domain is the real one</strong>
+        <span>The site runs on blanchebeautyuk.com but every email address is @blanchebeauty.co.uk.
+        I could not test whether the .co.uk domain resolves, redirects, or is unregistered. Customers
+        who type the address off a business card need to land somewhere.</span>
+      </div>
+      <div class="need">
+        <strong>Approval to write to the live site</strong>
+        <span>Everything above was read-only. Nothing changes until you approve a specific step —
+        and R1 is safe, fast and worth doing today.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Method</h2>
+    </div>
+    <p class="method">
+      Every figure here was measured on 9 August 2026 through the Wix REST API against the two site
+      IDs, not estimated: <code>site-properties/v4/properties</code>, <code>contacts/v4/contacts</code>,
+      <code>members/v1/members</code>, <code>bookings/v2/services/query</code> and
+      <code>/count</code>, <code>bookings-reader/v2/extended-bookings/count</code>, and
+      <code>events/v3/events/query</code>. All calls were reads. No site content, data or setting was
+      modified. The service catalogue was paged in batches of 13 and deduplicated by service ID, giving
+      39 of 39. Claims about rendered pages, visual design, SEO tags and Phorest's product capabilities
+      are absent from this report because the network policy made them unverifiable — not because they
+      were checked and found fine.
+    </p>
+  </section>
+
+</div>
