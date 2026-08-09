@@ -12,9 +12,11 @@
  *     way to start that conversation.
  *
  * Every claim on the page is read out of `shared/` — the editions, the room
- * catalogue, the board sizes, the game modes. Nothing is retyped, so a change
- * to the product is a change to the pitch, and the pitch cannot drift into
- * saying something the build does not do.
+ * catalogue, the board sizes, the game modes, and every franc of the pricing.
+ * Nothing is retyped, so a change to the product is a change to the pitch, and
+ * the pitch cannot drift into saying something the build does not do or quote a
+ * price the company no longer charges. The one number format the page owns is
+ * `formatMoney`, and every figure goes through it.
  *
  * Which build matters: a capability claim — the lede, the three steps, the
  * stats strip, the hero caption — is read out of `deps.edition.features`, not
@@ -48,8 +50,14 @@ import {
   tokens,
   type ThemeId,
 } from "../../shared/brand.ts";
-import { allowsEnvironment, EDITIONS } from "../../shared/editions.ts";
-import type { EditionFeatures, EditionId, EditionSpec } from "../../shared/editions.ts";
+import { allowsEnvironment, EDITIONS, VAT_NOTE } from "../../shared/editions.ts";
+import type {
+  EditionFeatures,
+  EditionId,
+  EditionPricing,
+  EditionSpec,
+  PriceTier,
+} from "../../shared/editions.ts";
 import { ENVIRONMENTS } from "../../shared/environments.ts";
 import type { EnvironmentKind, EnvironmentSpec } from "../../shared/environments.ts";
 import { BOARD_PRESETS, GAME_MODES } from "../../shared/game.ts";
@@ -271,6 +279,10 @@ export function createEntryScreen(deps: EntryScreenDeps): EntryScreen {
   renderRooms($("[data-rooms]"), edition);
   $("[data-rooms-aside]").textContent = roomsAside(edition);
   renderTailoring($("[data-tailoring]"));
+  renderPricing($("[data-pricing]"));
+  // The one place VAT is mentioned. It belongs under the figures it qualifies
+  // and nowhere else — repeated, it starts to read as a disclaimer.
+  $("[data-vat]").textContent = VAT_NOTE;
   renderEditions($("[data-editions]"), edition.id);
 
   // ── Theme control ────────────────────────────────────────────────────────
@@ -483,7 +495,7 @@ export function createEntryScreen(deps: EntryScreenDeps): EntryScreen {
       if (deps.onPlayFlat) {
         addButton({ label: "Try the flat-screen version", primary: true, icon: "play", onClick: run("Starting…", deps.onPlayFlat) });
       }
-      addButton({ label: "What you can order", onClick: () => scrollTo("[data-editions-section]") });
+      addButton({ label: "What it costs", onClick: () => scrollTo("[data-pricing-section]") });
       return;
     }
 
@@ -498,9 +510,9 @@ export function createEntryScreen(deps: EntryScreenDeps): EntryScreen {
       addButton({ label: "Play on this screen", primary: true, icon: "play", onClick: run("Starting…", deps.onPlayFlat) });
     }
     addButton({
-      label: "See the editions",
+      label: "What it costs",
       icon: "arrow",
-      onClick: () => scrollTo("[data-editions-section]"),
+      onClick: () => scrollTo("[data-pricing-section]"),
     });
   }
 
@@ -876,6 +888,155 @@ function renderTailoring(host: HTMLElement): void {
   }
 }
 
+// ── Pricing ─────────────────────────────────────────────────────────────────
+
+/**
+ * Money, written once, the way this page writes it everywhere: currency first,
+ * thousands grouped, and no decimals on a whole franc — `CHF 4,900`, never
+ * `CHF 4900`. The grouping is done here rather than by `Intl.NumberFormat`
+ * because the locale a visitor's browser happens to be set to must not decide
+ * how a Swiss price list is punctuated: the same figure has to read identically
+ * next to the `headline` strings the edition specs already carry.
+ *
+ * `currency` comes off the pricing block rather than being assumed, so a second
+ * currency added upstream prints correctly instead of silently saying CHF.
+ */
+function formatMoney(amount: number, currency: EditionPricing["currency"]): string {
+  const abs = Math.abs(amount);
+  const cents = Math.round(abs * 100) % 100;
+  const whole = String(Math.floor(abs)).replace(/\B(?=(\d{3})+$)/g, ",");
+  const tail = cents > 0 ? `.${String(cents).padStart(2, "0")}` : "";
+  return `${currency} ${amount < 0 ? "-" : ""}${whole}${tail}`;
+}
+
+/**
+ * The edition VRENT points a customer at by default. Marked on the card, not
+ * dressed up: it is the one that fits an event, which is what most enquiries
+ * turn out to be.
+ */
+const RECOMMENDED: EditionId = "pro";
+
+/**
+ * What the card's button says, and the subject line it arrives with. The
+ * subject names the edition so a reply thread starts already scoped — an inbox
+ * full of "Website enquiry" is a worse outcome than no button at all.
+ */
+const ASK: Record<EditionId, { label: string; subject: string }> = {
+  demo: { label: "Ask about a rental", subject: "Demo edition, with a rental" },
+  pro: { label: "Ask about Pro", subject: "Pro edition, per event or per year" },
+  enterprise: { label: "Ask about Enterprise", subject: "Enterprise edition, custom build" },
+};
+
+/**
+ * The per-event tiers, which are the whole argument: they are named and sized
+ * after the hardware packages the customer is already renting, so the game
+ * reads as a line on that quote rather than as a separate purchase.
+ */
+function renderTiers(pricing: EditionPricing): HTMLElement | null {
+  const tiers: readonly PriceTier[] = pricing.tiers ?? [];
+  if (tiers.length === 0) return null;
+
+  const box = node("div", "vr-tiers");
+  const unit = pricing.unit;
+  box.appendChild(
+    node("p", "vr-tiers__head", unit ? `${sentenceCase(unit)}, by rental package` : "By rental package"),
+  );
+
+  const list = node("dl", "vr-tiers__list");
+  for (const tier of tiers) {
+    const row = node("div", "vr-tier");
+    const label = node("dt", "vr-tier__label");
+    label.appendChild(node("span", "vr-tier__name", tier.label));
+    label.appendChild(node("span", "vr-tier__detail", tier.detail));
+    row.appendChild(label);
+    row.appendChild(node("dd", "vr-tier__amount", formatMoney(tier.amount, pricing.currency)));
+    list.appendChild(row);
+  }
+  box.appendChild(list);
+  return box;
+}
+
+/**
+ * The annual line. Whether it *replaces* the headline price or sits on top of
+ * it is read from the shape of the pricing rather than hardcoded per edition:
+ * a block with per-event tiers is offering the year as an alternative to
+ * paying event by event, while a one-off setup fee is quoted plus its upkeep.
+ */
+function renderRecurring(pricing: EditionPricing): HTMLElement | null {
+  const rec = pricing.recurring;
+  if (!rec) return null;
+
+  const box = node("div", "vr-recurring");
+  const line = node("p", "vr-recurring__line");
+  line.appendChild(node("span", "vr-recurring__lead", pricing.tiers?.length ? "Or" : "Plus"));
+  line.appendChild(node("span", "vr-recurring__amount", formatMoney(rec.amount, pricing.currency)));
+  line.appendChild(node("span", "vr-recurring__unit", rec.unit));
+  box.appendChild(line);
+  box.appendChild(node("p", "vr-recurring__note", rec.note));
+  return box;
+}
+
+/**
+ * Three cards: what each edition is, what it costs, and one button per card
+ * that opens a mail already addressed and titled. Every figure comes from the
+ * edition's own `pricing` block — the headline verbatim, the tiers and the
+ * recurring amounts through `formatMoney`.
+ */
+function renderPricing(host: HTMLElement): void {
+  host.replaceChildren();
+
+  for (const id of EDITION_ORDER) {
+    const spec = EDITIONS[id];
+    const pricing = spec.pricing;
+    const best = id === RECOMMENDED;
+    const label = editionLabel(id);
+    const card = node("article", `vr-price${best ? " is-recommended" : ""}`);
+
+    const top = node("div", "vr-price__top");
+    top.appendChild(node("h3", "vr-price__name", label));
+    if (best) top.appendChild(node("span", "vr-price__flag", "Recommended"));
+    card.appendChild(top);
+
+    card.appendChild(node("p", "vr-price__tagline", spec.tagline));
+
+    // The headline is printed as the spec writes it — "Included", "from CHF
+    // 150" — with the unit beside it rather than folded in, so the two can be
+    // sized independently and the figure stays the thing you read first.
+    const figure = node("p", "vr-price__figure");
+    figure.appendChild(node("span", "vr-price__amount", pricing.headline));
+    if (pricing.unit) figure.appendChild(node("span", "vr-price__unit", pricing.unit));
+    card.appendChild(figure);
+
+    card.appendChild(node("p", "vr-price__note", pricing.note));
+
+    // Both are absent on most editions, and neither is faked when it is: a
+    // card with no tiers simply goes from its note to its selling points.
+    const tiers = renderTiers(pricing);
+    if (tiers) card.appendChild(tiers);
+    const recurring = renderRecurring(pricing);
+    if (recurring) card.appendChild(recurring);
+
+    const points = node("ul", "vr-price__points");
+    for (const p of spec.sellingPoints) points.appendChild(node("li", undefined, p));
+    card.appendChild(points);
+
+    const ask = ASK[id];
+    const cta = document.createElement("a");
+    cta.className = `vr-btn vr-price__cta${best ? " vr-btn--primary" : ""}`;
+    cta.href = `mailto:${brand.contactEmail}?subject=${encodeURIComponent(
+      `${brand.shortName} — ${ask.subject}`,
+    )}`;
+    // The visible label is short; the full sentence goes to a screen reader,
+    // which would otherwise announce three near-identical links.
+    cta.setAttribute("aria-label", `Email ${brand.contactEmail} about the ${label} edition`);
+    cta.insertAdjacentHTML("afterbegin", ICONS.arrow);
+    cta.appendChild(node("span", undefined, ask.label));
+    card.appendChild(cta);
+
+    host.appendChild(card);
+  }
+}
+
 // ── Editions ────────────────────────────────────────────────────────────────
 
 /**
@@ -909,6 +1070,11 @@ function editionSpecRows(f: EditionFeatures): readonly [string, string][] {
   ];
 }
 
+/**
+ * The matrix under the prices. It carries no copy of its own — the name, the
+ * tagline and the selling points are said once, in the pricing card above, and
+ * this reads as the specification sheet a buyer scans across.
+ */
 function renderEditions(host: HTMLElement, currentId: EditionId): void {
   host.replaceChildren();
   for (const id of EDITION_ORDER) {
@@ -921,8 +1087,6 @@ function renderEditions(host: HTMLElement, currentId: EditionId): void {
     if (id === currentId) top.appendChild(node("span", "vr-edition__here", "This build"));
     card.appendChild(top);
 
-    card.appendChild(node("p", "vr-edition__tagline", spec.tagline));
-
     const specs = node("dl", "vr-edition__specs");
     for (const [k, v] of editionSpecRows(f)) {
       const row = node("div");
@@ -930,10 +1094,6 @@ function renderEditions(host: HTMLElement, currentId: EditionId): void {
       specs.appendChild(row);
     }
     card.appendChild(specs);
-
-    const points = node("ul", "vr-edition__points");
-    for (const p of spec.sellingPoints) points.appendChild(node("li", undefined, p));
-    card.appendChild(points);
 
     const feats = node("ul", "vr-edition__features");
     for (const row of FEATURE_ROWS) {
@@ -1130,10 +1290,19 @@ const SHELL = `
     <div class="vr-tailoring" data-tailoring></div>
   </section>
 
+  <section class="vr-section" data-pricing-section>
+    <div class="vr-section__head">
+      <h2 class="vr-section__title">What it costs</h2>
+      <p class="vr-section__aside">Included with the rental, priced per event, or built for you.</p>
+    </div>
+    <div class="vr-prices" data-pricing></div>
+    <p class="vr-vat" data-vat></p>
+  </section>
+
   <section class="vr-section" data-editions-section>
     <div class="vr-section__head">
-      <h2 class="vr-section__title">Three editions, one codebase</h2>
-      <p class="vr-section__aside">Each ships as its own signed build.</p>
+      <h2 class="vr-section__title">Feature by feature</h2>
+      <p class="vr-section__aside">Three editions, one codebase. Each ships as its own signed build.</p>
     </div>
     <div class="vr-editions" data-editions></div>
   </section>

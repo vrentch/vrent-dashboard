@@ -879,6 +879,265 @@
   color: var(--vr-text-2);
 }
 
+/* ── Pricing ────────────────────────────────────────────────────────────── */
+
+/* Three columns that become one on a phone. `auto-fit` rather than a fixed
+   three, so the middle sizes land on two rather than crushing three cards to a
+   width the tier rows cannot hold. */
+.vr-prices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.vr-price {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 24px 26px;
+  border: var(--vr-hair) solid var(--vr-line);
+  border-radius: var(--vr-radius-lg, 22px);
+  background: var(--vr-panel);
+}
+
+/* The recommended card is marked, not inflated: a primary edge and the shadow
+   the theme already uses for a raised panel. No scale transform — it would
+   break the row's alignment and shift on a phone where the cards are stacked
+   and the comparison it is making no longer exists. */
+.vr-price.is-recommended {
+  border-color: color-mix(in srgb, var(--vr-primary) 60%, transparent);
+  box-shadow: 0 30px 60px -46px var(--vr-shadow, transparent);
+}
+
+.vr-price__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.vr-price__name {
+  margin: 0;
+  font-family: var(--vr-font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.vr-price__flag {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: var(--vr-radius-pill, 999px);
+  background: color-mix(in srgb, var(--vr-primary) 16%, transparent);
+  box-shadow: inset 0 0 0 var(--vr-hair) color-mix(in srgb, var(--vr-primary) 55%, transparent);
+  color: color-mix(in srgb, var(--vr-primary) 75%, var(--vr-text));
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Two lines of tagline are reserved so the three figures sit on one line
+   across the row; released once the cards stop being side by side. */
+.vr-price__tagline {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--vr-text-2);
+  min-height: 2.9em;
+}
+
+.vr-price__figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0 0 8px;
+}
+
+.vr-price__amount {
+  font-family: var(--vr-font-display);
+  font-size: clamp(26px, 2.5vw, 30px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.vr-price__unit {
+  font-size: 13px;
+  color: var(--vr-quiet);
+  white-space: nowrap;
+}
+
+.vr-price__note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--vr-text-2);
+}
+
+/* The four packages. Inset on its own surface because it is a price list
+   inside a price card, and the reader needs to see where one ends. */
+.vr-tiers {
+  margin: 0 0 14px;
+  padding: 13px 15px 5px;
+  border: var(--vr-hair) solid var(--vr-line);
+  border-radius: var(--vr-radius-md, 14px);
+  background: color-mix(in srgb, var(--vr-surface-alt) 55%, transparent);
+}
+
+.vr-tiers__head {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vr-quiet);
+}
+
+.vr-tiers__list {
+  margin: 0;
+  padding: 0;
+}
+
+.vr-tier {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 0;
+  border-top: var(--vr-hair) solid var(--vr-line);
+}
+
+.vr-tier:first-child {
+  border-top: 0;
+}
+
+/* Name and capacity wrap onto a second line in a narrow column rather than
+   pushing the amount off the card. */
+.vr-tier__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 7px;
+  margin: 0;
+  min-width: 0;
+}
+
+.vr-tier__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vr-tier__detail {
+  font-size: 11.5px;
+  color: var(--vr-quiet);
+}
+
+.vr-tier__amount {
+  flex: none;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The annual line — an alternative to the tiers above it, or an addition to a
+   one-off. Dashed, so it reads as the other way round rather than as a fifth
+   tier. */
+.vr-recurring {
+  margin: 0 0 16px;
+  padding: 12px 15px 13px;
+  border: var(--vr-hair) dashed var(--vr-line-strong);
+  border-radius: var(--vr-radius-md, 14px);
+}
+
+.vr-recurring__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0 0 5px;
+}
+
+.vr-recurring__lead {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vr-accent);
+}
+
+.vr-recurring__amount {
+  font-family: var(--vr-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.vr-recurring__unit {
+  font-size: 12.5px;
+  color: var(--vr-quiet);
+}
+
+.vr-recurring__note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--vr-text-2);
+}
+
+.vr-price__points {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--vr-text-2);
+}
+
+.vr-price__points li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.vr-price__points li::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-top: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vr-text-muted);
+}
+
+.vr-price.is-recommended .vr-price__points li::before {
+  background: var(--vr-primary);
+}
+
+/* Pinned to the bottom of the card so the three buttons line up however
+   unevenly the cards above them fill. */
+.vr-price__cta {
+  width: 100%;
+  margin-top: auto;
+  min-height: 50px;
+  padding: 0 18px;
+  font-size: 15px;
+}
+
+.vr-vat {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  color: var(--vr-quiet);
+}
+
 /* ── Editions ───────────────────────────────────────────────────────────── */
 
 .vr-editions {
@@ -933,17 +1192,10 @@
   white-space: nowrap;
 }
 
-.vr-edition__tagline {
-  margin: 0 0 18px;
-  font-size: 14px;
-  color: var(--vr-text-2);
-  min-height: 2.8em;
-}
-
 .vr-edition__specs {
   display: grid;
   gap: 0;
-  margin: 0 0 18px;
+  margin: 14px 0 0;
   padding: 0;
   border-top: var(--vr-hair) solid var(--vr-line);
 }
@@ -967,37 +1219,6 @@
   color: var(--vr-text);
   font-weight: 600;
   text-align: right;
-}
-
-.vr-edition__points {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 9px;
-  font-size: 13.5px;
-  color: var(--vr-text-2);
-}
-
-.vr-edition__points li {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  line-height: 1.45;
-}
-
-.vr-edition__points li::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  margin-top: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--vr-text-muted);
-}
-
-.vr-edition.is-current .vr-edition__points li::before {
-  background: var(--vr-primary);
 }
 
 /* The same eight questions answered for every edition, so the columns can be
@@ -1205,6 +1426,10 @@
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 
+  .vr-prices {
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  }
+
   /* Three across, with the fourth cell widened so the second row still fills
      the strip edge to edge. */
   .vr-stats {
@@ -1226,7 +1451,9 @@
     max-width: 420px;
   }
 
-  .vr-edition__tagline {
+  /* Below this the cards are no longer three abreast, so there is nothing left
+     to line the figures up with. */
+  .vr-price__tagline {
     min-height: 0;
   }
 }
@@ -1297,9 +1524,21 @@
   }
 
   .vr-tailor,
-  .vr-edition {
+  .vr-edition,
+  .vr-price {
     padding-left: 20px;
     padding-right: 20px;
+  }
+
+  /* A phone column is narrow enough that "up to 50 headsets" and the amount
+     stop sharing a line comfortably; stack them instead of letting the label
+     wrap mid-phrase. */
+  .vr-tier {
+    flex-wrap: wrap;
+  }
+
+  .vr-tier__label {
+    flex: 1 1 auto;
   }
 }
 
