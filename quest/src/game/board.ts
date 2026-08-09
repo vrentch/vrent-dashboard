@@ -17,7 +17,7 @@ import * as THREE from "three";
 import type { BoardController, BoardEvents, Engine, PointerState, XrMode } from "../contracts.ts";
 import type { BoardPreset, Card, GameSettings } from "../../shared/game.ts";
 import { presetForPairs } from "../../shared/game.ts";
-import { hex, seatColors } from "../../shared/brand.ts";
+import { hex, onThemeChange, seatColors } from "../../shared/brand.ts";
 import { getEnvironment } from "../../shared/environments.ts";
 import { currentTint } from "../env/controller.ts";
 import { buildSymbolAtlas, type SymbolAtlas } from "./symbols.ts";
@@ -25,7 +25,6 @@ import { computeLayout, type BoardLayout, type Placement } from "./layout.ts";
 import {
   buildCardGeometry,
   createCard,
-  createCardBackTexture,
   createCardResources,
   type CardResources,
   type CardView,
@@ -75,6 +74,12 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
   let resources: CardResources | null = null;
   let atlas: SymbolAtlas | null = null;
   let cards: CardView[] = [];
+  /**
+   * Seat that owns each card's highlight, -1 for none. Seat colours are parsed
+   * out of the palette, so a theme switch has to re-tint every claimed card —
+   * and the board is the only thing that remembers who claimed what.
+   */
+  let cardSeat = new Int16Array(0);
 
   /** Cached inverse of each slot's board-local matrix — slots never move. */
   let slotInverse: THREE.Matrix4[] = [];
@@ -99,18 +104,29 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
   /**
    * The rim light and the self-lit floor are what keep faces readable in both
    * shipping extremes: a blown-out 360 panorama and unlit passthrough at night.
+   * These are the *environment's* demands; the theme's own `rimScale` and
+   * `cardFaceScale` are folded on top inside `setEnvResponse`.
    */
   function applyLighting(): void {
     if (!resources) return;
-    const env = resources.shared.uEnv.value;
     const dark = 1 - Math.max(0, Math.min(1, ambient / 1.25));
-    env.x = 0.35 + 0.5 * dark;
-    env.z = 0.05 + 0.12 * dark + (mode === "ar" ? 0.06 : 0);
+    resources.setEnvResponse(0.35 + 0.5 * dark, 0.05 + 0.12 * dark + (mode === "ar" ? 0.06 : 0));
   }
 
   const offModeChange = engine.onModeChange((next) => {
     mode = next;
     applyLighting();
+  });
+
+  // The atlas repaints itself and the card resources re-derive their own tints
+  // and theme multipliers. The one thing neither of them can know is which seat
+  // owns which card, so those colours are re-pushed from here. Nothing is
+  // rebuilt: a theme switch mid-turn must not interrupt a flip.
+  const offThemeChange = onThemeChange(() => {
+    for (let i = 0; i < cards.length; i++) {
+      const seat = cardSeat[i];
+      if (seat >= 0) cards[i].setSeatColor(seatColor(seat, _seat));
+    }
   });
 
   // ── Layout ────────────────────────────────────────────────────────────────
@@ -149,6 +165,7 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
     cards = [];
     slotInverse = [];
     slotCentre = [];
+    cardSeat = new Int16Array(0);
     resources?.dispose();
     resources = null;
     atlas?.dispose();
@@ -180,6 +197,7 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
     });
     applyLighting();
 
+    cardSeat = new Int16Array(deck.length).fill(-1);
     for (let i = 0; i < deck.length; i++) {
       const card = createCard(resources, i);
       cards.push(card);
@@ -197,7 +215,8 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
       const view = cards[i];
       if (state.symbol >= 0) view.setSymbol(state.symbol);
       if (state.matched) {
-        view.markMatched(seatColor(state.matchedBy ?? 0, _seat), false);
+        cardSeat[i] = state.matchedBy ?? 0;
+        view.markMatched(seatColor(cardSeat[i], _seat), false);
       } else if (state.faceUp) {
         view.setFaceUp(true, false);
       }
@@ -205,7 +224,7 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
   }
 
   /**
-   * Swaps card geometry and the back texture in place when the board changes
+   * Swaps card geometry and repaints the back in place when the board changes
    * size. Card materials, uniforms and animation state all survive, which is
    * why a placement change never interrupts a turn.
    */
@@ -221,13 +240,10 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
       next.cornerRadius,
       next.bevel,
     );
-    const back = createCardBackTexture(next.cardWidth / next.cardHeight, 512, anisotropy);
+    resources.back.redraw(next.cardWidth / next.cardHeight);
 
     const oldGeometry = resources.geometry;
-    const oldBack = resources.backTexture;
     resources.geometry = geometry;
-    resources.backTexture = back;
-    resources.shared.uBack.value = back;
 
     // `metrics` is captured by reference inside every card, so mutating it in
     // place rescales the motion along with the geometry.
@@ -244,7 +260,6 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
     for (const card of cards) card.mesh.geometry = geometry;
 
     oldGeometry.dispose();
-    oldBack.dispose();
     applyLayout(next);
   }
 
@@ -374,6 +389,7 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
         // a claimed card showing its back.
         if (!card.faceUp()) card.setFaceUp(true, budget-- > 0);
         card.markMatched(_seat);
+        cardSeat[index] = seat;
         if (hoverIndex === index) setHover(null, -1);
         if (intentIndex === index) intentIndex = null;
       }
@@ -399,7 +415,10 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
       intentIndex = index;
       if (index === null) return;
       seatColor(seat, _seat);
-      cards[index]?.setIntent(true, _seat);
+      const card = cards[index];
+      if (!card) return;
+      card.setIntent(true, _seat);
+      if (!card.matched()) cardSeat[index] = seat;
     },
 
     update(dt, now, pointers) {
@@ -426,6 +445,7 @@ export function createBoard(engine: Engine, events: BoardEvents): BoardControlle
 
     dispose() {
       offModeChange();
+      offThemeChange();
       teardown();
       group.clear();
     },

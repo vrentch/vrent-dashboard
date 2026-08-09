@@ -6,8 +6,11 @@
  * loading gate.
  *
  * Every colour is a custom property written by `applyBrandCssVars`, and the
- * radii and motion durations are written from `tokens` by `entry.ts`. There is
- * no literal colour in this file: re-skinning `shared/brand.ts` re-skins this
+ * radii, motion durations and the theme's own scene tokens are written from
+ * `tokens`/`scene` by `entry.ts`. There is no literal colour in this file and
+ * no light/dark branch: the surface, border, shadow and glow strengths come
+ * from the active theme's scene tokens, which are the same numbers the headset
+ * renders its spatial panels with. Re-skinning `shared/brand.ts` re-skins this
  * page with no CSS edit.
  *
  * Fonts resolve to the system stack. Nothing is fetched.
@@ -17,16 +20,26 @@
   --vr-gutter: clamp(20px, 5vw, 64px);
   --vr-max: 1200px;
   --vr-hair: 1px;
-  --vr-line: color-mix(in srgb, var(--vr-text-2) 18%, transparent);
-  --vr-line-strong: color-mix(in srgb, var(--vr-text-2) 34%, transparent);
-  --vr-card: color-mix(in srgb, var(--vr-ink) 55%, transparent);
-  --vr-card-hover: color-mix(in srgb, var(--vr-surface-alt) 80%, transparent);
+
+  /* Hairlines and fills, scaled by the theme's own alphas. */
+  --vr-line: color-mix(in srgb, var(--vr-text-2) calc(var(--vr-border-alpha, 0.14) * 100%), transparent);
+  --vr-line-strong: color-mix(in srgb, var(--vr-text-2) calc(var(--vr-border-alpha, 0.14) * 220%), transparent);
+  --vr-panel: color-mix(in srgb, var(--vr-surface) calc(var(--vr-panel-alpha, 0.92) * 100%), transparent);
+  --vr-panel-hover: color-mix(in srgb, var(--vr-surface-alt) calc(var(--vr-panel-alpha, 0.92) * 100%), transparent);
+  --vr-ease: cubic-bezier(0.22, 0.65, 0.24, 1);
+
+  /* The muted ink is tuned for 14px and up; below that it drops under 4.5:1 on
+     a white panel. Pulling it toward the body text pushes it away from the
+     background in whichever direction this theme happens to run, so the small
+     labels that carry real information stay readable in both. */
+  --vr-quiet: color-mix(in srgb, var(--vr-text-muted) 72%, var(--vr-text));
 
   position: fixed;
   inset: 0;
   z-index: 20;
   overflow-y: auto;
   overflow-x: hidden;
+  scroll-padding-top: 24px;
   display: flex;
   flex-direction: column;
   background: var(--vr-ink);
@@ -57,15 +70,37 @@
   box-sizing: border-box;
 }
 
+/* Labels that only a screen reader needs — the theme control is icon-only. */
+.vr-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* A single wide wash, not a rainbow. It sits behind everything and never
-   competes with text. */
+   competes with text; `--vr-rim` is the theme's own glow strength, so the
+   light palette gets the same wash at roughly half the weight. */
 .vr-entry__bg {
   position: fixed;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(60% 46% at 18% 0%, color-mix(in srgb, var(--vr-primary) 22%, transparent), transparent 70%),
-    radial-gradient(48% 40% at 92% 8%, color-mix(in srgb, var(--vr-accent) 12%, transparent), transparent 72%);
+    radial-gradient(
+      60% 46% at 18% 0%,
+      color-mix(in srgb, var(--vr-primary) calc(var(--vr-rim, 1) * 20%), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      48% 40% at 92% 8%,
+      color-mix(in srgb, var(--vr-accent) calc(var(--vr-rim, 1) * 11%), transparent),
+      transparent 72%
+    );
 }
 
 .vr-entry__bg::after {
@@ -82,17 +117,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
   max-width: var(--vr-max);
   margin: 0 auto;
-  padding: 26px var(--vr-gutter) 18px;
+  padding: 22px var(--vr-gutter) 16px;
 }
 
 .vr-brand {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   color: var(--vr-text);
   text-decoration: none;
 }
@@ -114,6 +150,7 @@
 .vr-brand__sep {
   width: var(--vr-hair);
   height: 18px;
+  flex: none;
   background: var(--vr-line-strong);
 }
 
@@ -121,12 +158,16 @@
   color: var(--vr-text-2);
   font-size: 14px;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .vr-nav__meta {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  flex: none;
   font-size: 13px;
   color: var(--vr-text-muted);
 }
@@ -139,11 +180,76 @@
   border: var(--vr-hair) solid color-mix(in srgb, var(--vr-reward) 40%, transparent);
   border-radius: var(--vr-radius-pill, 999px);
   background: color-mix(in srgb, var(--vr-reward) 12%, transparent);
-  color: var(--vr-reward);
+  color: color-mix(in srgb, var(--vr-reward) 78%, var(--vr-text));
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+/* ── Theme control ──────────────────────────────────────────────────────── */
+
+.vr-theme {
+  --seg-w: 42px;
+  --seg-h: 32px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 3px;
+  border: var(--vr-hair) solid var(--vr-line-strong);
+  border-radius: var(--vr-radius-pill, 999px);
+  background: var(--vr-panel);
+}
+
+.vr-theme__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: var(--seg-w);
+  height: var(--seg-h);
+  border-radius: var(--vr-radius-pill, 999px);
+  background: color-mix(in srgb, var(--vr-primary) 16%, transparent);
+  box-shadow: inset 0 0 0 var(--vr-hair) color-mix(in srgb, var(--vr-primary) 55%, transparent);
+  transition: transform var(--vr-motion-base, 220ms) var(--vr-ease);
+}
+
+.vr-theme[data-active="light"] .vr-theme__thumb {
+  transform: translateX(var(--seg-w));
+}
+
+.vr-theme__opt {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  width: var(--seg-w);
+  height: var(--seg-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--vr-radius-pill, 999px);
+  background: none;
+  color: var(--vr-text-muted);
+  cursor: pointer;
+  transition: color var(--vr-motion-fast, 120ms) ease;
+}
+
+.vr-theme__opt[aria-pressed="true"] {
+  color: var(--vr-text);
+}
+
+.vr-theme__opt:hover:not([aria-pressed="true"]) {
+  color: var(--vr-text-2);
+}
+
+.vr-theme__opt:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
+}
+
+.vr-theme__icon {
+  width: 17px;
+  height: 17px;
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
@@ -154,7 +260,7 @@
   width: 100%;
   max-width: var(--vr-max);
   margin: 0 auto;
-  padding: 0 var(--vr-gutter) 64px;
+  padding: 0 var(--vr-gutter) 40px;
 }
 
 .vr-hero {
@@ -162,7 +268,7 @@
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: clamp(28px, 5vw, 72px);
   align-items: center;
-  padding: clamp(28px, 6vh, 72px) 0 clamp(36px, 7vh, 84px);
+  padding: clamp(24px, 5vh, 64px) 0 clamp(36px, 7vh, 80px);
 }
 
 .vr-eyebrow {
@@ -186,7 +292,7 @@
 
 .vr-lede {
   margin: 0 0 32px;
-  max-width: 48ch;
+  max-width: 50ch;
   font-size: clamp(16px, 1.35vw, 19px);
   line-height: 1.6;
   color: var(--vr-text-2);
@@ -202,7 +308,7 @@
 }
 
 .vr-btn {
-  --btn-bg: var(--vr-card);
+  --btn-bg: var(--vr-panel);
   --btn-fg: var(--vr-text);
   --btn-line: var(--vr-line-strong);
   display: inline-flex;
@@ -219,6 +325,7 @@
   font-weight: 600;
   font-size: 16px;
   letter-spacing: 0.005em;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background var(--vr-motion-fast, 120ms) ease,
@@ -227,7 +334,7 @@
 }
 
 .vr-btn:hover:not(:disabled) {
-  background: var(--vr-card-hover);
+  background: var(--vr-panel-hover);
   border-color: color-mix(in srgb, var(--vr-text-2) 50%, transparent);
 }
 
@@ -291,7 +398,7 @@
   margin: 0 0 26px;
   min-height: 22px;
   font-size: 13.5px;
-  color: var(--vr-text-muted);
+  color: var(--vr-quiet);
 }
 
 .vr-status__dot {
@@ -323,7 +430,7 @@
   border: var(--vr-hair) solid var(--vr-line);
   border-left: 3px solid var(--vr-accent);
   border-radius: var(--vr-radius-md, 14px);
-  background: var(--vr-card);
+  background: var(--vr-panel);
   max-width: 56ch;
 }
 
@@ -429,6 +536,7 @@
       color-mix(in srgb, var(--vr-surface-alt) 85%, transparent),
       color-mix(in srgb, var(--vr-surface) 92%, transparent)
     );
+  box-shadow: 0 30px 60px -44px var(--vr-shadow, transparent);
   perspective: 900px;
 }
 
@@ -489,11 +597,18 @@
   color: var(--vr-text-muted);
 }
 
-/* ── Editions ───────────────────────────────────────────────────────────── */
+/* ── Sections ───────────────────────────────────────────────────────────── */
 
 .vr-section {
-  padding-top: clamp(28px, 5vh, 56px);
+  padding-top: clamp(30px, 5vh, 60px);
+  padding-bottom: clamp(6px, 2vh, 20px);
   border-top: var(--vr-hair) solid var(--vr-line);
+}
+
+.vr-section--flush {
+  border-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .vr-section__head {
@@ -510,13 +625,261 @@
   font-size: clamp(20px, 2.2vw, 26px);
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 .vr-section__aside {
   margin: 0;
   font-size: 13.5px;
-  color: var(--vr-text-muted);
+  color: var(--vr-quiet);
+  text-align: right;
 }
+
+/* ── How a session runs ─────────────────────────────────────────────────── */
+
+.vr-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
+  gap: 22px 30px;
+}
+
+.vr-step {
+  padding-top: 15px;
+  border-top: 2px solid var(--vr-line-strong);
+}
+
+.vr-step__n {
+  display: block;
+  margin-bottom: 10px;
+  font-family: var(--vr-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--vr-accent);
+}
+
+.vr-step__title {
+  margin: 0 0 8px;
+  font-family: var(--vr-font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.vr-step__body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--vr-text-2);
+}
+
+/* Hairline-separated cells: the 1px gaps show the container through, which is
+   the divider — no extra borders to keep in sync. The column count is explicit
+   rather than auto-fit because five cells never divide evenly, and a collapsed
+   grid leaves a hole where the divider colour would show as a block. */
+.vr-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--vr-hair);
+  margin-top: clamp(26px, 4vh, 42px);
+  border: var(--vr-hair) solid var(--vr-line);
+  border-radius: var(--vr-radius-lg, 22px);
+  background: var(--vr-line);
+  overflow: hidden;
+}
+
+.vr-stat {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 18px 20px 20px;
+  background: var(--vr-panel);
+}
+
+.vr-stat__value {
+  font-family: var(--vr-font-display);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.vr-stat__label {
+  font-size: 13px;
+  color: var(--vr-text-2);
+}
+
+.vr-stat__detail {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--vr-quiet);
+}
+
+/* Names the build those five figures belong to, on a build that some other
+   edition beats. Hidden entirely on the top edition, where it would only be
+   noise. */
+.vr-scope {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--vr-quiet);
+}
+
+.vr-scope[hidden] {
+  display: none;
+}
+
+/* ── Rooms ──────────────────────────────────────────────────────────────── */
+
+.vr-rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(256px, 1fr));
+  gap: 12px;
+}
+
+.vr-room {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px 15px;
+  border: var(--vr-hair) solid var(--vr-line);
+  border-radius: var(--vr-radius-md, 14px);
+  background: var(--vr-panel);
+}
+
+/* The three photographic slots ship as placeholders for a customer's own
+   capture, and a dashed edge says so without a word of copy. */
+.vr-room[data-kind="panorama"] {
+  border-style: dashed;
+}
+
+.vr-room[data-kind="passthrough"] {
+  border-color: color-mix(in srgb, var(--vr-primary) 45%, transparent);
+}
+
+/* A room the running build cannot load. It stays in the catalogue — a buyer is
+   choosing between all of them — but loses its fill and steps back to the
+   quiet ink, so the badge next to the name is not the only thing saying so.
+   `--vr-quiet` rather than the muted ink: this text is 13.5px and still has to
+   clear 4.5:1 in both themes. */
+.vr-room.is-locked {
+  background: none;
+  border-color: color-mix(in srgb, var(--vr-line) 65%, transparent);
+}
+
+.vr-room.is-locked .vr-room__name {
+  color: var(--vr-text-2);
+}
+
+.vr-room.is-locked .vr-room__blurb {
+  color: var(--vr-quiet);
+}
+
+.vr-room.is-locked .vr-room__swatch {
+  opacity: 0.45;
+}
+
+.vr-room__tag {
+  flex: none;
+  padding: 1px 8px;
+  border: var(--vr-hair) solid var(--vr-line-strong);
+  border-radius: var(--vr-radius-pill, 999px);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--vr-quiet);
+}
+
+.vr-room__swatch {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--tint, var(--vr-accent));
+  box-shadow: inset 0 0 0 var(--vr-hair) var(--vr-line-strong);
+}
+
+.vr-room__body {
+  min-width: 0;
+}
+
+/* Name, an availability badge when there is one, then the kind hard right.
+   Wraps rather than crushing the name in the narrowest column. */
+.vr-room__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 3px;
+}
+
+.vr-room__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.vr-room__kind {
+  margin-left: auto;
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vr-quiet);
+}
+
+.vr-room__blurb {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--vr-text-2);
+}
+
+/* ── What a custom build changes ────────────────────────────────────────── */
+
+.vr-tailoring {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.vr-tailor {
+  padding: 22px 24px 24px;
+  border: var(--vr-hair) solid var(--vr-line);
+  border-radius: var(--vr-radius-lg, 22px);
+  background: var(--vr-panel);
+}
+
+.vr-tailor__icon {
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 16px;
+  color: var(--vr-accent);
+}
+
+.vr-tailor__title {
+  margin: 0 0 8px;
+  font-family: var(--vr-font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.vr-tailor__body {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--vr-text-2);
+}
+
+/* ── Editions ───────────────────────────────────────────────────────────── */
 
 .vr-editions {
   display: grid;
@@ -530,18 +893,19 @@
   padding: 24px 24px 26px;
   border: var(--vr-hair) solid var(--vr-line);
   border-radius: var(--vr-radius-lg, 22px);
-  background: var(--vr-card);
-  transition: border-color var(--vr-motion-fast, 120ms) ease, background var(--vr-motion-fast, 120ms) ease;
+  background: var(--vr-panel);
+  transition:
+    border-color var(--vr-motion-fast, 120ms) ease,
+    background var(--vr-motion-fast, 120ms) ease;
 }
 
 .vr-edition:hover {
   border-color: var(--vr-line-strong);
-  background: var(--vr-card-hover);
+  background: var(--vr-panel-hover);
 }
 
 .vr-edition.is-current {
   border-color: color-mix(in srgb, var(--vr-primary) 60%, transparent);
-  background: color-mix(in srgb, var(--vr-primary) 10%, transparent);
 }
 
 .vr-edition__top {
@@ -595,7 +959,7 @@
 
 .vr-edition__specs dt {
   margin: 0;
-  color: var(--vr-text-muted);
+  color: var(--vr-quiet);
 }
 
 .vr-edition__specs dd {
@@ -636,6 +1000,152 @@
   background: var(--vr-primary);
 }
 
+/* The same eight questions answered for every edition, so the columns can be
+   read across. Excluded rows step back rather than shouting. */
+.vr-edition__features {
+  list-style: none;
+  display: grid;
+  gap: 9px;
+  margin: 18px 0 0;
+  padding: 17px 0 0;
+  border-top: var(--vr-hair) solid var(--vr-line);
+  font-size: 13px;
+}
+
+.vr-edition__features li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  line-height: 1.35;
+}
+
+.vr-edition__features .is-on {
+  color: var(--vr-text-2);
+}
+
+.vr-edition__features .is-off {
+  color: var(--vr-text-muted);
+}
+
+.vr-tick {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.vr-edition__features .is-on .vr-tick {
+  color: var(--vr-accent);
+}
+
+.vr-edition__features .is-off .vr-tick {
+  color: color-mix(in srgb, var(--vr-text-muted) 60%, transparent);
+}
+
+/* ── Contact ────────────────────────────────────────────────────────────── */
+
+.vr-contact {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.6fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: start;
+  margin-top: clamp(30px, 5vh, 60px);
+  padding: clamp(26px, 4vw, 44px);
+  border: var(--vr-hair) solid var(--vr-line-strong);
+  border-radius: var(--vr-radius-lg, 22px);
+  background: var(--vr-panel);
+  box-shadow: 0 40px 70px -52px var(--vr-shadow, transparent);
+}
+
+.vr-contact__title {
+  margin: 0 0 12px;
+  font-family: var(--vr-font-display);
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.vr-contact__body {
+  margin: 0 0 18px;
+  max-width: 54ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--vr-text-2);
+}
+
+.vr-contact__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--vr-text-2);
+}
+
+.vr-contact__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.vr-contact__list li::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  flex: none;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  background: var(--vr-accent);
+}
+
+.vr-contact__act {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+.vr-contact__act .vr-btn {
+  width: 100%;
+}
+
+.vr-contact__alt {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--vr-quiet);
+}
+
+.vr-contact__address {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 7px 12px;
+  border: var(--vr-hair) dashed var(--vr-line-strong);
+  border-radius: var(--vr-radius-sm, 8px);
+  font-family: var(--vr-font-mono);
+  font-size: 14px;
+  color: var(--vr-accent);
+  user-select: all;
+}
+
+.vr-contact__site {
+  justify-self: start;
+  font-size: 13px;
+  color: var(--vr-text-2);
+  text-decoration: none;
+  border-bottom: var(--vr-hair) solid var(--vr-line-strong);
+}
+
+.vr-contact__site:hover {
+  color: var(--vr-text);
+}
+
+.vr-contact__site:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 3px;
+}
+
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 
 .vr-foot {
@@ -651,7 +1161,7 @@
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
-  color: var(--vr-text-muted);
+  color: var(--vr-quiet);
 }
 
 .vr-foot a {
@@ -671,16 +1181,14 @@
 
 /* ── Entrance motion ────────────────────────────────────────────────────── */
 
+/* Only the hero moves, and only once. Everything further down the page is
+   already in place by the time it is scrolled to. */
 .vr-rise {
-  animation: vr-rise var(--vr-motion-slow, 380ms) cubic-bezier(0.22, 0.65, 0.24, 1) backwards;
+  animation: vr-rise var(--vr-motion-slow, 380ms) var(--vr-ease) backwards;
 }
 
 .vr-rise:nth-child(2) {
   animation-delay: 60ms;
-}
-
-.vr-rise:nth-child(3) {
-  animation-delay: 120ms;
 }
 
 @keyframes vr-rise {
@@ -692,6 +1200,22 @@
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 
+@media (max-width: 1080px) {
+  .vr-editions {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  /* Three across, with the fourth cell widened so the second row still fills
+     the strip edge to edge. */
+  .vr-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .vr-stat:nth-child(4) {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 940px) {
   .vr-hero {
     grid-template-columns: minmax(0, 1fr);
@@ -702,12 +1226,48 @@
     max-width: 420px;
   }
 
-  .vr-editions {
+  .vr-edition__tagline {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .vr-contact {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .vr-edition__tagline {
-    min-height: 0;
+  .vr-contact__act {
+    justify-items: stretch;
+  }
+}
+
+@media (max-width: 760px) {
+  .vr-tailoring {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vr-section__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .vr-section__aside {
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .vr-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vr-stat:nth-child(4) {
+    grid-column: auto;
+  }
+
+  .vr-stat:last-child {
+    grid-column: 1 / -1;
   }
 }
 
@@ -717,8 +1277,29 @@
     align-items: stretch;
   }
 
-  .vr-nav__meta span:last-child {
+  .vr-nav__version {
     display: none;
+  }
+
+  .vr-stat {
+    padding: 15px 16px 17px;
+  }
+
+  .vr-stat__value {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 430px) {
+  .vr-brand__sep,
+  .vr-brand__product {
+    display: none;
+  }
+
+  .vr-tailor,
+  .vr-edition {
+    padding-left: 20px;
+    padding-right: 20px;
   }
 }
 

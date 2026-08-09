@@ -15,11 +15,16 @@
  * Hues are derived from the brand palette by subdividing the arcs between the
  * brand's own hues, so a re-skin of `shared/brand.ts` re-skins the card faces
  * with it and the deck never drifts off-brand.
+ *
+ * The whole atlas is therefore a derived value. It is repainted into the same
+ * canvas and the same texture on `onThemeChange`, so switching theme mid-match
+ * re-inks the deck without rebuilding it.
  */
 
 import * as THREE from "three";
 import { mulberry32 } from "../../shared/game.ts";
-import { hex, palette, seatColors, text as brandText } from "../../shared/brand.ts";
+import { contrastRatio, hex, onThemeChange, palette, rgba, seatColors } from "../../shared/brand.ts";
+import { cardInk, cardPaper } from "./card.ts";
 
 // ── Catalogue ───────────────────────────────────────────────────────────────
 
@@ -108,9 +113,59 @@ function css(c: Hsl, alpha = 1): string {
     : `hsla(${h.toFixed(1)}, ${s.toFixed(1)}%, ${l.toFixed(1)}%, ${alpha.toFixed(3)})`;
 }
 
+/** Back to `#RRGGBB`, so a candidate colour can be measured with `contrastRatio`. */
+function hslToHex(c: Hsl): string {
+  const h = (((c.h % 360) + 360) % 360) / 360;
+  const s = Math.max(0, Math.min(100, c.s)) / 100;
+  const l = Math.max(0, Math.min(100, c.l)) / 100;
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const chan = (t: number): number => {
+    let u = t;
+    if (u < 0) u += 1;
+    if (u > 1) u -= 1;
+    if (u < 1 / 6) return p + (q - p) * 6 * u;
+    if (u < 1 / 2) return q;
+    if (u < 2 / 3) return p + (q - p) * (2 / 3 - u) * 6;
+    return p;
+  };
+  const byte = (v: number) =>
+    Math.round(Math.max(0, Math.min(1, v)) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${byte(chan(h + 1 / 3))}${byte(chan(h))}${byte(chan(h - 1 / 3))}`;
+}
+
 /** Shifts a hue's lightness/saturation without leaving the hue. */
 function shade(c: Hsl, l: number, s = c.s): Hsl {
   return { h: c.h, s, l };
+}
+
+/** Darkest a mark is allowed to get while chasing contrast, before it stops
+ *  reading as a colour at all. */
+const MIN_MARK_LIGHTNESS = 16;
+
+/**
+ * Darkens `c` along its own hue until it clears `ratio` against `bg`, and
+ * returns it untouched if it already does.
+ *
+ * A fixed lightness cannot work here: at HSL 34% a blue mark measures 12:1
+ * against a near-white face while a chartreuse one — a hue the ramp reaches
+ * whenever the arc between amber and mint gets subdivided — measures 2.6:1 and
+ * is genuinely hard to read at three metres. Solving per hue is what lets the
+ * same code hold the floor in both palettes.
+ */
+function clampContrast(c: Hsl, bg: string, ratio: number): Hsl {
+  if (contrastRatio(hslToHex(c), bg) >= ratio) return c;
+  // Invariant: `lo` meets the ratio (or is as dark as we allow), `hi` fails.
+  let lo = Math.min(MIN_MARK_LIGHTNESS, c.l);
+  let hi = c.l;
+  for (let i = 0; i < 16; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrastRatio(hslToHex({ h: c.h, s: c.s, l: mid }), bg) >= ratio) lo = mid;
+    else hi = mid;
+  }
+  return { h: c.h, s: c.s, l: lo };
 }
 
 /**
@@ -146,11 +201,24 @@ function hueGap(a: number, b: number): number {
 }
 
 /**
- * Builds `count` maximally-separated hues by repeatedly subdividing whichever
- * arc between brand anchors is currently the widest. Greedily splitting the
- * largest remaining interval is the optimal way to maximise the smallest gap,
- * which at 24 symbols lands every face ~13° from its nearest neighbour — close
- * to the 15° ceiling a 24-way split of the wheel allows.
+ * Two neighbouring faces closer than this are the same colour to a player
+ * glancing across a 48-card board.
+ */
+const MIN_HUE_SEPARATION = 13;
+
+/**
+ * Builds `count` separated hues by repeatedly subdividing whichever arc between
+ * brand anchors is currently the widest.
+ *
+ * Every hue the ramp emits sits at `gap[i] / divs[i]` from its neighbour, so the
+ * smallest separation is decided entirely by which arc gets split last — and
+ * splitting the widest arc minimises the *largest* gap, which is not the same
+ * thing as protecting the smallest. Left alone it will happily halve a 19° arc
+ * into two 9.7° ones while a 17° arc sits untouched, which is exactly what the
+ * light palette did at 24 symbols. So an arc is only a candidate if the split
+ * would leave it at or above `MIN_HUE_SEPARATION`; when every arc is blocked
+ * the floor drops to the widest split still available, giving up as little as
+ * the anchors allow rather than collapsing one arc.
  */
 function hueRamp(count: number): Hsl[] {
   const anchors = brandAnchors();
@@ -173,15 +241,24 @@ function hueRamp(count: number): Hsl[] {
 
   const divs = new Array<number>(a).fill(1);
   let total = a;
+  let floor = MIN_HUE_SEPARATION;
   while (total < count) {
-    let best = 0;
+    let best = -1;
     let bestWidth = -1;
+    let widestSplit = 0;
     for (let i = 0; i < a; i++) {
+      const after = gap[i] / (divs[i] + 1);
+      if (after > widestSplit) widestSplit = after;
+      if (after < floor) continue;
       const w = gap[i] / divs[i];
       if (w > bestWidth) {
         bestWidth = w;
         best = i;
       }
+    }
+    if (best < 0) {
+      floor = widestSplit;
+      continue;
     }
     divs[best]++;
     total++;
@@ -220,6 +297,8 @@ interface Pen {
   wash: string;
   /** The same hue at full chroma, for accents and bands. */
   pure: string;
+  /** The substrate under the mark, for knocking holes back out of it. */
+  paper: string;
   /** Default stroke width, in tile fractions. */
   w: number;
   /** Deterministic per-symbol randomness. */
@@ -579,9 +658,10 @@ function drawCircuit(p: Pen, index: number): void {
   stroke(p, 0.03, p.wash);
 
   for (let i = 0; i < via.length; i += 2) {
+    // A via is a hole: the substrate showing through, not a dark dot.
     begin(p);
     circlePath(p, via[i], via[i + 1], 0.055);
-    fill(p, brandText.primary);
+    fill(p, p.paper);
     begin(p);
     circlePath(p, via[i], via[i + 1], 0.055);
     stroke(p, 0.028, p.pure);
@@ -670,8 +750,24 @@ function setSeed(setId: string): number {
 }
 
 /**
+ * Contrast floors against the card face, measured on what the canvas actually
+ * paints. `mark` is the symbol itself and carries the 4.5:1 body-text bar so it
+ * still clears the 3:1 graphics bar once `scene.cardFaceScale` pulls the whole
+ * face back in a light room. `pure` is the accent — the numeral band, the
+ * circuit pads, a constellation's primary star — and holds the 3:1 graphics
+ * bar. `wash` is the faint ink behind the mark and only has to stay visible.
+ */
+const MARK_CONTRAST = 4.5;
+const PURE_CONTRAST = 3;
+const WASH_CONTRAST = 2;
+
+/** How far the wash sits above the mark, in HSL lightness. */
+const WASH_LIFT = 28;
+
+/**
  * Draws `count` symbols of `setId` into a single canvas and wraps it as a
- * texture. Called once per match — never per card.
+ * texture. Called once per match — never per card — and repainted in place
+ * whenever the theme changes.
  */
 export function buildSymbolAtlas(
   setId: string,
@@ -690,95 +786,122 @@ export function buildSymbolAtlas(
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) throw new Error("symbols: 2D canvas unavailable");
 
-  const substrate = brandText.primary;
-  const vignette = hexToHsl(palette.surfaceAlt);
-  const hues = hueRamp(n);
-  const colors: THREE.Color[] = [];
-
-  ctx.fillStyle = substrate;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   const draw = drawFor(spec.id);
 
-  for (let i = 0; i < n; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const ox = col * tile;
-    const oy = row * tile;
+  // Allocated once and mutated by every repaint, so a caller holding one of
+  // these keeps a live colour across a theme change instead of a stale copy.
+  const colors: THREE.Color[] = [];
+  for (let i = 0; i < n; i++) colors.push(new THREE.Color());
+  const fallback = new THREE.Color();
 
-    // Alternating lightness gives neighbouring hues a second axis of
-    // separation, which matters most on the densest boards.
-    const base = hues[i];
-    const lift = i % 2 === 0 ? 0 : -4;
-    const pure = shade(base, Math.max(38, Math.min(62, base.l + lift)), Math.min(96, base.s + 8));
-    const mark = shade(pure, 34, Math.min(88, pure.s));
-    const wash = shade(pure, 62, Math.min(70, pure.s));
+  /** Repaints every tile from the live palette. Same canvas, same texture. */
+  const paint = (): void => {
+    const paper = cardPaper();
+    const shadow = cardInk();
+    const hues = hueRamp(n);
 
-    // sRGB, to match what the canvas actually painted — `setHSL` would
-    // otherwise read the triple as linear-sRGB and shift the hue.
-    colors.push(
-      new THREE.Color().setHSL(
+    ctx.fillStyle = paper;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < n; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const ox = col * tile;
+      const oy = row * tile;
+
+      // Alternating lightness gives neighbouring hues a second axis of
+      // separation, which matters most on the densest boards.
+      const base = hues[i];
+      const lift = i % 2 === 0 ? 0 : -4;
+      const pure = clampContrast(
+        shade(base, Math.max(38, Math.min(62, base.l + lift)), Math.min(96, base.s + 8)),
+        paper,
+        PURE_CONTRAST,
+      );
+      // The mark starts from `pure` and is never lighter than it, so a hue that
+      // had to be darkened for the accent stays at least that dark for the mark.
+      const mark = clampContrast(
+        shade(pure, Math.min(34, pure.l), Math.min(88, pure.s)),
+        paper,
+        MARK_CONTRAST,
+      );
+      const wash = clampContrast(
+        shade(pure, Math.min(70, mark.l + WASH_LIFT), Math.min(70, pure.s)),
+        paper,
+        WASH_CONTRAST,
+      );
+
+      // sRGB, to match what the canvas actually painted — `setHSL` would
+      // otherwise read the triple as linear-sRGB and shift the hue.
+      colors[i].setHSL(
         (((pure.h % 360) + 360) % 360) / 360,
         Math.max(0, Math.min(1, pure.s / 100)),
         Math.max(0, Math.min(1, pure.l / 100)),
         THREE.SRGBColorSpace,
-      ),
-    );
+      );
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(ox, oy, tile, tile);
-    ctx.clip();
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ox, oy, tile, tile);
+      ctx.clip();
 
-    // Substrate, with a whisper of a vignette so the face is not dead flat
-    // under the clearcoat.
-    ctx.fillStyle = substrate;
-    ctx.fillRect(ox, oy, tile, tile);
-    const grad = ctx.createRadialGradient(
-      ox + tile * 0.5,
-      oy + tile * 0.42,
-      tile * 0.1,
-      ox + tile * 0.5,
-      oy + tile * 0.5,
-      tile * 0.78,
-    );
-    grad.addColorStop(0, css(vignette, 0));
-    grad.addColorStop(1, css(vignette, 0.13));
-    ctx.fillStyle = grad;
-    ctx.fillRect(ox, oy, tile, tile);
+      // Substrate, with a whisper of a vignette so the face is not dead flat
+      // under the clearcoat. The vignette darkens toward the theme's own
+      // deepest colour; `surfaceAlt` is a pale panel tint in a light palette
+      // and would have lightened the corners instead.
+      ctx.fillStyle = paper;
+      ctx.fillRect(ox, oy, tile, tile);
+      const grad = ctx.createRadialGradient(
+        ox + tile * 0.5,
+        oy + tile * 0.42,
+        tile * 0.1,
+        ox + tile * 0.5,
+        oy + tile * 0.5,
+        tile * 0.78,
+      );
+      grad.addColorStop(0, rgba(shadow, 0));
+      grad.addColorStop(1, rgba(shadow, 0.13));
+      ctx.fillStyle = grad;
+      ctx.fillRect(ox, oy, tile, tile);
 
-    // Keyline in the symbol's own hue: the fastest colour cue at distance,
-    // and it frames the mark so the face never looks unfinished.
-    ctx.strokeStyle = css(pure, 0.34);
-    ctx.lineWidth = Math.max(1, tile * 0.014);
-    ctx.beginPath();
-    ctx.roundRect(
-      ox + tile * 0.085,
-      oy + tile * 0.085,
-      tile * 0.83,
-      tile * 0.83,
-      tile * 0.075,
-    );
-    ctx.stroke();
+      // Keyline in the symbol's own hue: the fastest colour cue at distance,
+      // and it frames the mark so the face never looks unfinished.
+      ctx.strokeStyle = css(pure, 0.34);
+      ctx.lineWidth = Math.max(1, tile * 0.014);
+      ctx.beginPath();
+      ctx.roundRect(
+        ox + tile * 0.085,
+        oy + tile * 0.085,
+        tile * 0.83,
+        tile * 0.83,
+        tile * 0.075,
+      );
+      ctx.stroke();
 
-    ctx.save();
-    ctx.translate(ox + tile * 0.5, oy + tile * 0.5);
-    const pen: Pen = {
-      ctx,
-      k: tile,
-      mark: css(mark),
-      wash: css(wash),
-      pure: css(pure),
-      w: 0.075,
-      rnd: mulberry32(setSeed(spec.id) ^ Math.imul(i + 1, 0x9e3779b1)),
-    };
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "round";
-    draw(pen, i);
-    ctx.restore();
+      ctx.save();
+      ctx.translate(ox + tile * 0.5, oy + tile * 0.5);
+      const pen: Pen = {
+        ctx,
+        k: tile,
+        mark: css(mark),
+        wash: css(wash),
+        pure: css(pure),
+        paper,
+        w: 0.075,
+        rnd: mulberry32(setSeed(spec.id) ^ Math.imul(i + 1, 0x9e3779b1)),
+      };
+      ctx.lineCap = "butt";
+      ctx.lineJoin = "round";
+      draw(pen, i);
+      ctx.restore();
 
-    ctx.restore();
-  }
+      ctx.restore();
+    }
+
+    fallback.setHex(hex(palette.accent));
+  };
+
+  paint();
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -790,11 +913,17 @@ export function buildSymbolAtlas(
   texture.anisotropy = Math.max(1, Math.min(4, options.anisotropy ?? 1));
   texture.needsUpdate = true;
 
+  // Repainting the same canvas keeps the texture object identity, so every card
+  // material still points at a valid map and no board rebuild is needed.
+  const offTheme = onThemeChange(() => {
+    paint();
+    texture.needsUpdate = true;
+  });
+
   const insetU = 1 / canvas.width;
   const insetV = 1 / canvas.height;
   const scaleU = tile / canvas.width;
   const scaleV = tile / canvas.height;
-  const fallback = new THREE.Color(hex(palette.accent));
 
   return {
     texture,
@@ -817,6 +946,7 @@ export function buildSymbolAtlas(
       return colors[((symbol % n) + n) % n] ?? fallback;
     },
     dispose() {
+      offTheme();
       texture.dispose();
       canvas.width = 0;
       canvas.height = 0;

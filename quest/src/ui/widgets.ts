@@ -15,9 +15,20 @@
  *     padlock and the edition that unlocks it, a failed code shows a cross.
  */
 
-import { palette, rgba, seatColors, text as ink, tokens } from "../../shared/brand.ts";
+import { THEMES, palette, rgba, seatColors, text as ink, tokens } from "../../shared/brand.ts";
+import type { ThemeId } from "../../shared/brand.ts";
 import type { Gfx, Rect, Radii } from "./panel.ts";
-import { centreRect, colsIn, cutLeft, cutRight, gridIn, inset, theme } from "./panel.ts";
+import {
+  centreRect,
+  colsIn,
+  cutLeft,
+  cutRight,
+  gridIn,
+  inset,
+  readableSurface,
+  readableText,
+  theme,
+} from "./panel.ts";
 
 // ── Metrics ─────────────────────────────────────────────────────────────────
 
@@ -291,18 +302,22 @@ export interface LockInfo {
   reason: string;
 }
 
+/** What `lockBadge` will occupy, for laying a text column out beside one. */
+export function lockBadgeWidth(g: Gfx, requires: string): number {
+  return g.measure(requires.toUpperCase(), { role: "label", size: 19 }) + 46;
+}
+
 /** Compact "Pro"/"Enterprise" pill with a padlock. Returns its width. */
 export function lockBadge(g: Gfx, x: number, cy: number, requires: string, align: "left" | "right" = "left"): number {
   const label = requires.toUpperCase();
-  const tw = g.measure(label, { role: "label", size: 19 });
-  const w = tw + 46;
+  const w = lockBadgeWidth(g, requires);
   const h = 34;
   const bx = align === "right" ? x - w : x;
   const box = { x: bx, y: cy - h / 2, w, h };
   g.fillRound(box, tokens.radius.pill, rgba(palette.reward, 0.14));
   g.strokeRound(box, tokens.radius.pill, rgba(palette.reward, 0.4));
-  icon(g, "lock", bx + 17, cy, 17, palette.reward, 2);
-  g.text(label, bx + 30, cy + 1, { role: "label", size: 19, color: palette.reward, tracking: 1.6 });
+  icon(g, "lock", bx + 17, cy, 17, theme.rewardText, 2);
+  g.text(label, bx + 30, cy + 1, { role: "label", size: 19, color: theme.rewardText, tracking: 1.6 });
   return w;
 }
 
@@ -406,11 +421,18 @@ interface Skin {
   fgSub: string;
 }
 
+/**
+ * Filled buttons keep the label the palette nominated and move the *fill* if the
+ * pair falls short — the brand colour has room to shift a few percent, the "text
+ * that reads on a fill" colour does not. For both shipped themes this is a
+ * no-op; it exists so a re-skinned customer palette cannot ship a button whose
+ * label has gone soft.
+ */
 function skinFor(kind: ButtonKind, disabled: boolean): Skin {
   if (disabled) {
     return {
-      fill: rgba(palette.ink, 0.3),
-      fillHover: rgba(palette.ink, 0.3),
+      fill: theme.card,
+      fillHover: theme.card,
       border: theme.lineFaint,
       borderHover: theme.lineFaint,
       fg: theme.disabledFg,
@@ -418,35 +440,40 @@ function skinFor(kind: ButtonKind, disabled: boolean): Skin {
     };
   }
   switch (kind) {
-    case "primary":
+    case "primary": {
+      const fill = readableSurface(palette.primary, ink.onPrimary);
       return {
-        fill: palette.primary,
-        fillHover: rgba(palette.primary, 0.86),
+        fill,
+        fillHover: mix(fill, ink.onPrimary, 0.14),
         border: rgba(ink.onPrimary, 0.24),
         borderHover: rgba(ink.onPrimary, 0.42),
         fg: ink.onPrimary,
         fgSub: rgba(ink.onPrimary, 0.78),
       };
-    case "accent":
+    }
+    case "accent": {
+      const fill = readableSurface(palette.accent, ink.onAccent);
       return {
-        fill: palette.accent,
-        fillHover: rgba(palette.accent, 0.86),
+        fill,
+        fillHover: mix(fill, ink.onAccent, 0.14),
         border: rgba(ink.onAccent, 0.2),
         borderHover: rgba(ink.onAccent, 0.36),
         fg: ink.onAccent,
         fgSub: rgba(ink.onAccent, 0.76),
       };
+    }
     case "danger":
       return {
         fill: rgba(palette.danger, 0.16),
         fillHover: rgba(palette.danger, 0.26),
         border: rgba(palette.danger, 0.46),
         borderHover: rgba(palette.danger, 0.7),
-        fg: palette.danger,
-        fgSub: rgba(palette.danger, 0.8),
+        fg: theme.dangerText,
+        fgSub: rgba(theme.dangerText, 0.8),
       };
     case "ghost":
       return {
+        // Transparent, so the panel shows through whatever colour it is.
         fill: rgba(palette.ink, 0),
         fillHover: theme.cardHover,
         border: theme.line,
@@ -517,10 +544,18 @@ export function button(g: Gfx, r: Rect, o: ButtonOptions): boolean {
       maxWidth: availW,
     });
   } else {
-    const tx = centred ? box.x + box.w / 2 - (o.icon && centred ? 18 : 0) : contentX + iconW;
-    if (o.icon && centred) {
+    // An icon sits to the LEFT of the label, so the label shifts RIGHT by half
+    // the space the icon occupies to keep the pair optically centred. Shifting
+    // it left instead put the label's left edge inside the icon's box and the
+    // two overprinted.
+    const ICON_W = 24;
+    const ICON_GAP = 10;
+    const withIcon = Boolean(o.icon) && centred;
+    const shift = withIcon ? (ICON_W + ICON_GAP) / 2 : 0;
+    const tx = centred ? box.x + box.w / 2 + shift : contentX + iconW;
+    if (withIcon && o.icon) {
       const lw = g.measure(o.label, { role: "h3" });
-      icon(g, o.icon, box.x + box.w / 2 - lw / 2 - 22, box.y + box.h / 2, 24, fg, 2.6);
+      icon(g, o.icon, tx - lw / 2 - ICON_GAP - ICON_W / 2, box.y + box.h / 2, ICON_W, fg, 2.6);
     }
     g.text(o.label, tx, box.y + box.h / 2 + 1, {
       role: "h3",
@@ -624,15 +659,16 @@ export function toggle(g: Gfx, r: Rect, o: ToggleOptions): boolean {
   g.text(o.value ? "On" : "Off", rightEdge, box.y + box.h / 2 + 1, {
     role: "caption",
     align: "right",
-    color: o.value ? palette.accent : theme.fgMuted,
+    color: o.value ? theme.accentText : theme.fgMuted,
   });
 
+  const trackOn = readableSurface(palette.accent, ink.onAccent);
   const track: Rect = { x: rightEdge - stateW - 18 - switchW, y: box.y + box.h / 2 - 21, w: switchW, h: 42 };
-  g.fillRound(track, tokens.radius.pill, disabled ? rgba(palette.ink, 0.4) : mix(rgba(palette.ink, 0.6), rgba(palette.accent, 0.9), on));
+  g.fillRound(track, tokens.radius.pill, disabled ? theme.card : mix(theme.card, trackOn, on));
   g.strokeRound(track, tokens.radius.pill, on > 0.5 ? rgba(palette.accent, 0.6) : theme.line);
   const knobX = track.x + 21 + on * (track.w - 42);
   g.circle(knobX, track.y + track.h / 2, 15, disabled ? theme.disabledFg : on > 0.5 ? ink.onAccent : theme.fg2);
-  if (on > 0.55) icon(g, "check", knobX, track.y + track.h / 2, 15, palette.accent, 2.6);
+  if (on > 0.55) icon(g, "check", knobX, track.y + track.h / 2, 15, trackOn, 2.6);
 
   g.hit({ id: o.id, rect: r, disabled });
   return !disabled && g.clicked(o.id);
@@ -656,7 +692,7 @@ export function segmented<T extends string>(
   const n = o.options.length;
   if (n === 0) return null;
   const radius = tokens.radius.md;
-  g.fillRound(r, radius, rgba(palette.ink, 0.42));
+  g.fillRound(r, radius, theme.card);
   g.strokeRound(r, radius, theme.line);
 
   const pad = 5;
@@ -667,7 +703,7 @@ export function segmented<T extends string>(
   // The indicator slides rather than blinks — it shows *where* selection moved.
   const pos = g.anim(`${o.id}#i`, activeIndex, tokens.motion.base);
   const indicator: Rect = { x: inner.x + pos * segW, y: inner.y, w: segW, h: inner.h };
-  g.fillRound(indicator, radius - 2, rgba(palette.primary, 0.9));
+  g.fillRound(indicator, radius - 2, readableSurface(palette.primary, ink.onPrimary));
   g.strokeRound(indicator, radius - 2, rgba(ink.onPrimary, 0.22));
 
   let picked: T | null = null;
@@ -696,7 +732,7 @@ export function segmented<T extends string>(
       // Shift the label left to make room for a padlock inside the segment.
       const tw = Math.min(g.measure(seg.label, { role }), cell.w - 54);
       lx -= 15;
-      icon(g, "lock", lx + tw / 2 + 13, cell.y + cell.h / 2, 18, palette.reward, 2.2);
+      icon(g, "lock", lx + tw / 2 + 13, cell.y + cell.h / 2, 18, theme.rewardText, 2.2);
     }
     g.text(seg.label, lx, cell.y + cell.h / 2 + 1, {
       role,
@@ -712,6 +748,72 @@ export function segmented<T extends string>(
 
     g.hit({ id, rect: cell, disabled: !!seg.disabled });
     if (!seg.disabled && g.clicked(id)) picked = seg.id;
+  });
+
+  return picked;
+}
+
+// ── Theme switch ────────────────────────────────────────────────────────────
+
+export const THEME_OPTIONS: readonly ThemeId[] = ["dark", "light"];
+
+/**
+ * A miniature of a theme, drawn from that theme's own palette rather than the
+ * active one — a swatch showing the light theme has to look light even while the
+ * dark theme is on screen. Surface over ink, with the two brand hues as dots.
+ */
+function themeSwatch(g: Gfx, r: Rect, id: ThemeId): void {
+  const p = THEMES[id].palette;
+  g.save();
+  g.clip(r, tokens.radius.sm);
+  g.fillRound(r, 0, p.ink);
+  g.fillRound({ x: r.x, y: r.y, w: r.w, h: r.h * 0.56 }, 0, p.surface);
+  const dot = r.w * 0.15;
+  g.circle(r.x + r.w * 0.3, r.y + r.h * 0.74, dot, p.primary);
+  g.circle(r.x + r.w * 0.68, r.y + r.h * 0.74, dot, p.accent);
+  g.restore();
+  // The light swatch is near-white; without an edge it dissolves into a light panel.
+  g.strokeRound(r, tokens.radius.sm, theme.lineStrong);
+}
+
+/**
+ * The theme picker. Deliberately not a switch labelled "dark mode": a customer
+ * demoing the product should see both options, and see what each one looks like,
+ * without committing to find out. Returns the newly-picked theme, or null.
+ */
+export function themeSwitch(g: Gfx, r: Rect, o: { id: string; value: ThemeId }): ThemeId | null {
+  const cells = colsIn(r, THEME_OPTIONS.length, 12);
+  let picked: ThemeId | null = null;
+
+  THEME_OPTIONS.forEach((id, i) => {
+    const cell = cells[i];
+    if (!cell) return;
+    const wid = `${o.id}:${id}`;
+    const selected = id === o.value;
+    const { box, hover, focus } = pressBox(g, wid, cell, false);
+    focusRing(g, cell, CONTROL.radius, focus);
+
+    g.fillRound(box, CONTROL.radius, selected ? theme.cardSelected : hover > 0 ? theme.cardHover : theme.card);
+    g.strokeRound(
+      box,
+      CONTROL.radius,
+      selected ? palette.primary : hover > 0 ? theme.lineStrong : theme.line,
+      selected ? 2 : 1,
+    );
+
+    const sw = Math.min(48, box.h - 20);
+    themeSwatch(g, { x: box.x + 14, y: box.y + (box.h - sw) / 2, w: sw, h: sw }, id);
+
+    const tickW = selected ? 28 : 0;
+    g.text(THEMES[id].name, box.x + 24 + sw, box.y + box.h / 2 + 1, {
+      role: "bodyStrong",
+      color: selected ? theme.fg : theme.fg2,
+      maxWidth: box.w - sw - 46 - tickW,
+    });
+    if (selected) icon(g, "check", box.x + box.w - 24, box.y + box.h / 2, 20, theme.accentText, 3);
+
+    g.hit({ id: wid, rect: cell });
+    if (g.clicked(wid)) picked = id;
   });
 
   return picked;
@@ -745,7 +847,7 @@ export function slider(g: Gfx, r: Rect, o: SliderOptions): number | null {
   g.text(o.format(o.value), r.x + r.w, r.y + 12, {
     role: "mono",
     align: "right",
-    color: disabled ? theme.disabledFg : palette.accent,
+    color: disabled ? theme.disabledFg : theme.accentText,
   });
   if (o.hint) g.text(o.hint, r.x, r.y + r.h - 6, { role: "caption", color: theme.fgMuted });
 
@@ -769,10 +871,14 @@ export function slider(g: Gfx, r: Rect, o: SliderOptions): number | null {
   const st = g.state(o.id);
   const hover = disabled ? 0 : g.anim(`${o.id}#h`, st.hover || st.active ? 1 : 0, tokens.motion.fast);
 
-  g.fillRound(track, tokens.radius.pill, rgba(palette.ink, 0.6));
+  g.fillRound(track, tokens.radius.pill, theme.card);
   g.strokeRound(track, tokens.radius.pill, theme.line);
   if (t > 0) {
-    g.fillRound({ ...track, w: Math.max(trackH, track.w * t) }, tokens.radius.pill, disabled ? theme.disabledFg : palette.accent);
+    g.fillRound(
+      { ...track, w: Math.max(trackH, track.w * t) },
+      tokens.radius.pill,
+      disabled ? theme.disabledFg : readableSurface(palette.accent, ink.onAccent),
+    );
   }
 
   // Step ticks give the value a readable scale without a second axis label.
@@ -786,7 +892,9 @@ export function slider(g: Gfx, r: Rect, o: SliderOptions): number | null {
 
   const knobX = track.x + track.w * t;
   const knobR = 19 + hover * 2;
-  g.circle(knobX, track.y + track.h / 2, knobR + 3, rgba(palette.ink, 0.85));
+  // A ring of the recessed surface keeps the knob's edge visible where it sits
+  // on the filled part of the track, in either theme.
+  g.circle(knobX, track.y + track.h / 2, knobR + 3, theme.card);
   g.circle(knobX, track.y + track.h / 2, knobR, disabled ? theme.disabledFg : theme.fg);
   if (!disabled) g.ring(knobX, track.y + track.h / 2, knobR, rgba(palette.accent, 0.5 + hover * 0.5), 2);
 
@@ -829,7 +937,7 @@ export function stepper(
   g.text(String(o.value), mid.x + mid.w - 12, r.y + r.h / 2 + 1, {
     role: "h2",
     align: "right",
-    color: disabled ? theme.disabledFg : palette.accent,
+    color: disabled ? theme.disabledFg : theme.accentText,
   });
 
   let next: number | null = null;
@@ -918,7 +1026,7 @@ export function listRow(g: Gfx, r: Rect, o: ListRowOptions): boolean {
     icon(g, "forward", box.x + box.w - 30, box.y + box.h / 2, 18, theme.fgMuted, 2.4);
   }
   if (o.selected) {
-    icon(g, "check", box.x + box.w - rightPad - 8, box.y + box.h / 2, 22, palette.accent, 3);
+    icon(g, "check", box.x + box.w - rightPad - 8, box.y + box.h / 2, 22, theme.accentText, 3);
   }
 
   g.hit({ id: o.id, rect: r, disabled });
@@ -927,21 +1035,35 @@ export function listRow(g: Gfx, r: Rect, o: ListRowOptions): boolean {
 
 // ── Tag / chip ──────────────────────────────────────────────────────────────
 
-export function tag(
-  g: Gfx,
-  x: number,
-  cy: number,
-  label: string,
-  tone: "neutral" | "accent" | "reward" | "danger" = "neutral",
-): number {
-  const colour =
+export type TagTone = "neutral" | "accent" | "reward" | "danger";
+
+/**
+ * The pill width `tag` will occupy. Measured with the same `upper` the label is
+ * drawn with — measuring the caller's mixed case sized the pill for type that
+ * was never drawn, and the uppercase label spilled out of its own border.
+ */
+export function tagWidth(g: Gfx, label: string): number {
+  return g.measure(label, { role: "label", size: 18, tracking: 1.4, upper: true }) + 24;
+}
+
+export function tag(g: Gfx, x: number, cy: number, label: string, tone: TagTone = "neutral"): number {
+  // The wash keeps the brand hue; the label uses the contrast-corrected variant,
+  // because a 18 px tracked label is the smallest type in the product.
+  const wash =
     tone === "accent" ? palette.accent : tone === "reward" ? palette.reward : tone === "danger" ? palette.danger : ink.secondary;
-  const tw = g.measure(label, { role: "label", size: 18, tracking: 1.4 });
-  const w = tw + 24;
+  const fg =
+    tone === "accent"
+      ? theme.accentText
+      : tone === "reward"
+        ? theme.rewardText
+        : tone === "danger"
+          ? theme.dangerText
+          : theme.fg2;
+  const w = tagWidth(g, label);
   const box = { x, y: cy - 15, w, h: 30 };
-  g.fillRound(box, tokens.radius.sm, rgba(colour, 0.14));
-  g.strokeRound(box, tokens.radius.sm, rgba(colour, 0.34));
-  g.text(label, x + 12, cy + 1, { role: "label", size: 18, tracking: 1.4, color: colour, upper: true });
+  g.fillRound(box, tokens.radius.sm, rgba(wash, 0.14));
+  g.strokeRound(box, tokens.radius.sm, rgba(wash, 0.34));
+  g.text(label, x + 12, cy + 1, { role: "label", size: 18, tracking: 1.4, color: fg, upper: true });
   return w;
 }
 
@@ -974,6 +1096,15 @@ export function seatColor(seat: number): string {
   return seatColors[((seat % seatColors.length) + seatColors.length) % seatColors.length];
 }
 
+/**
+ * A seat colour safe to set type in. The palette picks seat hues that read on
+ * its own `ink`; a chip or a card is a different surface, and two of the light
+ * theme's eight seats land just under the floor on it.
+ */
+export function seatText(seat: number): string {
+  return readableText(seatColor(seat), theme.card);
+}
+
 export interface AvatarOptions {
   seat: number;
   name: string;
@@ -986,6 +1117,7 @@ export interface AvatarOptions {
 
 export function avatar(g: Gfx, cx: number, cy: number, radius: number, o: AvatarOptions): void {
   const col = seatColor(o.seat);
+  const fg = seatText(o.seat);
   const off = o.connected === false || o.out;
 
   g.circle(cx, cy, radius, rgba(col, off ? 0.1 : 0.2));
@@ -1001,13 +1133,13 @@ export function avatar(g: Gfx, cx: number, cy: number, radius: number, o: Avatar
   }
 
   if (o.isAi) {
-    icon(g, "ai", cx, cy, radius * 1.05, off ? rgba(col, 0.5) : col, 2.6);
+    icon(g, "ai", cx, cy, radius * 1.05, off ? rgba(fg, 0.5) : fg, 2.6);
   } else {
     g.text(initialsOf(o.name), cx, cy + 1, {
       role: "bodyStrong",
       size: radius * 0.82,
       align: "centre",
-      color: off ? rgba(col, 0.55) : col,
+      color: off ? rgba(fg, 0.55) : fg,
     });
   }
 
@@ -1056,7 +1188,7 @@ export function codeDisplay(g: Gfx, r: Rect, code: string): void {
     // A hairline under each pair does the grouping without punctuation noise.
     if (i % 2 === 1) {
       const pairStart = x - advance - tracking;
-      g.hairline(pairStart, cy + size * 0.62, x + advance, cy + size * 0.62, rgba(palette.accent, 0.45));
+      g.hairline(pairStart, cy + size * 0.62, x + advance, cy + size * 0.62, rgba(theme.accentText, 0.55));
     }
     x += advance + tracking + (i % 2 === 1 ? groupGap : 0);
   }
@@ -1100,7 +1232,8 @@ export function codeSlots(
     const border =
       o.status === "invalid" ? palette.danger : o.status === "joined" ? palette.accent : isNext ? palette.accent : filled ? theme.lineStrong : theme.line;
 
-    g.fillRound(box, tokens.radius.md, filled ? rgba(palette.ink, 0.6) : rgba(palette.ink, 0.34));
+    // A filled slot sits deeper than an empty one, in either theme.
+    g.fillRound(box, tokens.radius.md, filled ? theme.card : theme.cardHover);
     g.strokeRound(box, tokens.radius.md, border, isNext || o.status !== "idle" ? 3 : 1);
 
     if (filled) {
@@ -1108,7 +1241,7 @@ export function codeSlots(
         role: "monoBig",
         size: h * 0.52 * (0.82 + pop * 0.18),
         align: "centre",
-        color: o.status === "invalid" ? palette.danger : theme.fg,
+        color: o.status === "invalid" ? theme.dangerText : theme.fg,
         tracking: 0,
         alpha: 0.35 + pop * 0.65,
       });
@@ -1257,6 +1390,7 @@ export function emptyState(g: Gfx, r: Rect, o: { title: string; body: string; ic
 
 export type Tone = "info" | "success" | "warn" | "danger";
 
+/** The tone's brand hue — for fills, rails and borders. */
 export function toneColor(tone: Tone): string {
   switch (tone) {
     case "success":
@@ -1267,6 +1401,20 @@ export function toneColor(tone: Tone): string {
       return palette.danger;
     default:
       return palette.primary;
+  }
+}
+
+/** The same tone, corrected until it reads as type on a panel surface. */
+export function toneText(tone: Tone): string {
+  switch (tone) {
+    case "success":
+      return theme.accentText;
+    case "warn":
+      return theme.rewardText;
+    case "danger":
+      return theme.dangerText;
+    default:
+      return theme.primaryText;
   }
 }
 
@@ -1287,15 +1435,16 @@ export function toneIcon(tone: Tone): IconName {
 export function notice(g: Gfx, r: Rect, o: { text: string; tone?: Tone; detail?: string }): void {
   const tone = o.tone ?? "info";
   const col = toneColor(tone);
+  const fg = toneText(tone);
   g.fillRound(r, CONTROL.radius, rgba(col, 0.12));
   g.strokeRound(r, CONTROL.radius, rgba(col, 0.42));
-  icon(g, toneIcon(tone), r.x + 34, r.y + r.h / 2, 24, col, 3);
+  icon(g, toneIcon(tone), r.x + 34, r.y + r.h / 2, 24, fg, 3);
   const tx = r.x + 62;
   if (o.detail) {
-    g.text(o.text, tx, r.y + r.h * 0.36, { role: "bodyStrong", color: col, maxWidth: r.w - 96 });
+    g.text(o.text, tx, r.y + r.h * 0.36, { role: "bodyStrong", color: fg, maxWidth: r.w - 96 });
     g.text(o.detail, tx, r.y + r.h * 0.7, { role: "caption", color: theme.fg2, maxWidth: r.w - 96 });
   } else {
-    g.text(o.text, tx, r.y + r.h / 2 + 1, { role: "bodyStrong", color: col, maxWidth: r.w - 96 });
+    g.text(o.text, tx, r.y + r.h / 2 + 1, { role: "bodyStrong", color: fg, maxWidth: r.w - 96 });
   }
 }
 
@@ -1306,11 +1455,11 @@ export type PipStatus = "offline" | "connecting" | "online" | "reconnecting" | "
 /** Status dot + word + latency. Width returned so callers can lay out around it. */
 export function connectionPip(g: Gfx, x: number, cy: number, status: PipStatus, latencyMs: number): number {
   const map: Record<PipStatus, { label: string; col: string; bars: number }> = {
-    online: { label: latencyMs > 0 ? `Online · ${Math.round(latencyMs)} ms` : "Online", col: palette.accent, bars: 3 },
-    connecting: { label: "Connecting", col: palette.reward, bars: 1 },
-    reconnecting: { label: "Reconnecting", col: palette.reward, bars: 1 },
-    offline: { label: "Offline", col: ink.muted, bars: 0 },
-    failed: { label: "No connection", col: palette.danger, bars: 0 },
+    online: { label: latencyMs > 0 ? `Online · ${Math.round(latencyMs)} ms` : "Online", col: theme.accentText, bars: 3 },
+    connecting: { label: "Connecting", col: theme.rewardText, bars: 1 },
+    reconnecting: { label: "Reconnecting", col: theme.rewardText, bars: 1 },
+    offline: { label: "Offline", col: theme.fgMuted, bars: 0 },
+    failed: { label: "No connection", col: theme.dangerText, bars: 0 },
   };
   const s = map[status];
   for (let i = 0; i < 3; i++) {
@@ -1356,6 +1505,7 @@ export function sheet(g: Gfx, area: Rect, o: SheetOptions): SheetResult {
   const h = 300 + bulletH + (o.footnote ? 40 : 0);
   const card = centreRect(area, w, Math.min(h, area.h));
   const col = toneColor(o.tone ?? "warn");
+  const toneFg = toneText(o.tone ?? "warn");
 
   g.fillRound(card, tokens.radius.lg, palette.surface);
   g.strokeRound(card, tokens.radius.lg, rgba(col, 0.42));
@@ -1367,7 +1517,7 @@ export function sheet(g: Gfx, area: Rect, o: SheetOptions): SheetResult {
   const inner = inset(card, 40);
   let y = inner.y + 6;
 
-  icon(g, o.tone === "warn" || !o.tone ? "lock" : toneIcon(o.tone), inner.x + 18, y + 16, 30, col, 2.8);
+  icon(g, o.tone === "warn" || !o.tone ? "lock" : toneIcon(o.tone), inner.x + 18, y + 16, 30, toneFg, 2.8);
   g.text(o.title, inner.x + 48, y + 16, { role: "h2", color: theme.fg, maxWidth: inner.w - 60 });
   y += 58;
 
@@ -1375,7 +1525,7 @@ export function sheet(g: Gfx, area: Rect, o: SheetOptions): SheetResult {
 
   if (o.bullets?.length) {
     for (const b of o.bullets) {
-      icon(g, "check", inner.x + 12, y + 14, 18, col, 2.6);
+      icon(g, "check", inner.x + 12, y + 14, 18, toneFg, 2.6);
       g.text(b, inner.x + 34, y + 15, { role: "body", color: theme.fg2, maxWidth: inner.w - 40 });
       y += 46;
     }

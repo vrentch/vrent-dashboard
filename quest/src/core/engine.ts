@@ -19,12 +19,18 @@
  *  - Frame callbacks are individually guarded. A thrown error in the board
  *    must not stop the render loop: a frozen headset is far worse than a
  *    broken feature.
+ *  - Off-headset the engine is only half the story. `flatmode.ts` owns the
+ *    camera, the look controls and the mouse pointer whenever `mode` is
+ *    "none", and is inert the moment a session starts. It hangs off the engine
+ *    as `flat` (see `FlatEngine`) rather than being wired up by `main.ts`, so
+ *    a flat visitor gets a framed, playable app with no call site at all.
  */
 
 import * as THREE from "three";
 import type { Engine, PointerState, XrMode } from "../contracts.ts";
-import { hex, palette } from "../../shared/brand.ts";
+import { hex, onThemeChange, palette } from "../../shared/brand.ts";
 import { createInput } from "./input.ts";
+import { createFlatMode, type FlatMode } from "./flatmode.ts";
 
 /** A hitch must not teleport an animation, so no frame is worth more than this. */
 const MAX_DELTA = 0.1;
@@ -56,6 +62,19 @@ function xrSessionMode(mode: "vr" | "ar"): XRSessionMode {
   return mode === "ar" ? "immersive-ar" : "immersive-vr";
 }
 
+/**
+ * What `createEngine` actually returns.
+ *
+ * `Engine` in `src/contracts.ts` is the contract every other subsystem is
+ * written against and is deliberately left alone — nothing in the app needs to
+ * know the flat path exists. This adds the one member that does: the flat-mode
+ * controller, for anything that wants to drive the desktop view directly.
+ */
+export interface FlatEngine extends Engine {
+  /** Framing, look controls and the mouse pointer off-headset. Inert in XR. */
+  readonly flat: FlatMode;
+}
+
 /** Whether this device can run the given session type. */
 export async function isSessionSupported(mode: "vr" | "ar"): Promise<boolean> {
   const xr = navigator.xr;
@@ -67,7 +86,7 @@ export async function isSessionSupported(mode: "vr" | "ar"): Promise<boolean> {
   }
 }
 
-export function createEngine(canvas: HTMLCanvasElement): Engine {
+export function createEngine(canvas: HTMLCanvasElement): FlatEngine {
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
@@ -114,6 +133,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   /** Where y = 0 of `world` sits relative to the reference space origin. */
   let floorY = 0;
   let disposed = false;
+  /** Created once the engine object exists; every use is guarded until then. */
+  let flat: FlatMode | null = null;
 
   const headPosition = new THREE.Vector3();
   const headRotation = new THREE.Quaternion();
@@ -139,6 +160,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    // Framing is solved against the aspect ratio, so a reshaped window is a
+    // new framing problem, not just a new projection matrix.
+    flat?.resize();
   }
 
   function syncCameraToHead(): void {
@@ -149,6 +173,19 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   }
 
   function recentre(): void {
+    if (!renderer.xr.isPresenting) {
+      // Off-headset there is no head to recentre on, and the camera is flat
+      // mode's to place. "Recentre" therefore means "put the content back where
+      // it was authored and look at it straight on" — which is idempotent,
+      // where anchoring to the camera would walk the world a further
+      // RECENTRE_DISTANCE away on every press.
+      world.position.set(0, floorY, -RECENTRE_DISTANCE);
+      world.rotation.set(0, 0, 0);
+      world.updateMatrixWorld(true);
+      flat?.resetView();
+      return;
+    }
+
     camera.updateMatrixWorld();
     camera.matrixWorld.decompose(headPosition, headRotation, headScale);
 
@@ -238,14 +275,34 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     // matrices inside render(), which would leave every raycast this frame
     // testing against last frame's positions.
     scene.updateMatrixWorld();
-    camera.updateMatrixWorld();
 
     if (pendingRecentre && renderer.xr.isPresenting) {
       recentre();
       pendingRecentre = false;
     }
 
+    // Flat mode reads the content it just flushed and places the camera. It
+    // has to run before the camera's world matrix is taken, or every ray and
+    // every billboard this frame would use last frame's viewpoint. Guarded for
+    // the same reason frame callbacks are: a broken desktop camera must not
+    // take the render loop down with it.
+    if (flat) {
+      try {
+        flat.update(dt);
+      } catch (error) {
+        console.error("[engine] flat framing failed", error);
+      }
+    }
+    camera.updateMatrixWorld();
+
     input.update(dt);
+    if (flat) {
+      try {
+        flat.syncPointers(input.pointers());
+      } catch (error) {
+        console.error("[engine] flat pointer sync failed", error);
+      }
+    }
 
     for (const fn of frameCallbacks) {
       try {
@@ -307,7 +364,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     },
 
     pointers(): PointerState[] {
-      return input.pointers();
+      // Flat mode substitutes its own mouse pointer for the one `input.ts`
+      // synthesises; in a session it hands the snapshot straight back.
+      return flat ? flat.pointers() : input.pointers();
     },
 
     haptic(pointerId, intensity, ms) {
@@ -334,13 +393,29 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       renderer.xr.removeEventListener("sessionend", onSessionEnd);
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
+      unsubscribeTheme();
       frameCallbacks.clear();
       modeCallbacks.clear();
       void endSession();
+      flat?.dispose();
+      flat = null;
       input.dispose();
       renderer.dispose();
     },
   };
+
+  /**
+   * The clear colour and the scene background are *derived* from the palette —
+   * a parsed hex and a THREE.Color — so a theme switch strands both on the old
+   * ink. Everything else here reads `palette` live and needs nothing.
+   */
+  const unsubscribeTheme = onThemeChange(() => {
+    const ink = hex(palette.ink);
+    if (scene.background instanceof THREE.Color) scene.background.setHex(ink);
+    if (savedBackground instanceof THREE.Color) savedBackground.setHex(ink);
+    // Passthrough composites behind a transparent frame; keep it transparent.
+    renderer.setClearColor(ink, engine.mode === "ar" ? 0 : 1);
+  });
 
   renderer.xr.addEventListener("sessionstart", onSessionStart);
   renderer.xr.addEventListener("sessionend", onSessionEnd);
@@ -350,11 +425,15 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   resizeObserver?.observe(canvas);
   window.addEventListener("resize", resize);
 
+  flat = createFlatMode(engine);
+  // Same object, wider type: closures above keep working, callers get `flat`.
+  const flatEngine: FlatEngine = Object.assign(engine, { flat });
+
   resize();
   recentre();
   renderer.setAnimationLoop(frame);
 
-  return engine;
+  return flatEngine;
 }
 
 /**

@@ -12,12 +12,157 @@
  * light, hover, match glow, claimed state, AI intent — is one MeshPhysicalMaterial
  * with a region attribute, so a card is a single draw call and every card in
  * the deck shares one geometry and one compiled program.
+ *
+ * Every colour here is derived from the live palette, so all of it goes stale
+ * on a theme switch: the back is a canvas texture, the shared tints are parsed
+ * THREE.Colors. `createCardResources` subscribes to `onThemeChange` and repaints
+ * the back into the same canvas and rewrites the same uniforms, so a switch
+ * never rebuilds the board and never interrupts a turn.
  */
 
 import * as THREE from "three";
-import { hex, palette, rgba, text as brandText, tokens } from "../../shared/brand.ts";
+import {
+  hex,
+  luminance,
+  mix,
+  onThemeChange,
+  palette,
+  readableOn,
+  rgba,
+  scene,
+  text as brandText,
+  tokens,
+} from "../../shared/brand.ts";
 import type { BoardLayout } from "./layout.ts";
 import type { SymbolAtlas } from "./symbols.ts";
+
+// ── Card surfaces ───────────────────────────────────────────────────────────
+
+/**
+ * A card is the same physical object in both themes — a light printed face, a
+ * dark brand back, a machined metal edge. What changes is which of the theme's
+ * colours those are derived from, and how hard the face is driven once the room
+ * around it is bright, which is `scene.cardFaceScale`'s job in the shader.
+ *
+ * These three are the whole vocabulary: `symbols.ts` prints onto `cardPaper()`,
+ * the back plate is built out of `cardInk()`, the rim band is `cardEdge()`.
+ */
+
+function lightest(candidates: readonly string[]): string {
+  let best = candidates[0];
+  for (const c of candidates) if (luminance(c) > luminance(best)) best = c;
+  return best;
+}
+
+function darkest(candidates: readonly string[]): string {
+  let best = candidates[0];
+  for (const c of candidates) if (luminance(c) < luminance(best)) best = c;
+  return best;
+}
+
+/** How much brand hue the stock carries: enough to be off-white, not enough to
+ *  tint the symbol printed on it. */
+const PAPER_TINT = 0.05;
+
+/**
+ * The card face. Near-white in both themes — a light face is the only thing
+ * that keeps a card legible against unlit passthrough, so a light theme pulls
+ * its *brightness* back rather than swapping it for a dark plate.
+ */
+export function cardPaper(): string {
+  return mix(
+    lightest([palette.surface, palette.ink, palette.surfaceAlt, brandText.primary, brandText.onPrimary]),
+    palette.primary,
+    PAPER_TINT,
+  );
+}
+
+/**
+ * The deepest colour the theme owns. Backs stay a dark brand plate in both
+ * themes: a light back would dissolve into a bright room, and the face/back
+ * pair has to keep reading as two sides of one object.
+ */
+export function cardInk(): string {
+  return darkest([palette.ink, palette.surface, palette.surfaceAlt, brandText.primary, brandText.secondary]);
+}
+
+/** Mid-metal luminance — `readableOn`'s own light/dark pivot. */
+const EDGE_LUMINANCE = 0.45;
+
+/**
+ * Brushed-edge albedo: the theme's neutral, lifted toward the paper until it is
+ * a mid metal, so the chamfer catches the key light with the same strength
+ * whichever palette is loaded. The dark theme's neutral sits just under the
+ * pivot and is nudged; the light theme's is a dark slate and is raised a long
+ * way. Taking it straight from `text.secondary`, as this used to, made the edge
+ * a near-black line in the light theme — the one part of a card that has to
+ * stay bright, because it is the whole silhouette when the card turns edge-on.
+ */
+export function cardEdge(): string {
+  const base = brandText.secondary;
+  if (luminance(base) >= EDGE_LUMINANCE) return base;
+  const paper = cardPaper();
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 12; i++) {
+    const t = (lo + hi) / 2;
+    if (luminance(mix(base, paper, t)) < EDGE_LUMINANCE) lo = t;
+    else hi = t;
+  }
+  return mix(base, paper, hi);
+}
+
+// ── Claimed cards ───────────────────────────────────────────────────────────
+
+/**
+ * A claimed pair has to do two contradictory things at once: leave the game
+ * visually, and stay readable — the artwork is how a player checks who owns
+ * which pair after the flourish is over.
+ *
+ * `keep` is the share of the card's own face luminance the claimed plate holds
+ * on to, and `tint` is how far that plate travels toward the owner's hue. Both
+ * are handed to the shader, which applies the hue as a *multiply* rather than
+ * as a pedestal added underneath — see `FRAG_SURFACE`.
+ */
+export interface ClaimResponse {
+  /** Fraction of the face's luminance the plate keeps, after `cardFaceScale`. */
+  keep: number;
+  /** How far the plate travels toward the seat colour, 0-1. */
+  tint: number;
+}
+
+/**
+ * Share of the face — as the room already dims it — a claimed plate keeps.
+ * Measured, not guessed: on the shipping board a claimed plate then renders at
+ * roughly half an unclaimed face's luminance, which is where the printed symbol
+ * still clears the 3:1 graphics-contrast bar. Everything below ~0.5 puts the
+ * darkest marks under it, because a plate that dark is fighting the flat 0.05
+ * term in the contrast formula rather than the artwork.
+ */
+const CLAIM_KEEP = 0.58;
+/**
+ * Floor on the same plate, measured against an *undimmed* face. A bright room
+ * has already pulled every face back through `scene.cardFaceScale`, so keeping
+ * a flat share of that would dim a claimed card twice. This is the per-theme
+ * half of the response: inert in the dark theme, live in the light one.
+ */
+const CLAIM_FLOOR = 0.5;
+/** A very dark room must not be able to drive the floor into a full-bright plate. */
+const CLAIM_KEEP_MAX = 0.75;
+/**
+ * How much owner hue the plate carries. High enough to name the seat across a
+ * table, low enough that the mark keeps its own colour underneath.
+ */
+const CLAIM_TINT = 0.62;
+
+/** The claimed-state response for the active theme. Derived, so it goes stale. */
+export function claimResponse(): ClaimResponse {
+  const faceScale = Math.max(0.05, scene.cardFaceScale);
+  return {
+    keep: Math.min(CLAIM_KEEP_MAX, Math.max(CLAIM_KEEP, CLAIM_FLOOR / faceScale)),
+    tint: CLAIM_TINT,
+  };
+}
 
 // ── Easing ──────────────────────────────────────────────────────────────────
 
@@ -302,30 +447,35 @@ export function buildCardGeometry(
 // ── Card back ───────────────────────────────────────────────────────────────
 
 /**
- * The brand pattern, generated once and shared by all 48 cards. Deliberately
+ * The brand pattern, painted once and shared by all 48 cards. Deliberately
  * quiet: a dark plate, a fine diagonal weave, an inset keyline and a small
  * geometric emblem. Face-down cards form most of the board for most of the
  * game, so this has to survive being looked at for ten minutes.
+ *
+ * Built from `cardInk()` rather than from `surfaceAlt → surface → ink`, because
+ * those three are the theme's *panel* neutrals: in the light theme they are all
+ * pale, and a pale back is both invisible in a bright room and indistinguishable
+ * from the face. The plate is the theme's deepest colour lifted toward its own
+ * primary, which is a dark brand plate in either palette.
  */
-export function createCardBackTexture(aspect: number, size = 512, anisotropy = 1): THREE.Texture {
-  const w = Math.round(size * Math.max(0.5, Math.min(2, aspect)));
-  const h = size;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d", { alpha: false });
-  if (!ctx) throw new Error("card: 2D canvas unavailable");
+function paintCardBack(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const deep = cardInk();
+  const plate = mix(deep, palette.primary, 0.09);
+  const lit = mix(deep, palette.primary, 0.19);
+  // The emblem has to read on the plate whichever palette produced it, so its
+  // neutral comes from `readableOn` rather than from a text colour that flips.
+  const onPlate = readableOn(plate);
 
   const grad = ctx.createLinearGradient(0, 0, w * 0.35, h);
-  grad.addColorStop(0, palette.surfaceAlt);
-  grad.addColorStop(0.55, palette.surface);
-  grad.addColorStop(1, palette.ink);
+  grad.addColorStop(0, lit);
+  grad.addColorStop(0.55, plate);
+  grad.addColorStop(1, deep);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
   // Fine diagonal weave — visible as a texture, never as a pattern to read.
   ctx.save();
-  ctx.strokeStyle = rgba(palette.surfaceAlt, 0.55);
+  ctx.strokeStyle = rgba(mix(plate, palette.primary, 0.3), 0.5);
   ctx.lineWidth = Math.max(1, h * 0.004);
   const step = h / 13;
   ctx.beginPath();
@@ -334,7 +484,7 @@ export function createCardBackTexture(aspect: number, size = 512, anisotropy = 1
     ctx.lineTo(x + h, h);
   }
   ctx.stroke();
-  ctx.strokeStyle = rgba(palette.ink, 0.4);
+  ctx.strokeStyle = rgba(deep, 0.45);
   ctx.beginPath();
   for (let x = -h; x < w + h; x += step) {
     ctx.moveTo(x + step * 0.5, 0);
@@ -345,8 +495,8 @@ export function createCardBackTexture(aspect: number, size = 512, anisotropy = 1
 
   // Corner falloff so the plate reads as slightly domed under the rim light.
   const vig = ctx.createRadialGradient(w * 0.5, h * 0.44, h * 0.1, w * 0.5, h * 0.5, h * 0.85);
-  vig.addColorStop(0, rgba(palette.ink, 0));
-  vig.addColorStop(1, rgba(palette.ink, 0.55));
+  vig.addColorStop(0, rgba(deep, 0));
+  vig.addColorStop(1, rgba(deep, 0.55));
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, w, h);
 
@@ -359,31 +509,53 @@ export function createCardBackTexture(aspect: number, size = 512, anisotropy = 1
   ctx.stroke();
 
   // Emblem: two nested chevrons over a bar. Geometric, wordless, and small
-  // enough that a grid of them stays calm.
+  // enough that a grid of them stays calm. Both brand hues are lifted a little
+  // toward the paper: the light theme's accent is a deep teal that would sink
+  // into the plate at this alpha, and the lift is invisible in the dark theme.
   ctx.save();
   ctx.translate(w * 0.5, h * 0.5);
   const u = h * 0.01;
+  const paper = cardPaper();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.lineWidth = u * 1.9;
-  ctx.strokeStyle = rgba(palette.primary, 0.75);
+  ctx.strokeStyle = rgba(mix(palette.primary, paper, 0.12), 0.75);
   ctx.beginPath();
   ctx.moveTo(-u * 9, -u * 3.5);
   ctx.lineTo(0, u * 5);
   ctx.lineTo(u * 9, -u * 3.5);
   ctx.stroke();
   ctx.lineWidth = u * 1.4;
-  ctx.strokeStyle = rgba(palette.accent, 0.45);
+  ctx.strokeStyle = rgba(mix(palette.accent, paper, 0.18), 0.45);
   ctx.beginPath();
   ctx.moveTo(-u * 5.2, -u * 7);
   ctx.lineTo(0, u * 0.6);
   ctx.lineTo(u * 5.2, -u * 7);
   ctx.stroke();
-  ctx.fillStyle = rgba(brandText.secondary, 0.28);
+  ctx.fillStyle = rgba(onPlate, 0.24);
   ctx.beginPath();
   ctx.roundRect(-u * 9, u * 8, u * 18, u * 1.6, u * 0.8);
   ctx.fill();
   ctx.restore();
+}
+
+export interface CardBack {
+  /** The one texture every card's back region samples. */
+  texture: THREE.Texture;
+  /**
+   * Repaints the plate into the same canvas and the same texture object. Pass a
+   * new aspect when the board resizes, omit it to repaint at the current one —
+   * so neither a placement change nor a theme switch churns a GPU texture or
+   * invalidates a material that already points at this one.
+   */
+  redraw(aspect?: number): void;
+  dispose(): void;
+}
+
+export function createCardBack(aspect: number, size = 512, anisotropy = 1): CardBack {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) throw new Error("card: 2D canvas unavailable");
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -393,13 +565,38 @@ export function createCardBackTexture(aspect: number, size = 512, anisotropy = 1
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.anisotropy = Math.max(1, Math.min(4, anisotropy));
-  texture.needsUpdate = true;
-  return texture;
+
+  let ratio = aspect;
+
+  const redraw = (next = ratio): void => {
+    ratio = next;
+    const w = Math.round(size * Math.max(0.5, Math.min(2, ratio)));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== size) canvas.height = size;
+    paintCardBack(ctx, w, size);
+    texture.needsUpdate = true;
+  };
+
+  redraw(aspect);
+
+  return {
+    texture,
+    redraw,
+    dispose() {
+      texture.dispose();
+      canvas.width = 0;
+      canvas.height = 0;
+    },
+  };
 }
 
 // ── Material ────────────────────────────────────────────────────────────────
 
-/** Uniforms shared by every card material — one object, 48 references. */
+/**
+ * Uniforms shared by every card material — one object, 48 references. Every
+ * theme-derived colour on a card lives here rather than on the material, so a
+ * theme switch is a handful of writes instead of a walk over the deck.
+ */
 export interface SharedCardUniforms {
   /** The brand pattern. */
   uBack: { value: THREE.Texture };
@@ -407,8 +604,12 @@ export interface SharedCardUniforms {
   uRim: { value: THREE.Color };
   /** Miss flash colour. */
   uMiss: { value: THREE.Color };
-  /** (rimStrength, dim, selfLit, spare) */
+  /** Brushed-metal albedo for the rim band. */
+  uEdge: { value: THREE.Color };
+  /** (rimStrength, dim, selfLit, faceScale) */
   uEnv: { value: THREE.Vector4 };
+  /** Claimed-plate response, `(keep, tint)` from `claimResponse()`. */
+  uClaim: { value: THREE.Vector2 };
 }
 
 const VERT_HEAD = /* glsl */ `
@@ -432,7 +633,9 @@ uniform vec4 uStateB; // intent, miss, spare, spare
 uniform sampler2D uBack;
 uniform vec3 uRim;
 uniform vec3 uMiss;
-uniform vec4 uEnv;   // rimStrength, dim, selfLit, spare
+uniform vec3 uEdge;
+uniform vec4 uEnv;   // rimStrength, dim, selfLit, faceScale
+uniform vec2 uClaim; // plate luminance kept, seat tint
 `;
 
 /** Replaces `<map_fragment>`: picks the surface for this fragment's region. */
@@ -444,17 +647,35 @@ float claimed = uStateA.z;
 float dimK = 1.0 - 0.45 * uEnv.y;
 
 vec2 atlasUv = uUvRect.xy + clamp( vCardUv, 0.0, 1.0 ) * uUvRect.zw;
-vec3 faceCol = texture2D( map, atlasUv ).rgb;
+
+// The face is a light plate, which is what carries it against dark passthrough.
+// Against a bright room that same plate blows out and the card stops reading as
+// an object, so the theme's cardFaceScale (uEnv.w) drives it back here.
+// Substrate and printed mark scale together: the artwork's contrast is intact.
+vec3 faceCol = texture2D( map, atlasUv ).rgb * uEnv.w;
 vec3 backCol = texture2D( uBack, vCardUv ).rgb;
 
 // A claimed pair keeps its artwork — players must still be able to see who
 // owns what — but loses most of its luminance and takes on the owner's hue.
-faceCol = mix( faceCol, mix( faceCol * 0.18, uSeat * 0.26, 0.55 ), claimed );
+//
+// The hue arrives as a wash multiplied *over* the print, never as a flat
+// pedestal added under it. A pedestal lifts substrate and mark by the same
+// absolute amount, so as the plate darkens the two converge and the symbol
+// disappears; a multiply scales both by the same factor and the artwork's own
+// contrast survives untouched. Dividing the wash by its own luminance lands
+// every seat on the same plate brightness (uClaim.x), so seats differ in hue
+// and never in legibility — which matters most for the darkest seat colours a
+// light palette owns.
+vec3 claimWash = mix( vec3( 1.0 ), uSeat, uClaim.y );
+float claimLum = max( 0.05, dot( claimWash, vec3( 0.2126, 0.7152, 0.0722 ) ) );
+faceCol = mix( faceCol, faceCol * claimWash * ( uClaim.x / claimLum ), claimed );
+// The back carries no print to protect — it is a dark plate either way — so it
+// keeps the pedestal, which is what shows ownership on a card seen edge-on.
 backCol = mix( backCol, mix( backCol * 0.5, uSeat * 0.16, 0.5 ), claimed );
 
 // Brushed metal: fine circumferential grain across the card's thickness.
 float grain = 0.5 + 0.5 * sin( vCardUv.y * 44.0 );
-vec3 edgeCol = diffuseColor.rgb * ( 0.86 + 0.22 * grain );
+vec3 edgeCol = uEdge * ( 0.86 + 0.22 * grain );
 
 diffuseColor.rgb = ( faceCol * rFace + backCol * rBack + edgeCol * rEdge ) * dimK;
 diffuseColor.rgb *= 1.0 + 0.10 * uStateA.x;
@@ -529,8 +750,8 @@ function createCardMaterial(
   };
 
   const material = new THREE.MeshPhysicalMaterial({
-    // The edge's base albedo. Face and back are substituted in the shader.
-    color: new THREE.Color(hex(brandText.secondary)),
+    // No base colour: every region substitutes its own in the shader, and the
+    // edge reads `uEdge` so a theme switch is one write instead of 48.
     map: atlas,
     metalness: 0.9,
     roughness: 0.3,
@@ -548,7 +769,9 @@ function createCardMaterial(
     shader.uniforms.uBack = shared.uBack;
     shader.uniforms.uRim = shared.uRim;
     shader.uniforms.uMiss = shared.uMiss;
+    shader.uniforms.uEdge = shared.uEdge;
     shader.uniforms.uEnv = shared.uEnv;
+    shader.uniforms.uClaim = shared.uClaim;
 
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", `#include <common>\n${VERT_HEAD}`)
@@ -567,7 +790,7 @@ function createCardMaterial(
   };
 
   // Every card compiles to the same program; only the uniforms differ.
-  material.customProgramCacheKey = () => "vrent-card-v1";
+  material.customProgramCacheKey = () => "vrent-card-v3";
 
   return { material, uniforms };
 }
@@ -593,9 +816,16 @@ export interface CardMetrics {
 export interface CardResources {
   geometry: THREE.BufferGeometry;
   atlas: SymbolAtlas;
-  backTexture: THREE.Texture;
+  back: CardBack;
   shared: SharedCardUniforms;
   metrics: CardMetrics;
+  /**
+   * How hard the cards answer the room: `rimStrength` 0-1.5, `selfLit` 0-0.5.
+   * Both are pre-theme figures describing the *environment* — the theme's
+   * `rimScale` and `cardFaceScale` are folded in here and re-folded on a theme
+   * change, so no caller ever has to know they exist.
+   */
+  setEnvResponse(rimStrength: number, selfLit: number): void;
   dispose(): void;
 }
 
@@ -622,20 +852,59 @@ export function createCardResources(
     layout.bevel,
   );
 
-  const backTexture = createCardBackTexture(
+  const back = createCardBack(
     layout.cardWidth / layout.cardHeight,
     512,
     options.anisotropy ?? 1,
   );
 
   const shared: SharedCardUniforms = {
-    uBack: { value: backTexture },
+    uBack: { value: back.texture },
     uRim: { value: new THREE.Color(options.rim ?? hex(palette.accent)) },
     uMiss: { value: new THREE.Color(hex(palette.danger)) },
-    uEnv: {
-      value: new THREE.Vector4(options.rimStrength ?? 0.55, 0, options.selfLit ?? 0.1, 0),
-    },
+    uEdge: { value: new THREE.Color(hex(cardEdge())) },
+    uEnv: { value: new THREE.Vector4(0, 0, 0, 1) },
+    // Filled by `applyClaimResponse` below, so the tokens have one home.
+    uClaim: { value: new THREE.Vector2() },
   };
+
+  // Kept so a theme change can re-apply the theme multipliers to whatever the
+  // environment last asked for.
+  let baseRim = options.rimStrength ?? 0.55;
+  let baseSelfLit = options.selfLit ?? 0.1;
+
+  const setEnvResponse = (rimStrength: number, selfLit: number): void => {
+    baseRim = rimStrength;
+    baseSelfLit = selfLit;
+    const env = shared.uEnv.value;
+    env.x = baseRim * scene.rimScale;
+    env.z = baseSelfLit;
+    env.w = scene.cardFaceScale;
+  };
+
+  /**
+   * Purely theme-driven, unlike `setEnvResponse` — but it reads the same
+   * `cardFaceScale` that lands in `uEnv.w`, so the two are always re-applied
+   * together and a claimed plate can never be dimmed by a stale face scale.
+   */
+  const applyClaimResponse = (): void => {
+    const claim = claimResponse();
+    shared.uClaim.value.set(claim.keep, claim.tint);
+  };
+
+  setEnvResponse(baseRim, baseSelfLit);
+  applyClaimResponse();
+
+  // The back is a canvas texture and the tints are parsed colours: all derived,
+  // all stale after a switch. Repainting and rewriting them leaves geometry,
+  // materials and every card's animation state exactly where they were.
+  const offTheme = onThemeChange(() => {
+    back.redraw();
+    shared.uMiss.value.setHex(hex(palette.danger));
+    shared.uEdge.value.setHex(hex(cardEdge()));
+    setEnvResponse(baseRim, baseSelfLit);
+    applyClaimResponse();
+  });
 
   const metrics: CardMetrics = {
     width: layout.cardWidth,
@@ -652,12 +921,14 @@ export function createCardResources(
   return {
     geometry,
     atlas,
-    backTexture,
+    back,
     shared,
     metrics,
+    setEnvResponse,
     dispose() {
+      offTheme();
       geometry.dispose();
-      backTexture.dispose();
+      back.dispose();
     },
   };
 }
@@ -682,6 +953,12 @@ export interface CardView {
   hovered(): boolean;
   /** `animate: false` lands straight in the claimed state, for state restore. */
   markMatched(seat: THREE.Color, animate?: boolean): void;
+  /**
+   * Re-tints the owner colour without touching pose or animation state. Seat
+   * colours are parsed from the palette, so a theme switch has to push the new
+   * ones into every claimed card — mid-flourish included.
+   */
+  setSeatColor(seat: THREE.Color): void;
   markMissed(): void;
   setIntent(on: boolean, seat: THREE.Color): void;
   /** Back to a fresh, face-down, unclaimed card. */
@@ -804,6 +1081,10 @@ export function createCard(res: CardResources, index: number): CardView {
       flipTarget = 1;
       flipElapsed = -1;
       applyStatic();
+    },
+
+    setSeatColor(seat) {
+      uniforms.uSeat.value.copy(seat);
     },
 
     markMissed() {

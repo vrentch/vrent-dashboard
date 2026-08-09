@@ -18,6 +18,12 @@
  * The controller also owns the board's grounding rig — a baked blob shadow and
  * (in rooms with a floor) a wider light pool. There are no realtime shadows
  * anywhere in this product; a Quest 3 cannot afford them at 72 fps.
+ *
+ * Two things reach in from outside and are handled in the same place, because
+ * both amount to "re-grade the room without rebuilding it": a theme change,
+ * and the operator moving a surround-tuning slider. Either one re-resolves
+ * every live room's tint and re-runs its colour derivations; no geometry,
+ * material or texture is touched, so switching costs no VRAM and no hitch.
  */
 
 import * as THREE from "three";
@@ -27,10 +33,48 @@ import {
   getEnvironment,
   type EnvironmentSpec,
 } from "../../shared/environments.ts";
-import { hex, palette } from "../../shared/brand.ts";
-import { SceneAssets, createProceduralScene, defaultLighting } from "./procedural.ts";
+import { THEMES, hex, onThemeChange, palette, scene as sceneTokens } from "../../shared/brand.ts";
+import type { EnvironmentTuning } from "./procedural.ts";
+import {
+  SceneAssets,
+  createProceduralScene,
+  defaultLighting,
+  getEnvironmentTuning,
+  setEnvironmentTuning,
+  onEnvironmentTuningChange,
+  refreshSceneDerivations,
+  resolveTint,
+  roomInk,
+  themeAdoption,
+  themeLight,
+} from "./procedural.ts";
 import { createPanoramaScene } from "./panorama.ts";
 import { createPassthroughScene } from "./passthrough.ts";
+
+/**
+ * Surround tuning: the operator's live controls over the room. Re-exported
+ * here so the UI has one import for everything about the environment.
+ *
+ *   setEnvironmentTuning({ brightness: 1.3 })    // brighter room, immediately
+ *   setEnvironmentTuning({ tint: "#B26A00" })    // every room in one colour
+ *   setEnvironmentTuning({ tint: null })         // back to per-room tints
+ *   setEnvironmentTuning({ tintStrength: 0 })    // a neutral, colourless room
+ *   setEnvironmentTuning(DEFAULT_TUNING)         // reset
+ *   getEnvironmentTuning()                       // what is in force now
+ *
+ * `TUNING_LIMITS` carries the min/max/step for each control, so a slider does
+ * not have to hardcode a range. Out-of-range values are clamped, never
+ * rejected. Applying is this module's job; persisting the values is the
+ * caller's.
+ */
+export {
+  DEFAULT_TUNING,
+  TUNING_LIMITS,
+  getEnvironmentTuning,
+  onEnvironmentTuningChange,
+  setEnvironmentTuning,
+  type EnvironmentTuning,
+} from "./procedural.ts";
 
 // ── Scene contract ──────────────────────────────────────────────────────────
 
@@ -99,6 +143,10 @@ export interface EnvironmentSystem extends EnvironmentController {
   setBoardAnchor(centre: THREE.Vector3, radius?: number): void;
   /** Fires when a requested environment could not be shown. Returns an unsubscribe. */
   onFallback(fn: (requested: EnvironmentSpec, used: EnvironmentSpec, reason: FallbackReason) => void): () => void;
+  /** Applies operator surround tuning live. Same as the module-level function. */
+  setTuning(patch: Partial<EnvironmentTuning>): Readonly<EnvironmentTuning>;
+  /** The tuning currently in force. */
+  tuning(): Readonly<EnvironmentTuning>;
 }
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
@@ -111,6 +159,14 @@ const VEIL_PEAK = 0.82;
 const PANORAMA_GRACE_MS = 420;
 
 const DEFAULT_ANCHOR_RADIUS = 0.92;
+
+/**
+ * The five rooms were art-directed under the dark theme, so that theme's
+ * shadow token is the unit the others are read against. Stating it this way
+ * rather than as a bare number means a re-skin only has to set absolute values
+ * in `brand.ts` and the grounding rig follows.
+ */
+const SHADOW_ALPHA_BASELINE = THEMES.dark.scene.shadowAlpha;
 
 // ── Small maths helpers (allocation-free) ───────────────────────────────────
 
@@ -137,6 +193,12 @@ async function settleWithin<T>(p: Promise<T>, ms: number): Promise<T | "pending"
 interface Layer {
   spec: EnvironmentSpec;
   scene: EnvScene;
+  /**
+   * The room's live tint. Handed to the scene as `SceneContext.tint` and held
+   * by reference in its uniforms, so re-resolving it in place is all it takes
+   * for a theme change or a tint override to reach every shader in the room.
+   */
+  tint: THREE.Color;
 }
 
 class Environment implements EnvironmentSystem {
@@ -160,8 +222,9 @@ class Environment implements EnvironmentSystem {
   private readonly anchor = new THREE.Vector3(0, 0, 0);
   private anchorRadius = DEFAULT_ANCHOR_RADIUS;
 
-  private readonly tintScratch = new THREE.Color();
   private readonly veilScratch = new THREE.Color();
+  /** `palette.ink`, parsed once per theme rather than once per frame. */
+  private readonly veilBase = new THREE.Color();
   private readonly bgColor = new THREE.Color();
 
   private active: Layer | null = null;
@@ -173,6 +236,11 @@ class Environment implements EnvironmentSystem {
 
   private exposureAmbient = 1;
   private exposureKey = 1;
+  /**
+   * How much of the theme's scene treatment the room in view accepts, 0-1.
+   * Cross-faded with the rest of the exposure. @see themeAdoption
+   */
+  private exposureAdopt = 1;
 
   private fadeT = 1;
   private fading = false;
@@ -187,6 +255,9 @@ class Environment implements EnvironmentSystem {
   private readonly fallbackListeners = new Set<
     (requested: EnvironmentSpec, used: EnvironmentSpec, reason: FallbackReason) => void
   >();
+
+  /** Theme and tuning subscriptions, released on dispose. */
+  private readonly unsubscribes: (() => void)[] = [];
 
   /** Renderer/scene state we borrowed and must hand back on dispose. */
   private readonly restore: {
@@ -272,7 +343,41 @@ class Environment implements EnvironmentSystem {
     };
     engine.scene.add(this.veil);
 
+    // A theme switch and a tuning change are the same event as far as the
+    // rooms are concerned: re-resolve the tints, re-run the derivations. The
+    // palette itself has already been refreshed by `procedural.ts`, whose
+    // subscription is registered at import time and therefore runs first.
+    this.unsubscribes.push(onThemeChange(() => this.regrade()));
+    this.unsubscribes.push(onEnvironmentTuningChange(() => this.regrade()));
+
+    this.refreshVeilBase();
     this.pushLighting();
+  }
+
+  /**
+   * The veil is the one surface with no room behind it, so it takes the room's
+   * void colour rather than the palette's. Swapping between two rooms that both
+   * stay dark under a light theme must not flash the UI's near-white `ink`
+   * across the player's view.
+   */
+  private refreshVeilBase(): void {
+    const spec = this.active?.spec ?? this.outgoing?.spec ?? null;
+    this.veilBase.set(hex(spec ? roomInk(spec) : palette.ink));
+  }
+
+  /**
+   * Re-resolves every live room's tint and re-derives its colours in place.
+   *
+   * Cheap enough to run on a slider drag: a few hundred colour mixes and a
+   * handful of buffer re-uploads, no allocation of anything the GPU holds.
+   */
+  private regrade(): void {
+    if (this.disposed) return;
+    this.refreshVeilBase();
+    if (this.outgoing) this.outgoing.tint.set(hex(resolveTint(this.outgoing.spec)));
+    if (this.active) this.active.tint.set(hex(resolveTint(this.active.spec)));
+    refreshSceneDerivations();
+    if (!this.fading && this.active) this.tint.copy(this.active.tint);
   }
 
   // ── Grounding rig ─────────────────────────────────────────────────────────
@@ -347,34 +452,83 @@ class Environment implements EnvironmentSystem {
 
   // ── Lighting ──────────────────────────────────────────────────────────────
 
-  /** Copies `live` onto the actual lights, fog and clear state. */
+  /**
+   * Copies `live` onto the actual lights, fog and clear state.
+   *
+   * This is where the theme's `SceneTokens` land. `ambientScale` and `keyScale`
+   * are the whole reason a light room is not simply a washed-out dark one: the
+   * catalogue's exposure stays in charge of the *relative* brightness of the
+   * nine environments, and the theme decides where that whole set sits. The
+   * operator's brightness rides on top of both.
+   *
+   * Every one of those tokens is scaled by how much of the theme the room in
+   * view actually accepts. A light UI lifting a room sold as "a dark vault" by
+   * 2.1 stops of ambient does not produce a light-themed vault, it produces a
+   * white tunnel and a catalogue blurb that no longer describes it, so a room
+   * authored dark takes none of the lift and stays the room it was sold as.
+   */
   private pushLighting(): void {
+    const brightness = getEnvironmentTuning().brightness;
+
     this.hemi.color.copy(this.live.skyColor);
     this.hemi.groundColor.copy(this.live.groundColor);
-    this.hemi.intensity = this.exposureAmbient * this.live.ambientScale;
+    this.hemi.intensity =
+      this.exposureAmbient * this.live.ambientScale * this.token(sceneTokens.ambientScale) * brightness;
 
+    const key =
+      this.exposureKey * this.live.keyScale * this.token(sceneTokens.keyScale) * brightness;
     this.key.color.copy(this.live.keyColor);
-    this.key.intensity = this.exposureKey * this.live.keyScale;
+    this.key.intensity = key;
     this.key.position.copy(this.live.keyDirection).multiplyScalar(12);
 
     this.fill.color.copy(this.live.skyColor);
-    this.fill.intensity = this.exposureKey * this.live.keyScale * 0.22;
+    this.fill.intensity = key * 0.22;
     this.fill.position.set(-this.live.keyDirection.x, 0.35, -this.live.keyDirection.z).multiplyScalar(10);
 
     this.fog.color.copy(this.live.fogColor);
     this.fog.density = this.live.fogDensity;
 
+    // A contact patch that reads on a near-black floor is a smear on a white
+    // one. Mixed reality is exempt: that shadow falls on the player's real
+    // table, whose brightness has nothing to do with which UI they picked.
+    const mixedReality = this.live.background === null;
+    const shadowScale = mixedReality
+      ? 1
+      : this.token(sceneTokens.shadowAlpha / SHADOW_ALPHA_BASELINE);
     this.shadowUniforms.uColor.value = this.live.shadowColor;
-    this.shadowUniforms.uStrength.value = this.live.shadowStrength;
+    this.shadowUniforms.uStrength.value = this.live.shadowStrength * shadowScale;
+
+    // The pool is light thrown onto the floor. A pale floor has nowhere to put
+    // it, so it comes back as the room brightens — and a room that kept its
+    // dark floor under a light theme keeps its pool with it.
     this.poolUniforms.uColor.value = this.live.skyColor;
-    this.poolUniforms.uStrength.value = this.live.shadowStrength * this.live.poolStrength * 0.2;
+    this.poolUniforms.uStrength.value =
+      this.live.shadowStrength *
+      this.live.poolStrength *
+      0.2 *
+      (1 - 0.65 * themeLight() * this.exposureAdopt);
     this.floorPool.visible = this.live.poolStrength > 0.002;
   }
 
+  /**
+   * A theme scene token, damped towards its no-op value of 1 by how much of the
+   * theme the room in view accepts. A room that declines a light theme entirely
+   * is lit exactly as the catalogue authored it, whichever UI is on screen.
+   */
+  private token(value: number): number {
+    return 1 + (value - 1) * this.exposureAdopt;
+  }
+
   /** Exposure comes from the catalogue entry and cross-fades with the room. */
-  private setExposure(ambient: number, key: number): void {
+  private setExposure(ambient: number, key: number, adopt: number): void {
     this.exposureAmbient = ambient;
     this.exposureKey = key;
+    this.exposureAdopt = adopt;
+  }
+
+  /** The catalogue entry's exposure, applied whole. */
+  private setSpecExposure(spec: EnvironmentSpec): void {
+    this.setExposure(spec.ambient, spec.key, themeAdoption(spec));
   }
 
   /** Hard-swaps background and clear alpha. Only ever called under the veil. */
@@ -386,7 +540,9 @@ class Environment implements EnvironmentSystem {
       renderer.setClearColor(0x000000, 0);
       renderer.setClearAlpha(0);
     } else {
-      this.bgColor.copy(lighting.background);
+      // Exposed with the rest of the room — the sky is the one surface with no
+      // geometry to carry the shader's exposure for it.
+      this.bgColor.copy(lighting.background).multiplyScalar(getEnvironmentTuning().brightness);
       scene.background = this.bgColor;
       renderer.setClearColor(this.bgColor, 1);
       renderer.setClearAlpha(1);
@@ -430,6 +586,14 @@ class Environment implements EnvironmentSystem {
     return () => this.fallbackListeners.delete(fn);
   }
 
+  setTuning(patch: Partial<EnvironmentTuning>): Readonly<EnvironmentTuning> {
+    return setEnvironmentTuning(patch);
+  }
+
+  tuning(): Readonly<EnvironmentTuning> {
+    return getEnvironmentTuning();
+  }
+
   apply(spec: EnvironmentSpec): Promise<void> {
     const run = this.chain.then(() => this.swap(spec));
     // Keep the chain alive even if one swap rejects, so the next one still runs.
@@ -459,7 +623,7 @@ class Environment implements EnvironmentSystem {
     // the room off its own photograph, and this is what picks that up.
     if (!this.fading && this.active) {
       this.copyLighting(this.active.scene.lighting);
-      this.setExposure(this.active.spec.ambient, this.active.spec.key);
+      this.setSpecExposure(this.active.spec);
       this.pushLighting();
       this.pushBackground(this.active.scene.lighting);
     }
@@ -491,6 +655,8 @@ class Environment implements EnvironmentSystem {
     scene.fog = this.restore.fog;
     renderer.setClearColor(this.restore.clearColor, this.restore.clearAlpha);
 
+    for (const off of this.unsubscribes) off();
+    this.unsubscribes.length = 0;
     this.fallbackListeners.clear();
     if (activeSystem === this) activeSystem = null;
 
@@ -525,12 +691,17 @@ class Environment implements EnvironmentSystem {
     });
   }
 
+  /**
+   * A scene's build context. The tint colour handed over here is the object the
+   * scene keeps — the controller re-resolves it in place rather than replacing
+   * it, so the room follows a theme switch or an operator override for free.
+   */
   private contextFor(spec: EnvironmentSpec): SceneContext {
     return {
       renderer: this.engine.renderer,
       camera: this.engine.camera,
       spec,
-      tint: new THREE.Color(hex(spec.tint)),
+      tint: new THREE.Color(hex(resolveTint(spec))),
       anchor: this.anchor,
       anchorRadius: this.anchorRadius,
     };
@@ -548,16 +719,19 @@ class Environment implements EnvironmentSystem {
 
   private buildDefault(): Layer {
     const spec = getEnvironment(DEFAULT_ENVIRONMENT_ID);
-    return { spec, scene: createProceduralScene(this.contextFor(spec)) };
+    const ctx = this.contextFor(spec);
+    return { spec, tint: ctx.tint, scene: createProceduralScene(ctx) };
   }
 
   private async build(spec: EnvironmentSpec, gen: number): Promise<Layer> {
+    const ctx = this.contextFor(spec);
+
     if (spec.kind === "passthrough") {
-      return { spec, scene: createPassthroughScene(this.contextFor(spec)) };
+      return { spec, tint: ctx.tint, scene: createPassthroughScene(ctx) };
     }
 
     if (spec.kind === "panorama") {
-      const scene = createPanoramaScene(this.contextFor(spec));
+      const scene = createPanoramaScene(ctx);
       const settled = await settleWithin(scene.ready, PANORAMA_GRACE_MS);
       if (settled === false) {
         // Never show a customer a black void: fall back before we even fade.
@@ -575,10 +749,10 @@ class Environment implements EnvironmentSystem {
           void this.apply(fallback);
         });
       }
-      return { spec, scene };
+      return { spec, tint: ctx.tint, scene };
     }
 
-    return { spec, scene: createProceduralScene(this.contextFor(spec)) };
+    return { spec, tint: ctx.tint, scene: createProceduralScene(ctx) };
   }
 
   private begin(layer: Layer): void {
@@ -598,11 +772,13 @@ class Environment implements EnvironmentSystem {
       // front and ease only the geometry in — a veil over an empty scene would
       // read as a flash, which is the one thing a first impression cannot do.
       this.copyLighting(layer.scene.lighting);
-      this.setExposure(layer.spec.ambient, layer.spec.key);
+      this.setSpecExposure(layer.spec);
       this.pushBackground(layer.scene.lighting);
       this.pushLighting();
-      this.tint.set(hex(layer.spec.tint));
+      this.tint.copy(layer.tint);
     }
+    // The veil belongs to the room it is landing on, not to the UI.
+    this.refreshVeilBase();
 
     this.fadeT = 0;
     this.fading = true;
@@ -631,7 +807,7 @@ class Environment implements EnvironmentSystem {
 
     if (from) {
       // The live tint carries the board and the spatial UI across the swap.
-      this.tint.set(hex(from.spec.tint)).lerp(this.tintOf(to.spec), k);
+      this.tint.copy(from.tint).lerp(to.tint, k);
 
       // Veil: deep brand ink carrying a trace of the room. Peaks short of
       // solid, so the dissolve stays visible under it and no frame goes black.
@@ -639,19 +815,21 @@ class Environment implements EnvironmentSystem {
       // transition into a colour flash rather than a dip.
       this.veilMaterial.opacity = Math.pow(Math.sin(Math.PI * t), 1.25) * VEIL_PEAK;
       this.veilMaterial.color
-        .set(hex(palette.ink))
+        .copy(this.veilBase)
         .convertLinearToSRGB()
         .lerp(this.veilScratch.copy(this.tint).convertLinearToSRGB(), 0.14)
         .convertSRGBToLinear();
 
       this.lerpLighting(from.scene.lighting, to.scene.lighting, k);
+      const fromAdopt = themeAdoption(from.spec);
       this.setExposure(
         from.spec.ambient + (to.spec.ambient - from.spec.ambient) * k,
         from.spec.key + (to.spec.key - from.spec.key) * k,
+        fromAdopt + (themeAdoption(to.spec) - fromAdopt) * k,
       );
     } else {
       this.copyLighting(to.scene.lighting);
-      this.setExposure(to.spec.ambient, to.spec.key);
+      this.setSpecExposure(to.spec);
     }
     this.pushLighting();
 
@@ -663,10 +841,6 @@ class Environment implements EnvironmentSystem {
     if (t >= 1) this.finish();
   }
 
-  private tintOf(spec: EnvironmentSpec): THREE.Color {
-    return this.tintScratch.set(hex(spec.tint));
-  }
-
   private finish(): void {
     if (!this.fading && !this.fadeDone) return;
     this.fading = false;
@@ -676,8 +850,8 @@ class Environment implements EnvironmentSystem {
     if (to) {
       to.scene.setOpacity(1);
       this.copyLighting(to.scene.lighting);
-      this.setExposure(to.spec.ambient, to.spec.key);
-      this.tint.set(hex(to.spec.tint));
+      this.setSpecExposure(to.spec);
+      this.tint.copy(to.tint);
       if (!this.swapped) {
         this.swapped = true;
         this.pushBackground(to.scene.lighting);
@@ -708,7 +882,12 @@ class Environment implements EnvironmentSystem {
 /** The controller most recently created, so `currentTint()` has something to read. */
 let activeSystem: Environment | null = null;
 
+/**
+ * What `currentTint()` reports before the first `apply()`. Derived from the
+ * palette, so it is re-parsed rather than left on the old theme's accent.
+ */
 const FALLBACK_TINT = new THREE.Color(hex(palette.accent));
+onThemeChange(() => FALLBACK_TINT.set(hex(palette.accent)));
 
 /**
  * Builds the environment system for an engine. One per session.

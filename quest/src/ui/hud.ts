@@ -15,7 +15,7 @@
  */
 
 import * as THREE from "three";
-import { palette, rgba, text as ink, tokens } from "../../shared/brand.ts";
+import { onThemeChange, palette, rgba, scene, text as ink, tokens } from "../../shared/brand.ts";
 import type { GameMode } from "../../shared/game.ts";
 import { EMOTES } from "../../shared/protocol.ts";
 import type { EmoteId, PlayerView } from "../../shared/protocol.ts";
@@ -29,6 +29,7 @@ import {
   icon,
   iconButton,
   seatColor,
+  seatText,
 } from "./widgets.ts";
 
 // ── Public shape ────────────────────────────────────────────────────────────
@@ -90,9 +91,28 @@ export interface HudDeps {
 const HUD_W = 1.0;
 const HUD_H = 0.23;
 
+/**
+ * Anchored **clear of the board**, not near it.
+ *
+ * The board's envelope is fixed per placement (`src/game/layout.ts`): the table
+ * board is a 0.44 m slab raked 72° back, centred 0.83 m up and 0.60 m out, so
+ * its far edge tops out around y 0.90 / z −0.81. The room board is up to 1.34 m
+ * tall, centred 1.34 m up and 2.05 m out, so it spans roughly y 0.68 → 2.00.
+ *
+ * The HUD clears the table board over the top and the room board underneath —
+ * the only free ground in each case. Measured against a 1.6 m eye that leaves
+ * 11.9° of clearance on the table and 5.5° in the room, and both panels sit in
+ * the lower field of view (−20° to −37°), so the HUD stays roughly where the
+ * player last looked for it when the operator switches placement. Each `tilt`
+ * aims that panel's face back at the eye.
+ *
+ * Anything moved here has to be re-checked against those two envelopes at eye
+ * heights from 1.2 m (seated) to 1.75 m: an overlapping HUD is the single
+ * fastest way to make the board unreadable.
+ */
 const PLACEMENTS = {
-  table: { scale: 0.78, pos: new THREE.Vector3(0, 1.05, -0.78), tilt: -0.24 },
-  room: { scale: 1.15, pos: new THREE.Vector3(0, 1.62, -1.62), tilt: -0.06 },
+  table: { scale: 0.72, pos: new THREE.Vector3(0, 1.16, -0.96), tilt: -0.3 },
+  room: { scale: 0.95, pos: new THREE.Vector3(0, 0.48, -1.66), tilt: -0.59 },
 } as const;
 
 const WHEEL_M = 0.32;
@@ -137,6 +157,11 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     },
   });
   group.add(board.group);
+  // A Panel is born visible, and this module starts out of a match with
+  // `visible = false`. Without agreeing here the HUD paints at full opacity from
+  // boot: it ghosts through every menu screen and sits in the flat camera's
+  // framing box reading "Waiting… / PAIRS LEFT 0 of 10" before a match exists.
+  board.setVisible(false, false);
 
   /**
    * A thin plane behind the band that pulses on your turn. Animating a material
@@ -208,7 +233,11 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
   function drawBand(g: Gfx, r: Rect): void {
     const mine = isMyTurn();
     const active = turnPlayer();
+    // Two colours, not one: the brand hue drives the fill and the rail, and its
+    // contrast-corrected twin sets the type. On the light theme the raw accent
+    // and half the seat hues do not clear 4.5:1 against a panel.
     const col = mine ? palette.accent : active ? seatColor(active.seat) : ink.muted;
+    const fg = mine ? theme.accentText : active ? seatText(active.seat) : theme.fgMuted;
 
     // Status cluster gets carved off the right first so the turn text can use
     // everything that is left without ever colliding with it.
@@ -246,11 +275,11 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
 
     const tx = bandRect.x + 30;
     if (isFreeForAll()) {
-      icon(g, "spark", tx + 12, bandRect.y + bandRect.h / 2, 32, col, 3);
+      icon(g, "spark", tx + 12, bandRect.y + bandRect.h / 2, 32, fg, 3);
       g.text("EVERYONE PLAYS", tx + 44, bandRect.y + bandRect.h * 0.38, {
         role: "h2",
         size: 44,
-        color: col,
+        color: fg,
         tracking: 1.5,
       });
       g.text("Time Attack — clear the board first", tx + 46, bandRect.y + bandRect.h * 0.74, {
@@ -263,11 +292,11 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
 
     if (mine) {
       // A forward caret plus the largest type on the panel. Unmissable.
-      icon(g, "forward", tx + 14, bandRect.y + bandRect.h / 2, 38, col, 5);
+      icon(g, "forward", tx + 14, bandRect.y + bandRect.h / 2, 38, fg, 5);
       g.text("YOUR TURN", tx + 52, bandRect.y + bandRect.h * 0.4, {
         role: "h1",
         size: 56,
-        color: col,
+        color: fg,
         tracking: 2,
       });
       g.text(hintForMode(props.mode), tx + 54, bandRect.y + bandRect.h * 0.78, {
@@ -286,7 +315,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       g.text(`${active.name.toUpperCase()}`, tx + 74, bandRect.y + bandRect.h * 0.4, {
         role: "h2",
         size: 42,
-        color: col,
+        color: fg,
         tracking: 1,
         maxWidth: bandRect.w - 200,
       });
@@ -324,9 +353,9 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     g.text(`of ${props.pairsTotal}`, r.x + numW + 12, r.y + 70, { role: "caption", color: theme.fgMuted });
 
     const bar: Rect = { x: r.x, y: r.y + r.h - 14, w: r.w, h: 8 };
-    g.fillRound(bar, 4, rgba(palette.ink, 0.7));
+    g.fillRound(bar, 4, theme.card);
     const t = props.pairsTotal > 0 ? done / props.pairsTotal : 0;
-    if (t > 0) g.fillRound({ ...bar, w: Math.max(8, bar.w * t) }, 4, palette.accent);
+    if (t > 0) g.fillRound({ ...bar, w: Math.max(8, bar.w * t) }, 4, theme.accentText);
   }
 
   function drawTimer(g: Gfx, r: Rect, secs: number): void {
@@ -336,9 +365,9 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     const total = props.turnSeconds > 0 ? props.turnSeconds : Math.max(1, secs);
     const frac = Math.max(0, Math.min(1, secs / total));
     const urgent = secs <= 5;
-    const col = urgent ? palette.danger : palette.reward;
+    const col = urgent ? theme.dangerText : theme.rewardText;
 
-    g.ring(cx, cy, radius, rgba(ink.secondary, 0.22), 7);
+    g.ring(cx, cy, radius, theme.lineStrong, 7);
     g.ctx.save();
     g.ctx.beginPath();
     g.ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
@@ -369,10 +398,12 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
 
   function drawChip(g: Gfx, r: Rect, p: PlayerView): void {
     const col = seatColor(p.seat);
+    const fg = seatText(p.seat);
     const isTurn = !isFreeForAll() && p.seat === props.turnSeat && !p.out;
     const isSelf = p.id === props.selfId;
 
-    g.fillRound(r, tokens.radius.md, isTurn ? rgba(col, 0.16) : rgba(palette.ink, 0.42));
+    g.fillRound(r, tokens.radius.md, theme.card);
+    if (isTurn) g.fillRound(r, tokens.radius.md, rgba(col, 0.16));
     g.strokeRound(r, tokens.radius.md, isTurn ? rgba(col, 0.85) : theme.line, isTurn ? 2 : 1);
 
     // Caret above the active chip — the shape, not the fill, carries the state.
@@ -405,7 +436,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       role: "h2",
       size: 38,
       align: "right",
-      color: p.out ? theme.disabledFg : col,
+      color: p.out ? theme.disabledFg : fg,
     });
 
     // Second line: streak, or the reason this seat is inactive.
@@ -413,13 +444,13 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     let subCol: string = theme.fgMuted;
     if (p.out) {
       sub = "OUT";
-      subCol = palette.danger;
+      subCol = theme.dangerText;
     } else if (!p.connected) {
       sub = "RECONNECTING";
-      subCol = palette.reward;
+      subCol = theme.rewardText;
     } else if (p.streak > 1) {
       sub = `STREAK ×${p.streak}`;
-      subCol = palette.reward;
+      subCol = theme.rewardText;
     } else if (p.isHost) {
       sub = "HOST";
     }
@@ -428,7 +459,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       if (p.streak > 1 && !p.out && p.connected) {
         const w = g.measure(sub, { role: "label", size: 17, upper: true });
         for (let i = 0; i < Math.min(3, p.streak - 1); i++) {
-          icon(g, "up", tx + w + 14 + i * 15, r.y + r.h * 0.72, 13, palette.reward, 2.2);
+          icon(g, "up", tx + w + 14 + i * 15, r.y + r.h * 0.72, 13, theme.rewardText, 2.2);
         }
       }
     }
@@ -467,10 +498,11 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     g.ctx.save();
     g.ctx.beginPath();
     g.ctx.arc(cx, cy, outer, 0, Math.PI * 2);
-    g.ctx.fillStyle = rgba(palette.ink, 0.86);
+    // The wheel draws on transparency, so it supplies its own slab opacity.
+    g.ctx.fillStyle = rgba(palette.surface, scene.panelAlpha);
     g.ctx.fill();
     g.ctx.restore();
-    g.ring(cx, cy, outer, theme.line, 2);
+    g.ring(cx, cy, outer, theme.lineStrong, 2);
 
     EMOTES.forEach((e, i) => {
       const a0 = start + i * step;
@@ -485,9 +517,9 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       g.ctx.arc(cx, cy, ro, a0 + 0.012, a1 - 0.012);
       g.ctx.arc(cx, cy, inner, a1 - 0.012, a0 + 0.012, true);
       g.ctx.closePath();
-      g.ctx.fillStyle = selected ? rgba(palette.primary, 0.42) : rgba(palette.surfaceAlt, 0.55);
+      g.ctx.fillStyle = selected ? theme.cardSelected : theme.card;
       g.ctx.fill();
-      g.ctx.strokeStyle = selected ? palette.accent : theme.line;
+      g.ctx.strokeStyle = selected ? palette.primary : theme.line;
       g.ctx.lineWidth = selected ? 3 : 1;
       g.ctx.stroke();
       g.ctx.restore();
@@ -505,7 +537,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
         role: "caption",
         size: 20,
         align: "centre",
-        color: selected ? palette.accent : theme.fgMuted,
+        color: selected ? theme.accentText : theme.fgMuted,
         maxWidth: 150,
       });
     });
@@ -513,7 +545,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     g.ctx.save();
     g.ctx.beginPath();
     g.ctx.arc(cx, cy, inner - 4, 0, Math.PI * 2);
-    g.ctx.fillStyle = rgba(palette.surface, 0.95);
+    g.ctx.fillStyle = rgba(palette.surface, Math.min(1, scene.panelAlpha + 0.03));
     g.ctx.fill();
     g.ctx.restore();
     g.ring(cx, cy, inner - 4, theme.line, 1);
@@ -527,7 +559,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       role: "caption",
       size: 21,
       align: "centre",
-      color: wheelChoice < 0 ? theme.fgMuted : palette.accent,
+      color: wheelChoice < 0 ? theme.fgMuted : theme.accentText,
       maxWidth: inner * 1.7,
     });
   }
@@ -580,15 +612,21 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
   // ── Emote floaters ────────────────────────────────────────────────────────
 
   const emoteTextures = new Map<EmoteId, THREE.CanvasTexture>();
-  for (const e of EMOTES) {
-    emoteTextures.set(e.id, buildEmoteTexture(e.glyph, e.label));
+  function buildEmoteTextures(): void {
+    for (const t of emoteTextures.values()) t.dispose();
+    emoteTextures.clear();
+    for (const e of EMOTES) emoteTextures.set(e.id, buildEmoteTexture(e.glyph, e.label));
   }
+  buildEmoteTextures();
 
   interface Floater {
     mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
     t: number;
     base: THREE.Vector3;
     active: boolean;
+    /** What it is showing, so a theme rebuild can re-point it at a live texture. */
+    emote: EmoteId | null;
+    seat: number;
   }
 
   const floaterGeo = new THREE.PlaneGeometry(0.19, 0.12);
@@ -604,10 +642,30 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     mesh.visible = false;
     mesh.renderOrder = 30;
     parent.add(mesh);
-    floaters.push({ mesh, t: 0, base: new THREE.Vector3(), active: false });
+    floaters.push({ mesh, t: 0, base: new THREE.Vector3(), active: false, emote: null, seat: 0 });
   }
 
   let seatAnchor: ((seat: number) => THREE.Vector3 | null) | null = null;
+
+  /**
+   * Three things here are *derived* rather than read: the pulse plane's
+   * THREE.Color, the emote mask textures (drawn once with `text.onPrimary`) and
+   * the seat tint on any floater already in flight. None of them re-read their
+   * source, so all three are rebuilt on a theme change. The panels look after
+   * their own canvases.
+   */
+  const unthemed = onThemeChange(() => {
+    pulseMat.color.set(palette.accent);
+    // Rebuilding disposes the old masks, so anything still in the air has to be
+    // re-pointed at the replacement before the next frame reads a dead texture.
+    buildEmoteTextures();
+    for (const f of floaters) {
+      if (!f.active || !f.emote) continue;
+      f.mesh.material.map = emoteTextures.get(f.emote) ?? null;
+      f.mesh.material.color.set(seatColor(f.seat));
+      f.mesh.material.needsUpdate = true;
+    }
+  });
 
   function playEmote(seat: number, id: EmoteId): void {
     const slot = floaters.find((f) => !f.active) ?? floaters[0];
@@ -623,6 +681,8 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
     slot.mesh.visible = true;
     slot.t = 0;
     slot.active = true;
+    slot.emote = id;
+    slot.seat = seat;
   }
 
   function updateFloaters(dt: number): void {
@@ -643,6 +703,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       f.mesh.material.opacity = k < 0.7 ? Math.min(1, k * 8) : Math.max(0, 1 - (k - 0.7) / 0.3);
       if (k >= 1) {
         f.active = false;
+        f.emote = null;
         f.mesh.visible = false;
       }
     }
@@ -742,6 +803,7 @@ export function createHud(engine: Engine, deps: HudDeps = {}): Hud {
       return () => listeners.delete(cb);
     },
     dispose(): void {
+      unthemed();
       listeners.clear();
       board.dispose();
       wheel.dispose();

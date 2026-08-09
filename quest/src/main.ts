@@ -397,7 +397,9 @@ function settingsProps() {
     theme: prefs.theme,
     placement: prefs.placement,
     symbolSets: SYMBOL_SETS.map((s) => ({ id: s.id, name: s.name })),
-    version: `${EDITION.name} ${VERSION}`,
+    // The settings footer already renders the edition name and a "v" prefix
+    // around this, so passing anything but the bare number duplicates them.
+    version: VERSION,
   };
 }
 
@@ -478,6 +480,18 @@ async function applyEnvironment(id: string): Promise<void> {
   const spec =
     app.customs.find((c) => c.id === id) ??
     (allowsEnvironment(EDITION, id) ? getEnvironment(id) : getEnvironment(DEFAULT_ENVIRONMENT_ID));
+
+  // Passthrough composites the headset's own cameras. On a flat screen there
+  // is nothing to composite, so applying it renders a black void that reads as
+  // a broken page — the worst possible outcome on the tile that best sells the
+  // product. Keep it listed and explain it instead of switching.
+  if (spec.kind === "passthrough" && engine.mode === "none") {
+    ui.toasts.push({
+      text: "Your Room uses the headset's passthrough cameras. Open this page on a Quest 3 to play on your real table.",
+      key: "passthrough-flat",
+    });
+    return;
+  }
 
   prefs.settings.environmentId = spec.id;
   savePrefs(prefs);

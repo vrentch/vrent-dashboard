@@ -12,11 +12,11 @@
  */
 
 import * as THREE from "three";
-import { palette, rgba, tokens } from "../../shared/brand.ts";
+import { palette, rgba, scene, tokens } from "../../shared/brand.ts";
 import type { Engine } from "../contracts.ts";
 import type { Gfx, Rect } from "./panel.ts";
 import { Panel, inset, theme } from "./panel.ts";
-import { icon, toneColor, toneIcon } from "./widgets.ts";
+import { icon, toneColor, toneIcon, toneText } from "./widgets.ts";
 import type { Tone } from "./widgets.ts";
 
 export interface ToastOptions {
@@ -179,6 +179,7 @@ export function createToastLayer(engine: Engine, init: ToastOptionsInit = {}): T
 
   function drawCard(g: Gfx, e: Entry, slot: number, bounds: Rect): void {
     const col = toneColor(e.tone);
+    const fg = toneText(e.tone);
     const baseY = bounds.y + bounds.h - CARD_H - slot * (CARD_H + CARD_GAP);
     const ease = e.life * e.life * (3 - 2 * e.life);
     const r: Rect = {
@@ -191,17 +192,20 @@ export function createToastLayer(engine: Engine, init: ToastOptionsInit = {}): T
     g.save();
     g.alpha(ease);
 
+    // A toast floats free of any panel, so it carries its own slab treatment —
+    // opacity and shadow from `scene`, because the drop shadow that grounds a
+    // dark card reads as dirt under a white one.
     g.ctx.save();
-    g.ctx.shadowColor = rgba(palette.ink, 0.6);
-    g.ctx.shadowBlur = 18;
-    g.ctx.shadowOffsetY = 5;
-    g.fillRound(r, tokens.radius.md, rgba(palette.surface, 0.97));
+    g.ctx.shadowColor = theme.panelShadow;
+    g.ctx.shadowBlur = theme.panelShadowBlur * 0.7;
+    g.ctx.shadowOffsetY = theme.panelShadowOffset * 0.85;
+    g.fillRound(r, tokens.radius.md, rgba(palette.surface, scene.panelAlpha));
     g.ctx.restore();
 
     g.strokeRound(r, tokens.radius.md, rgba(col, 0.5));
     // Leading colour rail plus an icon — never colour alone.
     g.fillRound({ x: r.x, y: r.y + 10, w: 5, h: r.h - 20 }, 3, col);
-    icon(g, toneIcon(e.tone), r.x + 40, r.y + r.h / 2, 26, col, 3);
+    icon(g, toneIcon(e.tone), r.x + 40, r.y + r.h / 2, 26, fg, 3);
 
     const tx = r.x + 70;
     const tw = r.w - 90;
@@ -217,7 +221,7 @@ export function createToastLayer(engine: Engine, init: ToastOptionsInit = {}): T
     const remain = Math.max(0, Math.min(1, (e.expires - performance.now()) / Math.max(1, e.expires - e.born)));
     if (!e.dying && remain > 0) {
       const bar = inset(r, 0, 14, 6, 14);
-      g.hairline(bar.x, r.y + r.h - 7, bar.x + bar.w * remain, r.y + r.h - 7, rgba(col, 0.55));
+      g.hairline(bar.x, r.y + r.h - 7, bar.x + bar.w * remain, r.y + r.h - 7, rgba(fg, 0.6));
     }
 
     g.restore();

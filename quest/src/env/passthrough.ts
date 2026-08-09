@@ -18,15 +18,29 @@
  * The transparent clear itself (`scene.background = null`, clear alpha 0) is
  * applied by the controller from `lighting.background === null`, under the
  * cross-fade veil, so it lands on the same frame as everything else.
+ *
+ * THEMES. The player's room does not get brighter because the operator picked
+ * a light UI, so nothing here follows `roomLight()` the way the virtual rooms
+ * do: the shadow stays dark, the ring stays additive, and the only thing that
+ * moves is the brand tint. Both of those are load-bearing. A shadow derived
+ * from `palette.ink` would turn near-white on a light theme and the board would
+ * float; a ring flipped to normal blending would paint over the real table,
+ * which is the one thing mixed reality cannot do.
  */
 
 import * as THREE from "three";
 import type { EnvScene, SceneContext, SceneLighting } from "./controller.ts";
-import { SceneAssets, defaultLighting, makeShader, GLSL_NOISE, GLSL_OUTPUT } from "./procedural.ts";
-import { hex, palette, text as brandText } from "../../shared/brand.ts";
-
-const WHITE = new THREE.Color(hex(brandText.onPrimary));
-const INK = new THREE.Color(hex(palette.ink));
+import {
+  DEEP,
+  SceneAssets,
+  WHITE,
+  applyDefaultLighting,
+  defaultLighting,
+  makeShader,
+  mixInto,
+  GLSL_NOISE,
+  GLSL_OUTPUT,
+} from "./procedural.ts";
 
 export function createPassthroughScene(ctx: SceneContext): EnvScene {
   const assets = new SceneAssets();
@@ -35,18 +49,23 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
   const uTime: THREE.IUniform = { value: 0 };
 
   const lighting: SceneLighting = defaultLighting(ctx.spec, tint);
-  // The real room supplies the look; our lights only have to make the virtual
-  // objects sit in it. Keep them close to neutral so nothing looks colour-cast.
-  lighting.keyDirection.set(0.3, 0.9, 0.32).normalize();
-  lighting.keyColor = WHITE.clone().lerp(tint, 0.1);
-  lighting.skyColor = WHITE.clone().lerp(tint, 0.16);
-  lighting.groundColor = WHITE.clone().lerp(INK, 0.55);
-  lighting.fogColor = INK.clone();
-  lighting.fogDensity = 0;
-  lighting.background = null;
-  lighting.shadowColor = INK.clone().lerp(tint, 0.08);
-  lighting.shadowStrength = 0.5;
-  lighting.poolStrength = 0;
+  assets.themed(() => {
+    applyDefaultLighting(lighting, ctx.spec, tint);
+    // The real room supplies the look; our lights only have to make the virtual
+    // objects sit in it. Keep them close to neutral so nothing looks colour-cast.
+    lighting.keyDirection.set(0.3, 0.9, 0.32).normalize();
+    mixInto(lighting.keyColor, WHITE, tint, 0.1);
+    mixInto(lighting.skyColor, WHITE, tint, 0.16);
+    // Bounce off a real floor of unknown colour: a neutral mid grey in either
+    // theme, which is why it runs to `DEEP` rather than to `ink`.
+    mixInto(lighting.groundColor, WHITE, DEEP, 0.55);
+    lighting.fogColor.copy(DEEP);
+    lighting.fogDensity = 0;
+    lighting.background = null;
+    mixInto(lighting.shadowColor, DEEP, tint, 0.08);
+    lighting.shadowStrength = 0.5;
+    lighting.poolStrength = 0;
+  });
 
   const rings = new THREE.Group();
   rings.name = "passthrough-grounding";
@@ -95,6 +114,10 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
+      // Additive, spelled out rather than via the `light: "emit"` idiom the
+      // virtual rooms use. That idiom flips to normal blending in a light
+      // theme, which here would paint an opaque disc over the player's table.
+      // Over passthrough, additive is the only correct answer in either theme.
       { blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide },
     ),
   );
@@ -107,6 +130,8 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
     assets.geom(new THREE.RingGeometry(0.98, 1.22, 96, 1)),
     makeShader(
       assets,
+      // `uTint` is the controller's live tint object; it follows a theme switch
+      // and an operator override without this scene doing anything.
       { uTint: { value: tint }, uStrength: { value: 0.12 } },
       /* glsl */ `
       varying vec2 vLocal;
@@ -126,6 +151,7 @@ export function createPassthroughScene(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
+      // Additive for the same reason as the ring above: never occlude the room.
       { blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide },
     ),
   );

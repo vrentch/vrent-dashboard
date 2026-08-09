@@ -26,37 +26,412 @@
 import * as THREE from "three";
 import type { EnvScene, SceneContext, SceneLighting } from "./controller.ts";
 import type { EnvironmentSpec } from "../../shared/environments.ts";
-import { hex, palette, seatColors, text as brandText } from "../../shared/brand.ts";
+import {
+  hex,
+  luminance,
+  mix,
+  onThemeChange,
+  palette,
+  seatColors,
+  text as brandText,
+} from "../../shared/brand.ts";
 import { mulberry32 } from "../../shared/game.ts";
 
-// ── Brand colours, parsed once ──────────────────────────────────────────────
+// ── Brand colours, live ─────────────────────────────────────────────────────
+//
+// Parsed once into objects that are then **mutated in place** on a theme
+// change, exactly as `brand.ts` does with the palette itself. Every scene
+// derives its uniforms from these through a recipe registered on its
+// `SceneAssets`, so a swap of theme re-derives colour without rebuilding a
+// single GPU resource.
+//
+// The three neutrals below carry one extra step: they are the neutrals of the
+// room *currently being derived*, not of the theme. See `applyRoomGrade`.
 
-const INK = new THREE.Color(hex(palette.ink));
-const SURFACE = new THREE.Color(hex(palette.surface));
-const SURFACE_ALT = new THREE.Color(hex(palette.surfaceAlt));
-const PRIMARY = new THREE.Color(hex(palette.primary));
-const ACCENT = new THREE.Color(hex(palette.accent));
-const REWARD = new THREE.Color(hex(palette.reward));
-const WHITE = new THREE.Color(hex(brandText.onPrimary));
-const PAPER = new THREE.Color(hex(brandText.primary));
-const VIOLET = new THREE.Color(hex(seatColors[3]));
-const MINT = new THREE.Color(hex(seatColors[5]));
-const ICE = new THREE.Color(hex(seatColors[7]));
+const INK = new THREE.Color();
+const SURFACE = new THREE.Color();
+const SURFACE_ALT = new THREE.Color();
+const PRIMARY = new THREE.Color();
+const ACCENT = new THREE.Color();
+const REWARD = new THREE.Color();
+const VIOLET = new THREE.Color();
+const MINT = new THREE.Color();
+const ICE = new THREE.Color();
 
 /**
- * `a` blended `k` of the way towards `b`, as a fresh colour.
+ * A cool near-white, in *either* theme.
+ *
+ * `text.primary` cannot serve here: it is near-black on a light palette, so
+ * every "paper" surface derived from it would come out inverted — a white
+ * research lab would render as a black one.
+ */
+const PAPER = new THREE.Color();
+
+/**
+ * Pure white — `text.onPrimary`, the one palette entry that means the same
+ * thing in both themes. The far end of every lighting ramp.
+ */
+export const WHITE = new THREE.Color();
+
+/**
+ * The palette's darkest neutral, in either theme. The direction "away from the
+ * light": used to deepen an emitter that has no headroom left above it, and by
+ * anything that must stay dark whichever way the UI goes — the shadow the board
+ * casts on a real table, for one.
+ */
+export const DEEP = new THREE.Color();
+
+/**
+ * 0 for a dark room, 1 for a light one — the room **currently being derived**,
+ * which is not the same thing as the theme. See `themeAdoption`.
+ *
+ * Read off the palette's own void colour rather than off the theme's *name*,
+ * so a customer re-skin that is neither of the two shipped themes still lands
+ * the right way round. Everything in this file that has to behave differently
+ * in a bright room leans on this one number; there are no theme-id branches.
+ */
+let roomLightness = 0;
+
+/** The theme's own lightness, before any room declines part of it. */
+let themeLightness = 0;
+
+/** The adoption the grade currently installed in this module was built from. */
+let gradeAdoption = 1;
+
+/** `DEEP` as a `#RRGGBB` string, for the hex-string helpers in `brand.ts`. */
+let deepHex = "#000000";
+
+/**
+ * @see roomLightness
+ *
+ * Meaningful only inside a `SceneAssets` derivation, which is where a
+ * particular room's grade is installed. Anything holding a catalogue entry
+ * rather than being *inside* its room asks `roomLightFor(spec)` instead.
+ */
+export function roomLight(): number {
+  return roomLightness;
+}
+
+/** @see themeLightness */
+export function themeLight(): number {
+  return themeLightness;
+}
+
+// ── Per-room theme adoption ─────────────────────────────────────────────────
+
+/**
+ * The catalogue `ambient` either side of which a room reads as authored dark or
+ * authored bright. Neon Vault sits at 0.35 and Quantum Lab at 1.25, so the
+ * crossover lands between them and nearer the dark end: a room has to be
+ * genuinely bright before a light UI is allowed to open it up.
+ */
+const ADOPT_DARK = 0.35;
+const ADOPT_BRIGHT = 0.95;
+
+/**
+ * How much of a light theme a room is willing to take, 0-1.
+ *
+ * The theme is a UI decision; the catalogue is a promise. "A dark vault ribbed
+ * with reactive light" is the string the picker puts next to the room and the
+ * string the sales page prints, so the vault has to *be* a dark vault under
+ * either UI — and a room built out of near-white neutrals renders as a white
+ * tunnel however carefully it is lit. Each catalogue entry already states its
+ * intent in `ambient`, so that is what decides it: rooms authored bright take
+ * the whole of a light theme, rooms authored dark decline it, and the ones in
+ * between ramp.
+ *
+ * Read off that number rather than off the room's id, so a client's own
+ * uploaded 360 lands somewhere sensible with nobody maintaining a list.
+ */
+export function themeAdoption(spec: EnvironmentSpec): number {
+  return smooth01(ADOPT_DARK, ADOPT_BRIGHT, spec.ambient);
+}
+
+/** The lightness a given room actually renders at under the active theme. */
+export function roomLightFor(spec: EnvironmentSpec): number {
+  return themeLightness * themeAdoption(spec);
+}
+
+/** A theme neutral pulled back towards the palette's dark end by `hold`, 0-1. */
+function heldNeutral(neutral: string, hold: number): string {
+  return hold > 0.002 ? mix(neutral, deepHex, hold) : neutral;
+}
+
+/**
+ * A room's void colour under the active theme, as `#RRGGBB`.
+ *
+ * For anything that has to sit *behind* the room rather than in it — the
+ * controller's cross-fade veil, which would otherwise flash the UI's near-white
+ * `ink` between two rooms that both stay dark.
+ */
+export function roomInk(spec: EnvironmentSpec): string {
+  return heldNeutral(palette.ink, themeLightness - roomLightFor(spec));
+}
+
+/**
+ * Installs the grade for a room that takes `adoption` of the theme's lightness.
+ *
+ * The neutrals are the whole of it. On a pale palette `ink` and `surface` are
+ * both near-white, so a vault built from them comes out white whatever the
+ * lights are doing. A room that declines the theme's lightness gets those same
+ * neutrals pulled back to the palette's dark end instead, and every recipe
+ * downstream — `roomLightness` included — follows from there.
+ *
+ * Module-level state rather than a parameter threaded through fifty recipes,
+ * and safe because there is exactly one place it is read from: `SceneAssets`
+ * installs a room's grade immediately before running that room's derivations.
+ */
+function applyRoomGrade(adoption: number): void {
+  gradeAdoption = adoption;
+  roomLightness = themeLightness * adoption;
+  const hold = themeLightness - roomLightness;
+  INK.setHex(hex(heldNeutral(palette.ink, hold)));
+  SURFACE.setHex(hex(heldNeutral(palette.surface, hold)));
+  SURFACE_ALT.setHex(hex(heldNeutral(palette.surfaceAlt, hold)));
+}
+
+/**
+ * `a` blended `k` of the way towards `b`, written into `out`.
  *
  * Mixed in sRGB rather than in the linear working space, because every use of
  * this is art direction: "an ink surface with a tenth of the room tint in it"
  * should look like a tenth. A linear blend with a saturated accent lands two to
  * three times stronger than the number reads, and five rooms tinted that way
  * all come out as one loud colour.
+ *
+ * `out` may alias either input — the operands are staged through scratch.
  */
-export function mixColor(a: THREE.Color, b: THREE.Color, k: number): THREE.Color {
-  const from = a.clone().convertLinearToSRGB();
-  const to = b.clone().convertLinearToSRGB();
-  return from.lerp(to, k).convertSRGBToLinear();
+export function mixInto(
+  out: THREE.Color,
+  a: THREE.Color,
+  b: THREE.Color,
+  k: number,
+): THREE.Color {
+  MIX_A.copy(a).convertLinearToSRGB();
+  MIX_B.copy(b).convertLinearToSRGB();
+  return out.copy(MIX_A.lerp(MIX_B, k)).convertSRGBToLinear();
 }
+
+const MIX_A = new THREE.Color();
+const MIX_B = new THREE.Color();
+
+/** `mixInto` into a fresh colour. */
+export function mixColor(a: THREE.Color, b: THREE.Color, k: number): THREE.Color {
+  return mixInto(new THREE.Color(), a, b, k);
+}
+
+/**
+ * The colour a light fitting takes at its core, `k` of the way from its tint
+ * to full intensity.
+ *
+ * In a dark room an emitter burns out towards white. A pale room has no
+ * headroom above the wall behind it, so the same fitting has to read by going
+ * *deeper* instead — chroma rather than brightness. Which way to travel is
+ * decided by `roomLightness`, so this is one rule rather than two branches.
+ */
+export function coreInto(out: THREE.Color, tint: THREE.Color, k: number): THREE.Color {
+  mixInto(out, tint, WHITE, k * (1 - roomLightness));
+  return mixInto(out, out, DEEP, k * roomLightness * 0.45);
+}
+
+// ── Live rendering scalars ──────────────────────────────────────────────────
+//
+// Three uniforms shared by every shader that draws a room. Each is a single
+// object handed to every material, so one write re-grades with no traversal,
+// no allocation and no shader recompile.
+//
+// Exposure is the operator's, and therefore global. The other two describe how
+// light behaves in *this* room and live on its `SceneAssets`, because the two
+// rooms alive during a cross-fade need not agree about it — dissolving a white
+// research floor into a dark vault has to grade each of them its own way.
+
+/** Operator brightness. Multiplies every scene fragment before tone mapping. */
+const uRoomExposure: THREE.IUniform = { value: 1 };
+
+// ── Surround tuning ─────────────────────────────────────────────────────────
+
+/**
+ * The operator's live controls over the surround. Persisting these is the
+ * caller's business; everything here applies them the moment they change, with
+ * no rebuild and no reload.
+ */
+export interface EnvironmentTuning {
+  /** Overall room brightness. 1 is the room exactly as art-directed. */
+  brightness: number;
+  /**
+   * Overrides the catalogue tint for every environment — the hook for a
+   * customer who wants every room in their own colour. `null` leaves each
+   * environment on its own tint.
+   */
+  tint: string | null;
+  /** How much of that tint the room takes. 0 is a neutral grey room, 1 is as
+   *  art-directed, above 1 pushes the chroma. */
+  tintStrength: number;
+}
+
+export const TUNING_LIMITS = {
+  brightness: { min: 0.35, max: 2, step: 0.05 },
+  tintStrength: { min: 0, max: 1.6, step: 0.05 },
+} as const;
+
+/** The room exactly as art-directed. Hand this back to `setEnvironmentTuning`
+ *  for a "reset" control. */
+export const DEFAULT_TUNING: Readonly<EnvironmentTuning> = {
+  brightness: 1,
+  tint: null,
+  tintStrength: 1,
+};
+
+const tuning: EnvironmentTuning = { ...DEFAULT_TUNING };
+
+type TuningListener = (tuning: Readonly<EnvironmentTuning>) => void;
+const tuningListeners = new Set<TuningListener>();
+
+const HEX6 = /^#[0-9a-f]{6}$/i;
+
+function clamp(v: number, lo: number, hi: number): number {
+  return !Number.isFinite(v) ? lo : v < lo ? lo : v > hi ? hi : v;
+}
+
+/** The operator's current surround tuning. Read-only — patch it with `setEnvironmentTuning`. */
+export function getEnvironmentTuning(): Readonly<EnvironmentTuning> {
+  return tuning;
+}
+
+/**
+ * Applies a partial tuning patch live. Unknown or out-of-range values are
+ * clamped rather than rejected, so a slider dragged to its stop is never an
+ * error. Returns the tuning actually in force.
+ */
+export function setEnvironmentTuning(patch: Partial<EnvironmentTuning>): Readonly<EnvironmentTuning> {
+  if (patch.brightness !== undefined) {
+    tuning.brightness = clamp(
+      patch.brightness,
+      TUNING_LIMITS.brightness.min,
+      TUNING_LIMITS.brightness.max,
+    );
+  }
+  if (patch.tint !== undefined) {
+    tuning.tint = patch.tint !== null && HEX6.test(patch.tint) ? patch.tint : null;
+  }
+  if (patch.tintStrength !== undefined) {
+    tuning.tintStrength = clamp(
+      patch.tintStrength,
+      TUNING_LIMITS.tintStrength.min,
+      TUNING_LIMITS.tintStrength.max,
+    );
+  }
+
+  uRoomExposure.value = tuning.brightness;
+  // Listeners first: the controller re-resolves each live room's tint colour
+  // in place, and the derivations below then read it.
+  for (const fn of tuningListeners) {
+    try {
+      fn(tuning);
+    } catch (err) {
+      console.error("[env] tuning listener failed", err);
+    }
+  }
+  refreshSceneDerivations();
+  return tuning;
+}
+
+/**
+ * The operator's brightness, for the handful of things `uRoomExposure` cannot
+ * reach: three's own lit materials (whose *emissive* term is not lit by
+ * anything) and unlit line materials. Read it inside a `themed` recipe — those
+ * re-run on a tuning change, so the value stays current.
+ */
+export function roomExposure(): number {
+  return tuning.brightness;
+}
+
+/** Subscribe to tuning changes. Returns an unsubscribe function. */
+export function onEnvironmentTuningChange(fn: TuningListener): () => void {
+  tuningListeners.add(fn);
+  return () => tuningListeners.delete(fn);
+}
+
+const TINT_SCRATCH = new THREE.Color();
+const HSL_SCRATCH = { h: 0, s: 0, l: 0 };
+
+/**
+ * The tint a room should actually use, as `#RRGGBB`.
+ *
+ * Three things fold in: the operator's override if there is one, their chroma
+ * setting, and the room's own value. The catalogue tints were picked against a
+ * dark room; on a pale one the same hex is too light to read against the walls,
+ * so it is deepened towards the palette's darkest neutral in proportion to how
+ * bright *that room* has become. A room that declines a light theme keeps its
+ * neon at full strength, which is the point of it.
+ */
+export function resolveTint(spec: EnvironmentSpec): string {
+  let base = tuning.tint ?? spec.tint;
+  if (tuning.tintStrength !== 1) {
+    TINT_SCRATCH.setHex(hex(base)).getHSL(HSL_SCRATCH, THREE.SRGBColorSpace);
+    TINT_SCRATCH.setHSL(
+      HSL_SCRATCH.h,
+      clamp(HSL_SCRATCH.s * tuning.tintStrength, 0, 1),
+      HSL_SCRATCH.l,
+      THREE.SRGBColorSpace,
+    );
+    base = `#${TINT_SCRATCH.getHexString(THREE.SRGBColorSpace)}`;
+  }
+  const light = roomLightFor(spec);
+  return light > 0 ? mix(base, deepHex, 0.34 * light) : base;
+}
+
+// ── Palette refresh ─────────────────────────────────────────────────────────
+
+/** `smoothstep`, on the CPU. */
+function smooth01(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function refreshPalette(): void {
+  PRIMARY.setHex(hex(palette.primary));
+  ACCENT.setHex(hex(palette.accent));
+  REWARD.setHex(hex(palette.reward));
+  WHITE.setHex(hex(brandText.onPrimary));
+  VIOLET.setHex(hex(seatColors[3]));
+  MINT.setHex(hex(seatColors[5]));
+  ICE.setHex(hex(seatColors[7]));
+
+  PAPER.setHex(hex(mix(brandText.onPrimary, palette.primary, 0.08)));
+  deepHex =
+    luminance(palette.ink) <= luminance(brandText.primary) ? palette.ink : brandText.primary;
+  DEEP.setHex(hex(deepHex));
+
+  themeLightness = smooth01(0.1, 0.45, luminance(palette.ink));
+  // The three neutrals are room state, not theme state: re-install whichever
+  // grade is in force so they pick up the new palette. Every live scene
+  // re-installs its own a moment later, in `refreshSceneDerivations`.
+  applyRoomGrade(gradeAdoption);
+}
+
+refreshPalette();
+
+/**
+ * Re-runs every derivation registered by every live scene.
+ *
+ * Called on a theme change, and by the controller when the operator moves a
+ * surround-tuning slider. Nothing here allocates a GPU resource: uniforms and
+ * material colours are written in place, so a hundred switches cost the same
+ * VRAM as none.
+ */
+export function refreshSceneDerivations(): void {
+  for (const assets of liveScenes) assets.rederive();
+}
+
+// A single module-level subscription rather than one per scene, so the palette
+// is always refreshed before any scene reads it. `SceneAssets` joins and
+// leaves `liveScenes` in its constructor and `dispose()`, which is that
+// object's unsubscribe.
+onThemeChange(() => {
+  refreshPalette();
+  refreshSceneDerivations();
+});
 
 // ── Shared scene bookkeeping ────────────────────────────────────────────────
 
@@ -66,19 +441,109 @@ interface FadeEntry {
   uniform: THREE.IUniform | null;
 }
 
+/** Every scene currently built, so a theme change can find their derivations. */
+const liveScenes = new Set<SceneAssets>();
+
 /**
  * Owns every GPU resource a scene allocates, drives the cross-fade opacity and
  * frees the lot in one call. Nothing in an environment may create a geometry,
  * material or texture without handing it to one of these.
+ *
+ * It is also where a scene registers everything it *derives* from the palette —
+ * a mixed colour, a parsed hex, a baked vertex attribute. Those recipes are
+ * re-run in place whenever the theme or the operator's tuning changes, which is
+ * what keeps a room correct across a switch without rebuilding it.
+ *
+ * Each one carries its room's grade with it (`themeAdoption`), installed around
+ * every derivation it runs. Two rooms are alive at once through a cross-fade
+ * and they need not agree: a white research floor dissolving into a dark vault
+ * grades each end of the dissolve the way that room was authored.
  */
 export class SceneAssets {
   readonly root = new THREE.Group();
+
+  /**
+   * Gain on additive light drawn *inside* a lit surface — a cove bleeding onto
+   * a wall, a reflection in a floor. On a pale surface an add has almost
+   * nowhere to go, and pushing it anyway erases the shading underneath, so a
+   * light room pulls it back and lets chroma carry the effect instead.
+   */
+  readonly roomGlow: THREE.IUniform = { value: 1 };
+  /** Gain on optional glitter — stars, motes, signage bokeh. Fades out entirely
+   *  in a bright room, where a daylit sky simply has no stars in it. */
+  readonly roomSpark: THREE.IUniform = { value: 1 };
+
+  /** How much of the theme's lightness this room takes. @see themeAdoption */
+  private readonly adoption: number;
 
   private readonly geometries = new Set<THREE.BufferGeometry>();
   private readonly materials = new Set<THREE.Material>();
   private readonly textures = new Set<THREE.Texture>();
   private readonly fading: FadeEntry[] = [];
+  private readonly derivations: (() => void)[] = [];
   private disposed = false;
+
+  /**
+   * `spec` is the catalogue entry the room is being built from. Omitting it —
+   * the grounding rig, anything not a catalogue room — means "follow the theme
+   * as it is", which is what everything did before rooms could decline it.
+   */
+  constructor(spec?: EnvironmentSpec) {
+    this.adoption = spec ? themeAdoption(spec) : 1;
+    // Before anything the caller does: a scene reads the neutrals the moment it
+    // asks for its lighting rig, which is a line or two above its first recipe.
+    this.grade();
+    liveScenes.add(this);
+  }
+
+  // ── Derived state ─────────────────────────────────────────────────────────
+
+  /**
+   * Installs this room's grade on the module, so everything derived under it
+   * reads the neutrals and the `roomLightness` this room actually renders at
+   * rather than the theme's raw ones.
+   */
+  private grade(): void {
+    applyRoomGrade(this.adoption);
+    this.roomGlow.value = 1 - 0.62 * roomLightness;
+    this.roomSpark.value = 1 - 0.93 * roomLightness;
+  }
+
+  /**
+   * Registers work that derives from the live palette. Runs `fn` now, and
+   * again on every theme or tuning change. `fn` must write in place — it is
+   * called with GPU resources already built and pointing at its output.
+   */
+  themed(fn: () => void): void {
+    this.derivations.push(fn);
+    this.grade();
+    fn();
+  }
+
+  /** A colour uniform derived from the live palette. */
+  uColor(recipe: (out: THREE.Color) => void): THREE.IUniform {
+    const value = new THREE.Color();
+    this.themed(() => recipe(value));
+    return { value };
+  }
+
+  /** A scalar uniform derived from the live palette. */
+  uScalar(recipe: () => number): THREE.IUniform {
+    const uniform: THREE.IUniform = { value: 0 };
+    this.themed(() => {
+      uniform.value = recipe();
+    });
+    return uniform;
+  }
+
+  /** Re-runs every registered derivation, under this room's grade. */
+  rederive(): void {
+    if (this.disposed) return;
+    this.grade();
+    for (let i = 0; i < this.derivations.length; i++) this.derivations[i]();
+  }
+
+  // ── GPU resources ─────────────────────────────────────────────────────────
 
   geom<T extends THREE.BufferGeometry>(geometry: T): T {
     this.geometries.add(geometry);
@@ -131,6 +596,10 @@ export class SceneAssets {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // Leaving `liveScenes` is this object's unsubscribe: a retired room is
+    // never re-derived, and holds nothing alive past its own disposal.
+    liveScenes.delete(this);
+    this.derivations.length = 0;
 
     // Sweep the graph as well as the ledger — nothing escapes.
     this.root.traverse((object) => {
@@ -259,6 +728,47 @@ interface ShaderOptions {
   side?: THREE.Side;
   depthWrite?: boolean;
   depthTest?: boolean;
+  /**
+   * Marks the material as light rather than surface, which decides how it
+   * survives a bright room:
+   *
+   *   "emit"  — a fitting the room can see: a light strip, a shaft, an aurora.
+   *             Additive in a dark room. Additive light cannot make a mark on
+   *             a pale wall, so in a light room it flips to normal blending and
+   *             the (now deep, saturated) colour recipes carry it instead.
+   *   "spark" — optional glitter: stars, motes, signage bokeh. Stays additive
+   *             and fades out as the room brightens, because a daylit sky has
+   *             no stars in it.
+   *
+   * Both are set here rather than by the caller passing `AdditiveBlending`, so
+   * the decision is recorded and can be revisited on a theme change.
+   */
+  light?: "emit" | "spark";
+}
+
+/** Where three's own tone-mapping chunk lands in a fragment shader. */
+const OUTPUT_ANCHOR = "#include <tonemapping_fragment>";
+
+/**
+ * Injects the shared grading uniforms and applies exposure just before tone
+ * mapping — the one physically correct place for it.
+ *
+ * Done here rather than inside `GLSL_OUTPUT` so that a shader written without
+ * `makeShader` (the panorama loading card) keeps compiling untouched.
+ *
+ * `uRoom*` is a reserved prefix: a scene shader must not declare a uniform by
+ * any of these names. Redeclaring one is a compile error that a desktop
+ * preview will not necessarily surface — `panorama.ts` already has a uniform
+ * called `uExposure` of its own, which is exactly why these are namespaced.
+ */
+function graded(fragmentShader: string, spark: boolean): string {
+  const grade = spark
+    ? "gl_FragColor.rgb *= uRoomExposure * uRoomSpark;"
+    : "gl_FragColor.rgb *= uRoomExposure;";
+  return `uniform float uRoomExposure, uRoomGlow, uRoomSpark;\n${fragmentShader.replace(
+    OUTPUT_ANCHOR,
+    `${grade}\n  ${OUTPUT_ANCHOR}`,
+  )}`;
 }
 
 /** A fade-aware `ShaderMaterial`. Every scene material goes through here. */
@@ -269,31 +779,50 @@ export function makeShader(
   fragmentShader: string,
   options: ShaderOptions = {},
 ): THREE.ShaderMaterial {
+  const light = options.light;
   const material = new THREE.ShaderMaterial({
-    uniforms: { uOpacity: { value: 1 }, ...uniforms },
+    uniforms: {
+      uOpacity: { value: 1 },
+      uRoomExposure,
+      uRoomGlow: assets.roomGlow,
+      uRoomSpark: assets.roomSpark,
+      ...uniforms,
+    },
     vertexShader,
-    fragmentShader,
+    fragmentShader: graded(fragmentShader, light === "spark"),
     transparent: true,
     depthWrite: options.depthWrite ?? true,
     depthTest: options.depthTest ?? true,
     side: options.side ?? THREE.FrontSide,
-    blending: options.blending ?? THREE.NormalBlending,
+    blending: light ? THREE.AdditiveBlending : options.blending ?? THREE.NormalBlending,
     fog: false,
   });
+  if (light === "emit") {
+    // Blending is renderer state, not shader code — three does not put it in
+    // the program cache key for a transparent material, so flipping it costs
+    // nothing and cannot cause a recompile hitch on the headset.
+    assets.themed(() => {
+      material.blending = roomLightness > 0.5 ? THREE.NormalBlending : THREE.AdditiveBlending;
+    });
+  }
   return assets.mat(material);
 }
 
-/** Attaches a per-instance float attribute. */
+/**
+ * Attaches a per-instance float attribute. A `Float32Array` is adopted rather
+ * than copied, so a caller that has to refill it on a theme change can keep
+ * writing into the same buffer instead of allocating a new one.
+ */
 function instanceAttr(
   geometry: THREE.BufferGeometry,
   name: string,
-  values: readonly number[],
+  values: Float32Array | readonly number[],
   itemSize = 1,
-): void {
-  geometry.setAttribute(
-    name,
-    new THREE.InstancedBufferAttribute(new Float32Array(values), itemSize),
-  );
+): THREE.InstancedBufferAttribute {
+  const array = values instanceof Float32Array ? values : new Float32Array(values);
+  const attribute = new THREE.InstancedBufferAttribute(array, itemSize);
+  geometry.setAttribute(name, attribute);
+  return attribute;
 }
 
 /**
@@ -320,25 +849,62 @@ function goldenSphere(index: number, count: number, target: THREE.Vector3): THRE
 // ── Lighting defaults ───────────────────────────────────────────────────────
 
 /**
- * A sane room lighting rig derived from the catalogue entry. Scenes start here
- * and override only what their art direction needs, so `ambient`, `key` and
- * `tint` in `environments.ts` always mean something.
+ * A sane room lighting rig derived from the catalogue entry, written into an
+ * existing `SceneLighting`.
+ *
+ * In place, and colour by colour, because a scene hands `lighting.fogColor`
+ * straight to a uniform: replacing the object on a theme change would strand
+ * the shader on the old colour. A `null` background is left null — that is
+ * passthrough's signal to the controller and is never a colour.
+ */
+export function applyDefaultLighting(
+  out: SceneLighting,
+  spec: EnvironmentSpec,
+  tint: THREE.Color,
+): SceneLighting {
+  out.keyDirection.set(0.42, 0.8, 0.44).normalize();
+  mixInto(out.keyColor, WHITE, tint, 0.2);
+  out.keyScale = 1;
+  mixInto(out.skyColor, tint, WHITE, 0.32);
+  mixInto(out.groundColor, INK, tint, 0.2);
+  out.ambientScale = 1;
+  mixInto(out.fogColor, INK, tint, 0.1);
+  out.fogDensity = spec.floor ? 0.05 : 0.012;
+  if (out.background) mixInto(out.background, INK, tint, 0.06);
+  // A shadow is the absence of light, so it runs to the palette's darkest
+  // neutral and never to `ink` — which on a light palette is nearly white, and
+  // would leave the board hovering over a pale smudge. How *heavy* it is on a
+  // given theme is the controller's business, via `scene.shadowAlpha`.
+  mixInto(out.shadowColor, DEEP, tint, 0.14);
+  out.shadowStrength = 0.55;
+  out.poolStrength = spec.floor ? 1 : 0;
+  return out;
+}
+
+/**
+ * A fresh lighting rig from the catalogue entry. Scenes start here and override
+ * only what their art direction needs, so `ambient`, `key` and `tint` in
+ * `environments.ts` always mean something.
  */
 export function defaultLighting(spec: EnvironmentSpec, tint: THREE.Color): SceneLighting {
-  return {
-    keyDirection: new THREE.Vector3(0.42, 0.8, 0.44).normalize(),
-    keyColor: mixColor(WHITE, tint, 0.2),
-    keyScale: 1,
-    skyColor: mixColor(tint, WHITE, 0.32),
-    groundColor: mixColor(INK, tint, 0.2),
-    ambientScale: 1,
-    fogColor: mixColor(INK, tint, 0.1),
-    fogDensity: spec.floor ? 0.05 : 0.012,
-    background: mixColor(INK, tint, 0.06),
-    shadowColor: mixColor(INK, tint, 0.14),
-    shadowStrength: 0.55,
-    poolStrength: spec.floor ? 1 : 0,
-  };
+  return applyDefaultLighting(
+    {
+      keyDirection: new THREE.Vector3(),
+      keyColor: new THREE.Color(),
+      keyScale: 1,
+      skyColor: new THREE.Color(),
+      groundColor: new THREE.Color(),
+      ambientScale: 1,
+      fogColor: new THREE.Color(),
+      fogDensity: 0,
+      background: new THREE.Color(),
+      shadowColor: new THREE.Color(),
+      shadowStrength: 0.55,
+      poolStrength: 0,
+    },
+    spec,
+    tint,
+  );
 }
 
 // ── Entry point ─────────────────────────────────────────────────────────────
@@ -358,6 +924,12 @@ export function createProceduralScene(ctx: SceneContext): EnvScene {
     default:
       return neonVault(ctx);
   }
+}
+
+/** The background colour of a scene that has one (i.e. is not passthrough). */
+function bg(lighting: SceneLighting): THREE.Color {
+  if (!lighting.background) lighting.background = new THREE.Color();
+  return lighting.background;
 }
 
 /** Shared plumbing: one uniform holding the scene clock, plus the fade hooks. */
@@ -393,24 +965,27 @@ const VAULT_LENGTH = 26;
 const VAULT_BAYS = 13;
 
 function neonVault(ctx: SceneContext): EnvScene {
-  const assets = new SceneAssets();
+  const assets = new SceneAssets(ctx.spec);
   assets.root.name = "env-neon-vault";
   const tint = ctx.tint;
   const uTime: THREE.IUniform = { value: 0 };
 
   const lighting = defaultLighting(ctx.spec, tint);
-  lighting.keyDirection.set(0.28, 0.9, 0.34).normalize();
-  lighting.keyColor = mixColor(WHITE, tint, 0.35);
-  lighting.skyColor = mixColor(tint, WHITE, 0.15);
-  lighting.groundColor = mixColor(INK, tint, 0.3);
-  // Fog and background are all but the same colour, so the open ends of the
-  // vault dissolve into the dark instead of reading as two lit portals.
-  lighting.fogColor = mixColor(INK, tint, 0.055);
-  lighting.fogDensity = 0.115;
-  lighting.background = mixColor(INK, tint, 0.045);
-  lighting.shadowStrength = 0.62;
-
   const fogColor = lighting.fogColor;
+  assets.themed(() => {
+    applyDefaultLighting(lighting, ctx.spec, tint);
+    lighting.keyDirection.set(0.28, 0.9, 0.34).normalize();
+    mixInto(lighting.keyColor, WHITE, tint, 0.35);
+    mixInto(lighting.skyColor, tint, WHITE, 0.15);
+    mixInto(lighting.groundColor, INK, tint, 0.3);
+    // Fog and background are all but the same colour, so the open ends of the
+    // vault dissolve into the room instead of reading as two lit portals. On a
+    // light palette that same rule turns them into aerial haze.
+    mixInto(lighting.fogColor, INK, tint, 0.055);
+    lighting.fogDensity = 0.115;
+    mixInto(bg(lighting), INK, tint, 0.045);
+    lighting.shadowStrength = 0.62;
+  });
   const stripY = VAULT_SPRING + 0.05;
   const stripX = VAULT_RADIUS - 0.22;
   /** The apex line. Looking down the vault this is the strongest read. */
@@ -425,7 +1000,7 @@ function neonVault(ctx: SceneContext): EnvScene {
     makeShader(
       assets,
       {
-        uBase: { value: mixColor(SURFACE, INK, 0.55) },
+        uBase: assets.uColor((c) => mixInto(c, SURFACE, INK, 0.55)),
         uTint: { value: tint },
         uFog: { value: fogColor },
         uFogDensity: { value: lighting.fogDensity },
@@ -469,8 +1044,12 @@ function neonVault(ctx: SceneContext): EnvScene {
         pulse *= pulse;
         float cove = exp(-length(vec2(abs(vW.x) - uStripX, vW.y - uStripY)) * 1.9);
         float crown = exp(-length(vec2(vW.x, vW.y - uCrownY)) * 1.5);
-        float bleed = cove + crown * 0.9;
-        col += uTint * bleed * (0.14 + 0.42 * pulse) * (0.45 + 0.55 * relief);
+        // Light bleeding out of the coves. On a pale vault it cannot brighten
+        // the plaster, so there it stains it instead — which is what actually
+        // happens when a coloured cove washes a white wall.
+        float bleed = (cove + crown * 0.9) * (0.14 + 0.42 * pulse) * (0.45 + 0.55 * relief);
+        col = mix(col, uTint, clamp(bleed, 0.0, 1.0) * 0.6 * (1.0 - uRoomGlow));
+        col += uTint * bleed * uRoomGlow;
 
         col = depthFade(col, vW, uFog, uFogDensity);
         gl_FragColor = vec4(col, uOpacity);
@@ -490,15 +1069,22 @@ function neonVault(ctx: SceneContext): EnvScene {
   );
   const ribMat = assets.mat(
     new THREE.MeshStandardMaterial({
-      color: mixColor(SURFACE_ALT, INK, 0.4),
       roughness: 0.66,
       metalness: 0.3,
-      // A trace of self-illumination so the arches catch the cove light rather
-      // than reading as black cut-outs against the glowing shell.
-      emissive: mixColor(INK, tint, 0.35),
       emissiveIntensity: 0.55,
     }),
   );
+  assets.themed(() => {
+    mixInto(ribMat.color, SURFACE_ALT, INK, 0.4);
+    // A trace of self-illumination so the arches catch the cove light rather
+    // than reading as black cut-outs against the glowing shell. A pale vault
+    // has no cut-outs to rescue, and the same emissive only fogs the arch.
+    mixInto(ribMat.emissive, INK, tint, 0.35);
+    // Emissive is the one term no light touches, so the brightness knob has to
+    // be applied by hand or the arches stay put while the vault around them
+    // moves — which reads as the ribs getting *brighter* as the room dims.
+    ribMat.emissiveIntensity = 0.55 * (1 - 0.7 * roomLightness) * roomExposure();
+  });
   const ribs = new THREE.InstancedMesh(ribGeo, ribMat, VAULT_BAYS + 1);
   ribs.frustumCulled = false;
   const m4 = new THREE.Matrix4();
@@ -527,7 +1113,7 @@ function neonVault(ctx: SceneContext): EnvScene {
       {
         uTime,
         uTint: { value: tint },
-        uHot: { value: mixColor(tint, WHITE, 0.72) },
+        uHot: assets.uColor((c) => coreInto(c, tint, 0.72)),
       },
       /* glsl */ `
       attribute float aPhase;
@@ -561,7 +1147,7 @@ function neonVault(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { blending: THREE.AdditiveBlending, depthWrite: false },
+      { light: "emit", depthWrite: false },
     ),
     stripCount,
   );
@@ -588,7 +1174,13 @@ function neonVault(ctx: SceneContext): EnvScene {
     hazeGeo,
     makeShader(
       assets,
-      { uTime, uTint: { value: mixColor(tint, WHITE, 0.12) }, uStrength: { value: 0.075 } },
+      {
+        uTime,
+        uTint: assets.uColor((c) => mixInto(c, tint, WHITE, 0.12)),
+        // A pale vault reads the same sheets as aerial haze, and needs more of
+        // them, not less — they are the only thing giving the depth away.
+        uStrength: assets.uScalar(() => 0.075 * (1 + 1.4 * roomLightness)),
+      },
       /* glsl */ `
       attribute float aSize;
       attribute float aPhase;
@@ -627,7 +1219,7 @@ function neonVault(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { blending: THREE.AdditiveBlending, depthWrite: false },
+      { light: "emit", depthWrite: false },
     ),
     hazeCount,
   );
@@ -650,7 +1242,7 @@ function neonVault(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uBase: { value: mixColor(INK, SURFACE, 0.6) },
+        uBase: assets.uColor((c) => mixInto(c, INK, SURFACE, 0.6)),
         uTint: { value: tint },
         uFog: { value: fogColor },
         uFogDensity: { value: lighting.fogDensity },
@@ -670,7 +1262,9 @@ function neonVault(ctx: SceneContext): EnvScene {
 
         vec2 g = abs(fract(p * 0.5) - 0.5) / max(fwidth(p * 0.5), 1e-4);
         float line = 1.0 - min(min(g.x, g.y), 1.0);
-        col += uTint * line * 0.045;
+        // A pale floor takes its joint lines as a darkening, not as a glow.
+        col *= 1.0 - line * 0.22 * (1.0 - uRoomGlow);
+        col += uTint * line * 0.045 * uRoomGlow;
 
         // The cove strips mirrored in the polish: a soft band at |x| = stripX,
         // pulsing in step with the real ones.
@@ -679,7 +1273,11 @@ function neonVault(ctx: SceneContext): EnvScene {
         float dx = abs(abs(p.x) - uStripX);
         float refl = exp(-dx * dx * 3.2);
         float ripple = 0.72 + 0.28 * vNoise2(vec2(p.x * 2.0, p.y * 0.5 - uTime * 0.05));
-        col += uTint * refl * ripple * (0.16 + 0.46 * pulse);
+        // Polished stone reflects what is above it. On a pale floor that is a
+        // wash of colour rather than a brightening, so the two are crossfaded.
+        float wash = refl * ripple * (0.16 + 0.46 * pulse);
+        col = mix(col, uTint, clamp(wash, 0.0, 1.0) * 0.55 * (1.0 - uRoomGlow));
+        col += uTint * wash * uRoomGlow;
 
         col = depthFade(col, vW, uFog, uFogDensity);
         float a = uOpacity * (1.0 - smoothstep(8.0, 12.5, length(p)));
@@ -712,7 +1310,7 @@ const PLANET_RADIUS = 128;
 const PLANET_CENTRE = new THREE.Vector3(0, -96, -206);
 
 function orbitalDeck(ctx: SceneContext): EnvScene {
-  const assets = new SceneAssets();
+  const assets = new SceneAssets(ctx.spec);
   assets.root.name = "env-orbital-deck";
   const tint = ctx.tint;
   const uTime: THREE.IUniform = { value: 0 };
@@ -726,19 +1324,27 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
   const sun = new THREE.Vector3(0.62, 0.3, -0.46).normalize();
 
   const lighting = defaultLighting(ctx.spec, tint);
-  lighting.keyDirection.copy(sun);
-  lighting.keyColor = mixColor(WHITE, REWARD, 0.08);
-  lighting.keyScale = 1;
-  lighting.skyColor = mixColor(tint, INK, 0.45);
-  // Bounce off the planet, so undersides pick up the world below.
-  lighting.groundColor = mixColor(tint, ICE, 0.35);
-  lighting.ambientScale = 1;
-  lighting.fogColor = INK.clone();
-  lighting.fogDensity = 0.004;
-  // Space is black. Anything else and the stars stop reading as stars.
-  lighting.background = mixColor(INK, PRIMARY, 0.015);
-  lighting.shadowColor = mixColor(INK, PRIMARY, 0.1);
-  lighting.shadowStrength = 0.7;
+  assets.themed(() => {
+    applyDefaultLighting(lighting, ctx.spec, tint);
+    lighting.keyDirection.copy(sun);
+    mixInto(lighting.keyColor, WHITE, REWARD, 0.08);
+    lighting.keyScale = 1;
+    mixInto(lighting.skyColor, tint, INK, 0.45);
+    // Bounce off the planet, so undersides pick up the world below.
+    mixInto(lighting.groundColor, tint, ICE, 0.35);
+    lighting.ambientScale = 1;
+    lighting.fogDensity = 0.004;
+
+    // Space is black, and anything else stops the stars reading as stars. A
+    // light palette does not want a black void behind a bright UI, so the same
+    // deck becomes a high-altitude one: the void opens into sky, the stars
+    // wash out with it and the sun becomes the thing you see.
+    mixInto(bg(lighting), INK, PRIMARY, 0.015);
+    mixInto(bg(lighting), bg(lighting), ICE, 0.22 * roomLightness);
+    lighting.fogColor.copy(bg(lighting));
+    mixInto(lighting.shadowColor, DEEP, PRIMARY, 0.1);
+    lighting.shadowStrength = 0.7;
+  });
 
   // ── Starfield with a deliberate galactic band.
   const starCount = 1500;
@@ -749,28 +1355,34 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
   const dir = new THREE.Vector3();
   const bandAxis = new THREE.Vector3(0.34, 0.79, -0.51).normalize();
   const starTone = new THREE.Color();
-  const rand = mulberry32(0x5eed01);
-  for (let i = 0; i < starCount; i++) {
-    goldenSphere(i, starCount, dir);
-    starPos[i * 3] = dir.x * starShell;
-    starPos[i * 3 + 1] = dir.y * starShell;
-    starPos[i * 3 + 2] = dir.z * starShell;
-    const band = Math.exp(-Math.pow(dir.dot(bandAxis), 2) * 15);
-    const r = rand();
-    const bright = 0.28 + band * 0.55 + r * r * 0.5;
-    starTone.copy(ICE).lerp(WHITE, rand());
-    if (rand() > 0.93) starTone.lerp(REWARD, 0.55);
-    starColor[i * 3] = starTone.r * bright;
-    starColor[i * 3 + 1] = starTone.g * bright;
-    starColor[i * 3 + 2] = starTone.b * bright;
-    starScale[i] = 0.55 + band * 0.5 + Math.pow(rand(), 9) * 2.2;
-    starPhase[i] = rand() * 6.2831853;
-  }
   const starGeo = assets.geom(new THREE.BufferGeometry());
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
   starGeo.setAttribute("aColor", new THREE.BufferAttribute(starColor, 3));
   starGeo.setAttribute("aScale", new THREE.BufferAttribute(starScale, 1));
   starGeo.setAttribute("aPhase", new THREE.BufferAttribute(starPhase, 1));
+  // The field is baked into attributes, which makes it derived state like any
+  // other. Re-seeding the same generator refills the same buffer with the new
+  // palette's stars — no reallocation, so the swap costs no VRAM.
+  assets.themed(() => {
+    const rand = mulberry32(0x5eed01);
+    for (let i = 0; i < starCount; i++) {
+      goldenSphere(i, starCount, dir);
+      starPos[i * 3] = dir.x * starShell;
+      starPos[i * 3 + 1] = dir.y * starShell;
+      starPos[i * 3 + 2] = dir.z * starShell;
+      const band = Math.exp(-Math.pow(dir.dot(bandAxis), 2) * 15);
+      const r = rand();
+      const bright = 0.28 + band * 0.55 + r * r * 0.5;
+      mixInto(starTone, ICE, WHITE, rand());
+      if (rand() > 0.93) mixInto(starTone, starTone, REWARD, 0.55);
+      starColor[i * 3] = starTone.r * bright;
+      starColor[i * 3 + 1] = starTone.g * bright;
+      starColor[i * 3 + 2] = starTone.b * bright;
+      starScale[i] = 0.55 + band * 0.5 + Math.pow(rand(), 9) * 2.2;
+      starPhase[i] = rand() * 6.2831853;
+    }
+    starGeo.attributes.aColor.needsUpdate = true;
+  });
   const pixel = Math.min(2, Math.max(1, ctx.renderer.getPixelRatio()));
   const stars = new THREE.Points(
     starGeo,
@@ -803,7 +1415,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { blending: THREE.AdditiveBlending, depthWrite: false },
+      { light: "spark", depthWrite: false },
     ),
   );
   stars.frustumCulled = false;
@@ -821,13 +1433,17 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
       {
         uTime,
         uSun: { value: sun },
-        uOcean: { value: mixColor(PRIMARY, INK, 0.62) },
-        uShallow: { value: mixColor(PRIMARY, ACCENT, 0.45) },
-        uLand: { value: mixColor(SURFACE_ALT, ACCENT, 0.22) },
-        uIce: { value: mixColor(PAPER, ICE, 0.25) },
-        uCity: { value: REWARD },
-        uAtmo: { value: mixColor(tint, ICE, 0.4) },
-        uTerm: { value: mixColor(REWARD, tint, 0.35) },
+        // A planet is an object in the sky, not a surface of the room: it keeps
+        // its own deep oceans whichever way the UI goes, so every darkening
+        // here runs towards the palette's darkest neutral rather than towards
+        // `ink` — which on a light palette is very nearly white.
+        uOcean: assets.uColor((c) => mixInto(c, PRIMARY, DEEP, 0.62)),
+        uShallow: assets.uColor((c) => mixInto(c, PRIMARY, ACCENT, 0.45)),
+        uLand: assets.uColor((c) => mixInto(c, SURFACE_ALT, ACCENT, 0.22)),
+        uIce: assets.uColor((c) => mixInto(c, PAPER, ICE, 0.25)),
+        uCity: assets.uColor((c) => c.copy(REWARD)),
+        uAtmo: assets.uColor((c) => mixInto(c, tint, ICE, 0.4)),
+        uTerm: assets.uColor((c) => mixInto(c, REWARD, tint, 0.35)),
       },
       /* glsl */ `
       varying vec3 vNormalW;
@@ -866,15 +1482,18 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
         float lit = smoothstep(-0.13, 0.30, ndl);
         float term = exp(-abs(ndl) * 8.0);
 
-        vec3 col = surface * (0.035 + 1.10 * lit);
+        // Night side. Against a black sky it is black; against a daylit one it
+        // has to keep some body, or the planet reads as a hole in the sky.
+        float dark = 0.035 + 0.16 * (1.0 - uRoomGlow);
+        vec3 col = surface * (dark + 1.10 * lit);
         col = mix(col, uIce * (0.08 + 1.0 * lit), cloud * 0.72);
-        col += uTerm * term * 0.30 * (1.0 - cloud * 0.55);
+        col += uTerm * term * 0.30 * (1.0 - cloud * 0.55) * uRoomGlow;
 
         // City glow, night side only. The branch is coherent across the disc.
         float night = 1.0 - smoothstep(-0.03, 0.14, ndl);
         if (night > 0.01) {
           float sparks = smoothstep(0.855, 0.995, vNoise3(p * 46.0));
-          col += uCity * sparks * land * (1.0 - cloud) * night * 0.5;
+          col += uCity * sparks * land * (1.0 - cloud) * night * 0.5 * uRoomGlow;
         }
 
         vec3 viewDir = normalize(cameraPosition - vW);
@@ -895,7 +1514,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
     assets.geom(new THREE.SphereGeometry(planetRadius * 1.055, 48, 32)),
     makeShader(
       assets,
-      { uSun: { value: sun }, uAtmo: { value: mixColor(tint, ICE, 0.5) } },
+      { uSun: { value: sun }, uAtmo: assets.uColor((c) => mixInto(c, tint, ICE, 0.5)) },
       /* glsl */ `
       varying vec3 vNormalW;
       varying vec3 vW;
@@ -919,7 +1538,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false },
+      { side: THREE.BackSide, light: "emit", depthWrite: false },
     ),
   );
   halo.position.copy(planet.position);
@@ -932,8 +1551,8 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
       assets,
       {
         uSize: { value: 12 * reach },
-        uCore: { value: WHITE },
-        uHalo: { value: mixColor(REWARD, WHITE, 0.5) },
+        uCore: assets.uColor((c) => c.copy(WHITE)),
+        uHalo: assets.uColor((c) => mixInto(c, REWARD, WHITE, 0.5)),
       },
       /* glsl */ `
       uniform float uSize;
@@ -958,7 +1577,7 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false },
+      { light: "emit", depthWrite: false, depthTest: false },
     ),
   );
   sunDisc.position.copy(sun).multiplyScalar(290 * reach);
@@ -973,10 +1592,10 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uBase: { value: mixColor(SURFACE, INK, 0.35) },
+        uBase: assets.uColor((c) => mixInto(c, SURFACE, INK, 0.35)),
         uTint: { value: tint },
         uSun: { value: sun },
-        uEdge: { value: mixColor(tint, WHITE, 0.35) },
+        uEdge: assets.uColor((c) => coreInto(c, tint, 0.35)),
       },
       VERT_WORLD,
       /* glsl */ `
@@ -1011,12 +1630,16 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
         // Hard sun grazing the plate.
         vec3 lateral = normalize(vec3(p.x, 0.0, p.y) + 1e-5);
         float graze = pow(max(dot(lateral, normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0), 8.0);
-        col += uEdge * graze * (0.022 + brush * 0.22);
+        col += uEdge * graze * (0.022 + brush * 0.22) * uRoomGlow;
 
-        // Glowing rim and a soft pool of deck light under the board.
+        // Glowing rim and a soft pool of deck light under the board. A pale
+        // plate cannot be brightened at its edge, so there the same rim is laid
+        // in as colour instead and the two crossfade on uRoomGlow.
         float rim = exp(-abs(r - ${(DECK_RADIUS - 0.14).toFixed(2)}) * 18.0);
-        col += uEdge * rim * (0.60 + 0.22 * sin(uTime * 0.4));
-        col += uTint * exp(-r * r * 0.10) * 0.028;
+        float pool = exp(-r * r * 0.10) * 0.028;
+        col = mix(col, uEdge, clamp(rim, 0.0, 1.0) * 0.8 * (1.0 - uRoomGlow));
+        col += uEdge * rim * (0.60 + 0.22 * sin(uTime * 0.4)) * uRoomGlow;
+        col += uTint * pool * uRoomGlow;
 
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
@@ -1031,7 +1654,10 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
     assets.geom(new THREE.CylinderGeometry(DECK_RADIUS, DECK_RADIUS * 0.94, 0.45, 72, 1, true)),
     makeShader(
       assets,
-      { uBase: { value: mixColor(SURFACE, INK, 0.6) }, uEdge: { value: mixColor(tint, WHITE, 0.3) } },
+      {
+        uBase: assets.uColor((c) => mixInto(c, SURFACE, INK, 0.6)),
+        uEdge: assets.uColor((c) => coreInto(c, tint, 0.3)),
+      },
       VERT_WORLD,
       /* glsl */ `
       uniform vec3 uBase, uEdge;
@@ -1041,7 +1667,8 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
       void main() {
         float band = 1.0 - smoothstep(0.0, 0.10, abs(vUv.y - 0.86));
         vec3 col = uBase * (0.30 + 0.55 * vUv.y);
-        col += uEdge * band * 0.35;
+        col = mix(col, uEdge, band * 0.7 * (1.0 - uRoomGlow));
+        col += uEdge * band * 0.35 * uRoomGlow;
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
       }
@@ -1053,12 +1680,14 @@ function orbitalDeck(ctx: SceneContext): EnvScene {
 
   // ── Railing: posts instanced, handrail a single torus.
   const railMat = assets.mat(
-    new THREE.MeshStandardMaterial({
-      color: mixColor(SURFACE_ALT, PAPER, 0.18),
-      roughness: 0.3,
-      metalness: 0.85,
-    }),
+    new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.85 }),
   );
+  assets.themed(() => {
+    mixInto(railMat.color, SURFACE_ALT, PAPER, 0.18);
+    // Polished metal against a bright sky wants to be darker than the sky, or
+    // the railing vanishes and the deck loses its edge.
+    mixInto(railMat.color, railMat.color, DEEP, 0.42 * roomLightness);
+  });
   const postGeo = assets.geom(new THREE.CylinderGeometry(0.022, 0.022, 1.04, 6));
   const posts = new THREE.InstancedMesh(postGeo, railMat, 28);
   posts.frustumCulled = false;
@@ -1101,7 +1730,7 @@ const LAB_SHAFTS: readonly (readonly [number, number])[] = [
 ];
 
 function quantumLab(ctx: SceneContext): EnvScene {
-  const assets = new SceneAssets();
+  const assets = new SceneAssets(ctx.spec);
   assets.root.name = "env-quantum-lab";
   const tint = ctx.tint;
   const uTime: THREE.IUniform = { value: 0 };
@@ -1109,17 +1738,21 @@ function quantumLab(ctx: SceneContext): EnvScene {
   // Bright, but a stop or two below paper white: shafts of light only read
   // against something they can be brighter than, and a full-white room in a
   // headset is fatiguing after two minutes.
-  const paper = mixColor(INK, PAPER, 0.4);
+  const paper = new THREE.Color();
   const lighting = defaultLighting(ctx.spec, tint);
-  lighting.keyDirection.set(0.2, 0.94, 0.28).normalize();
-  lighting.keyColor = mixColor(WHITE, tint, 0.1);
-  lighting.skyColor = mixColor(PAPER, tint, 0.22);
-  lighting.groundColor = mixColor(PAPER, tint, 0.1);
-  lighting.fogColor = mixColor(paper, tint, 0.16);
-  lighting.fogDensity = 0.055;
-  lighting.background = mixColor(paper, tint, 0.12);
-  lighting.shadowColor = mixColor(INK, tint, 0.3);
-  lighting.shadowStrength = 0.34;
+  assets.themed(() => {
+    mixInto(paper, INK, PAPER, 0.4);
+    applyDefaultLighting(lighting, ctx.spec, tint);
+    lighting.keyDirection.set(0.2, 0.94, 0.28).normalize();
+    mixInto(lighting.keyColor, WHITE, tint, 0.1);
+    mixInto(lighting.skyColor, PAPER, tint, 0.22);
+    mixInto(lighting.groundColor, PAPER, tint, 0.1);
+    mixInto(lighting.fogColor, paper, tint, 0.16);
+    lighting.fogDensity = 0.055;
+    mixInto(bg(lighting), paper, tint, 0.12);
+    mixInto(lighting.shadowColor, DEEP, tint, 0.3);
+    lighting.shadowStrength = 0.34;
+  });
 
   const shaftUniform = LAB_SHAFTS.map(([x, z]) => new THREE.Vector2(x, z));
 
@@ -1131,10 +1764,16 @@ function quantumLab(ctx: SceneContext): EnvScene {
       {
         // The volume sits below the floor in value. Shafts of light can only
         // read against something they are brighter than.
-        uHorizon: { value: mixColor(paper, tint, 0.16) },
-        uZenith: { value: mixColor(paper, PAPER, 0.22) },
-        uPanel: { value: mixColor(PAPER, WHITE, 0.5) },
-        uSeam: { value: mixColor(paper, INK, 0.5) },
+        uHorizon: assets.uColor((c) => mixInto(c, paper, tint, 0.16)),
+        uZenith: assets.uColor((c) => mixInto(c, paper, PAPER, 0.22)),
+        uPanel: assets.uColor((c) => mixInto(c, PAPER, WHITE, 0.5)),
+        // Panel seams are the ceiling's only structure. On a pale palette
+        // `ink` is nearly white, so the seam has to be taken further down or
+        // the lattice disappears and the ceiling reads as one flat sheet.
+        uSeam: assets.uColor((c) => {
+          mixInto(c, paper, INK, 0.5);
+          mixInto(c, c, DEEP, 0.4 * roomLightness);
+        }),
       },
       VERT_DOME,
       /* glsl */ `
@@ -1173,7 +1812,7 @@ function quantumLab(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uBase: { value: mixColor(paper, PAPER, 0.42) },
+        uBase: assets.uColor((c) => mixInto(c, paper, PAPER, 0.42)),
         uTint: { value: tint },
         uFog: { value: lighting.fogColor },
         uFogDensity: { value: lighting.fogDensity },
@@ -1199,11 +1838,14 @@ function quantumLab(ctx: SceneContext): EnvScene {
         float bold = 1.0 - min(min(G.x, G.y), 1.0);
         col *= 1.0 - fine * 0.10 - bold * 0.16;
 
-        // Where the shafts land.
+        // Where the shafts land. A white floor cannot be made whiter, so the
+        // pool is laid in as colour there and as light in a dark room.
         for (int i = 0; i < ${LAB_SHAFTS.length}; i++) {
           float d = length(p - uShafts[i]);
           float breathe = 0.85 + 0.15 * sin(uTime * 0.33 + float(i) * 1.7);
-          col += uTint * exp(-d * d * 0.30) * 0.16 * breathe;
+          float pool = exp(-d * d * 0.30) * breathe;
+          col = mix(col, uTint, clamp(pool, 0.0, 1.0) * 0.30 * (1.0 - uRoomGlow));
+          col += uTint * pool * 0.16 * uRoomGlow;
         }
 
         col *= mix(0.62, 1.0, 1.0 - smoothstep(2.0, 20.0, r));
@@ -1225,7 +1867,14 @@ function quantumLab(ctx: SceneContext): EnvScene {
     shaftGeo,
     makeShader(
       assets,
-      { uTime, uTint: { value: mixColor(WHITE, tint, 0.22) }, uStrength: { value: 0.5 } },
+      {
+        uTime,
+        // A shaft in a white room has to be read as colour rather than as
+        // brightness, so it carries more of the tint the paler the room gets —
+        // but only a little more, or five of them curdle the whole lab.
+        uTint: assets.uColor((c) => mixInto(c, WHITE, tint, 0.22 + 0.2 * roomLightness)),
+        uStrength: assets.uScalar(() => 0.5 * (1 - 0.5 * roomLightness)),
+      },
       /* glsl */ `
       attribute float aPhase;
       varying vec2 vUv;
@@ -1266,7 +1915,7 @@ function quantumLab(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false },
+      { side: THREE.DoubleSide, light: "emit", depthWrite: false },
     ),
     LAB_SHAFTS.length,
   );
@@ -1298,7 +1947,12 @@ function quantumLab(ctx: SceneContext): EnvScene {
     assets,
     {
       uTime,
-      uBase: { value: mixColor(PAPER, WHITE, 0.5) },
+      // White solids in a white room are invisible. Take the body down as the
+      // room comes up, so the arc still reads as a row of objects.
+      uBase: assets.uColor((c) => {
+        mixInto(c, PAPER, WHITE, 0.5);
+        mixInto(c, c, SURFACE_ALT, 0.55 * roomLightness);
+      }),
       uTint: { value: tint },
       uKey: { value: lighting.keyDirection },
     },
@@ -1334,7 +1988,8 @@ function quantumLab(ctx: SceneContext): EnvScene {
         vec3 viewDir = normalize(cameraPosition - vW);
         float fres = pow(1.0 - clamp(dot(viewDir, vNormalW), 0.0, 1.0), 2.4);
         vec3 col = uBase * (0.42 + 0.58 * ndl);
-        col += uTint * fres * 0.65;
+        col = mix(col, uTint, clamp(fres, 0.0, 1.0) * 0.55 * (1.0 - uRoomGlow));
+        col += uTint * fres * 0.65 * uRoomGlow;
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
       }
@@ -1372,7 +2027,7 @@ function quantumLab(ctx: SceneContext): EnvScene {
   // dark line is what reads.
   const ringMat = makeShader(
     assets,
-    { uTime, uTint: { value: mixColor(tint, INK, 0.35) } },
+    { uTime, uTint: assets.uColor((c) => mixInto(c, tint, DEEP, 0.35)) },
     /* glsl */ `
       ${GLSL_NOISE}
       attribute float aPhase;
@@ -1421,17 +2076,14 @@ function quantumLab(ctx: SceneContext): EnvScene {
   const frameSource = new THREE.BoxGeometry(1.25, 1.25, 1.25);
   const frameGeo = assets.geom(new THREE.EdgesGeometry(frameSource));
   frameSource.dispose();
-  const frame = new THREE.LineSegments(
-    frameGeo,
-    assets.mat(
-      new THREE.LineBasicMaterial({
-        color: mixColor(tint, INK, 0.15),
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false,
-      }),
-    ),
+  const frameMat = assets.mat(
+    new THREE.LineBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false }),
   );
+  // Unlit, so the brightness knob has to be folded into the colour itself.
+  assets.themed(() => {
+    mixInto(frameMat.color, tint, DEEP, 0.15).multiplyScalar(roomExposure());
+  });
+  const frame = new THREE.LineSegments(frameGeo, frameMat);
   // Off the centre line, so it frames the board rather than sitting on it.
   frame.position.set(-2.6, 2.05, -1.9);
   assets.add(frame);
@@ -1454,21 +2106,27 @@ function quantumLab(ctx: SceneContext): EnvScene {
 const GLASS_RADIUS = 6.6;
 
 function cyberAtrium(ctx: SceneContext): EnvScene {
-  const assets = new SceneAssets();
+  const assets = new SceneAssets(ctx.spec);
   assets.root.name = "env-cyber-atrium";
   const tint = ctx.tint;
   const uTime: THREE.IUniform = { value: 0 };
 
   const lighting = defaultLighting(ctx.spec, tint);
-  lighting.keyDirection.set(-0.42, 0.72, 0.55).normalize();
-  lighting.keyColor = mixColor(WHITE, tint, 0.42);
-  lighting.skyColor = mixColor(tint, PRIMARY, 0.35);
-  lighting.groundColor = mixColor(INK, VIOLET, 0.28);
-  lighting.fogColor = mixColor(INK, VIOLET, 0.14);
-  lighting.fogDensity = 0.055;
-  lighting.background = mixColor(INK, VIOLET, 0.05);
-  lighting.shadowColor = mixColor(INK, VIOLET, 0.2);
-  lighting.shadowStrength = 0.6;
+  assets.themed(() => {
+    applyDefaultLighting(lighting, ctx.spec, tint);
+    lighting.keyDirection.set(-0.42, 0.72, 0.55).normalize();
+    mixInto(lighting.keyColor, WHITE, tint, 0.42);
+    mixInto(lighting.skyColor, tint, PRIMARY, 0.35);
+    mixInto(lighting.groundColor, INK, VIOLET, 0.28);
+    // On a light palette the same recipe turns the night city into an overcast
+    // daytime one: a pale violet sky, towers reading dark against it, and the
+    // rain on the glass carried by contrast rather than by neon.
+    mixInto(lighting.fogColor, INK, VIOLET, 0.14);
+    lighting.fogDensity = 0.055;
+    mixInto(bg(lighting), INK, VIOLET, 0.05);
+    mixInto(lighting.shadowColor, DEEP, VIOLET, 0.2);
+    lighting.shadowStrength = 0.6;
+  });
 
   // A curated sign palette: four brand colours plus the room tint. Signage in
   // a city is not random, and neither is this.
@@ -1481,11 +2139,16 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uSky: { value: mixColor(INK, VIOLET, 0.07) },
-        uHaze: { value: mixColor(INK, tint, 0.16) },
-        uBlock: { value: mixColor(INK, SURFACE, 0.5) },
-        uWindow: { value: mixColor(REWARD, WHITE, 0.15) },
-        uWindowAlt: { value: mixColor(tint, WHITE, 0.2) },
+        uSky: assets.uColor((c) => mixInto(c, INK, VIOLET, 0.07)),
+        uHaze: assets.uColor((c) => mixInto(c, INK, tint, 0.16)),
+        // Towers read against the sky by being darker than it, whichever sky
+        // the palette hands them.
+        uBlock: assets.uColor((c) => {
+          mixInto(c, INK, SURFACE, 0.5);
+          mixInto(c, c, DEEP, 0.45 * roomLightness);
+        }),
+        uWindow: assets.uColor((c) => mixInto(c, REWARD, WHITE, 0.15)),
+        uWindowAlt: assets.uColor((c) => mixInto(c, tint, WHITE, 0.2)),
       },
       VERT_WORLD,
       /* glsl */ `
@@ -1520,7 +2183,8 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
           float lit = step(0.88, vHash12(wc));
           float flicker = step(0.988, vHash12(wc + floor(uTime * 2.0)));
           vec3 windowColor = mix(uWindow, uWindowAlt, step(0.55, vHash12(wc + 3.7)));
-          block += windowColor * lit * (0.11 + 0.24 * flicker) * mix(0.5, 1.0, f);
+          // A city in daylight does not have its lights on.
+          block += windowColor * lit * (0.11 + 0.24 * flicker) * mix(0.5, 1.0, f) * uRoomGlow;
 
           col = mix(col, block, mask);
         }
@@ -1544,27 +2208,30 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
   const bokehCol = new Float32Array(bokehCount * 3);
   const bokehScale = new Float32Array(bokehCount);
   const bokehPhase = new Float32Array(bokehCount);
-  const rand = mulberry32(0xc0ffee);
   const bokehTone = new THREE.Color();
-  for (let i = 0; i < bokehCount; i++) {
-    const a = rand() * Math.PI * 2;
-    const radius = 11 + rand() * 11;
-    bokehPos[i * 3] = Math.cos(a) * radius;
-    bokehPos[i * 3 + 1] = -3.5 + Math.pow(rand(), 1.35) * 16;
-    bokehPos[i * 3 + 2] = Math.sin(a) * radius;
-    bokehTone.copy(signColors[i % signColors.length]).lerp(WHITE, 0.1 + rand() * 0.25);
-    const gain = 0.35 + rand() * 0.65;
-    bokehCol[i * 3] = bokehTone.r * gain;
-    bokehCol[i * 3 + 1] = bokehTone.g * gain;
-    bokehCol[i * 3 + 2] = bokehTone.b * gain;
-    bokehScale[i] = 0.4 + Math.pow(rand(), 2.6) * 1.9;
-    bokehPhase[i] = rand() * 6.2831853;
-  }
   const bokehGeo = assets.geom(new THREE.BufferGeometry());
   bokehGeo.setAttribute("position", new THREE.BufferAttribute(bokehPos, 3));
   bokehGeo.setAttribute("aColor", new THREE.BufferAttribute(bokehCol, 3));
   bokehGeo.setAttribute("aScale", new THREE.BufferAttribute(bokehScale, 1));
   bokehGeo.setAttribute("aPhase", new THREE.BufferAttribute(bokehPhase, 1));
+  assets.themed(() => {
+    const rand = mulberry32(0xc0ffee);
+    for (let i = 0; i < bokehCount; i++) {
+      const a = rand() * Math.PI * 2;
+      const radius = 11 + rand() * 11;
+      bokehPos[i * 3] = Math.cos(a) * radius;
+      bokehPos[i * 3 + 1] = -3.5 + Math.pow(rand(), 1.35) * 16;
+      bokehPos[i * 3 + 2] = Math.sin(a) * radius;
+      mixInto(bokehTone, signColors[i % signColors.length], WHITE, 0.1 + rand() * 0.25);
+      const gain = 0.35 + rand() * 0.65;
+      bokehCol[i * 3] = bokehTone.r * gain;
+      bokehCol[i * 3 + 1] = bokehTone.g * gain;
+      bokehCol[i * 3 + 2] = bokehTone.b * gain;
+      bokehScale[i] = 0.4 + Math.pow(rand(), 2.6) * 1.9;
+      bokehPhase[i] = rand() * 6.2831853;
+    }
+    bokehGeo.attributes.aColor.needsUpdate = true;
+  });
   const pixel = Math.min(2, Math.max(1, ctx.renderer.getPixelRatio()));
   const bokeh = new THREE.Points(
     bokehGeo,
@@ -1603,7 +2270,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { blending: THREE.AdditiveBlending, depthWrite: false },
+      { light: "spark", depthWrite: false },
     ),
   );
   bokeh.frustumCulled = false;
@@ -1611,12 +2278,13 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
 
   // ── Structure: columns framing the atrium, and a dark roof.
   const columnMat = assets.mat(
-    new THREE.MeshStandardMaterial({
-      color: mixColor(SURFACE, INK, 0.55),
-      roughness: 0.55,
-      metalness: 0.5,
-    }),
+    new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.5 }),
   );
+  assets.themed(() => {
+    mixInto(columnMat.color, SURFACE, INK, 0.55);
+    // Structure has to sit darker than the sky behind it, whichever the sky is.
+    mixInto(columnMat.color, columnMat.color, DEEP, 0.5 * roomLightness);
+  });
   const columnGeo = assets.geom(new THREE.CylinderGeometry(0.15, 0.19, 13, 8));
   const columns = new THREE.InstancedMesh(columnGeo, columnMat, 10);
   columns.frustumCulled = false;
@@ -1635,7 +2303,13 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
     assets.geom(new THREE.CircleGeometry(GLASS_RADIUS + 0.6, 48)),
     makeShader(
       assets,
-      { uBase: { value: mixColor(INK, SURFACE, 0.3) }, uTint: { value: tint } },
+      {
+        uBase: assets.uColor((c) => {
+          mixInto(c, INK, SURFACE, 0.3);
+          mixInto(c, c, DEEP, 0.45 * roomLightness);
+        }),
+        uTint: { value: tint },
+      },
       VERT_WORLD,
       /* glsl */ `
       uniform vec3 uBase, uTint;
@@ -1649,7 +2323,7 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
         float ribs = abs(fract(ang / 6.2831853 * 20.0) - 0.5) * 2.0;
         float rib = 1.0 - smoothstep(0.55, 0.95, ribs);
         vec3 col = uBase * (0.35 + 0.45 * rib);
-        col += uTint * exp(-r * 0.6) * 0.12;
+        col += uTint * exp(-r * 0.6) * 0.12 * uRoomGlow;
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
       }
@@ -1668,10 +2342,12 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uBase: { value: mixColor(INK, SURFACE, 0.35) },
+        uBase: assets.uColor((c) => mixInto(c, INK, SURFACE, 0.35)),
         uTint: { value: tint },
         uFog: { value: lighting.fogColor },
         uFogDensity: { value: lighting.fogDensity },
+        // Live palette colours, shared by reference — `refreshPalette` mutates
+        // them in place, so the wet floor follows a re-skin with no rebuild.
         uSignA: { value: PRIMARY },
         uSignB: { value: REWARD },
         uSignC: { value: VIOLET },
@@ -1705,10 +2381,14 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
                     * (1.0 - smoothstep(${(GLASS_RADIUS - 0.7).toFixed(2)}, ${(GLASS_RADIUS + 0.5).toFixed(2)}, r));
         float ripple = 0.45 + 0.55 * vNoise2(vec2(a01 * 120.0, r * 2.4 - uTime * 0.16));
         float strength = pow(vHash12(vec2(li, 6.0)), 3.0);
-        col += signCol * band * reach * ripple * strength * 0.10;
+        // Wet stone in daylight still smears the colour above it, but as a
+        // stain in the surface rather than as light lying on top of it.
+        float smear = band * reach * ripple * strength;
+        col = mix(col, signCol, clamp(smear, 0.0, 1.0) * 0.5 * (1.0 - uRoomGlow));
+        col += signCol * smear * 0.10 * uRoomGlow;
 
         // A cool sheen so the stone still reads as stone.
-        col += uTint * exp(-r * 0.5) * 0.04;
+        col += uTint * exp(-r * 0.5) * 0.04 * uRoomGlow;
         col = depthFade(col, vW, uFog, uFogDensity);
         gl_FragColor = vec4(col, uOpacity * (1.0 - smoothstep(${(GLASS_RADIUS - 0.7).toFixed(
           2,
@@ -1728,9 +2408,14 @@ function cyberAtrium(ctx: SceneContext): EnvScene {
       assets,
       {
         uTime,
-        uTint: { value: mixColor(tint, WHITE, 0.15) },
-        uHot: { value: mixColor(WHITE, tint, 0.25) },
-        uMullion: { value: mixColor(INK, SURFACE_ALT, 0.5) },
+        uTint: assets.uColor((c) => mixInto(c, tint, WHITE, 0.15)),
+        uHot: assets.uColor((c) => coreInto(c, tint, 0.75)),
+        // The mullions are the only opaque thing on the curtain wall: they have
+        // to stay darker than the sky they are silhouetted against.
+        uMullion: assets.uColor((c) => {
+          mixInto(c, INK, SURFACE_ALT, 0.5);
+          mixInto(c, c, DEEP, 0.55 * roomLightness);
+        }),
       },
       VERT_WORLD,
       /* glsl */ `
@@ -1819,22 +2504,25 @@ const AURORA_RIBBONS: readonly (readonly [
 ];
 
 function auroraVoid(ctx: SceneContext): EnvScene {
-  const assets = new SceneAssets();
+  const assets = new SceneAssets(ctx.spec);
   assets.root.name = "env-aurora-void";
   const tint = ctx.tint;
   const uTime: THREE.IUniform = { value: 0 };
 
   const lighting = defaultLighting(ctx.spec, tint);
-  lighting.keyDirection.set(-0.3, 0.86, 0.42).normalize();
-  lighting.keyColor = mixColor(WHITE, tint, 0.3);
-  lighting.skyColor = mixColor(tint, ACCENT, 0.4);
-  lighting.groundColor = mixColor(INK, VIOLET, 0.4);
-  lighting.fogColor = mixColor(INK, VIOLET, 0.08);
-  lighting.fogDensity = 0.01;
-  lighting.background = mixColor(INK, VIOLET, 0.05);
-  lighting.shadowColor = mixColor(INK, VIOLET, 0.25);
-  lighting.shadowStrength = 0.4;
-  lighting.poolStrength = 0;
+  assets.themed(() => {
+    applyDefaultLighting(lighting, ctx.spec, tint);
+    lighting.keyDirection.set(-0.3, 0.86, 0.42).normalize();
+    mixInto(lighting.keyColor, WHITE, tint, 0.3);
+    mixInto(lighting.skyColor, tint, ACCENT, 0.4);
+    mixInto(lighting.groundColor, INK, VIOLET, 0.4);
+    mixInto(lighting.fogColor, INK, VIOLET, 0.08);
+    lighting.fogDensity = 0.01;
+    mixInto(bg(lighting), INK, VIOLET, 0.05);
+    mixInto(lighting.shadowColor, DEEP, VIOLET, 0.25);
+    lighting.shadowStrength = 0.4;
+    lighting.poolStrength = 0;
+  });
 
   const reach = fitDistance(ctx.camera, 72) / 72;
 
@@ -1844,9 +2532,9 @@ function auroraVoid(ctx: SceneContext): EnvScene {
     makeShader(
       assets,
       {
-        uLow: { value: mixColor(INK, VIOLET, 0.13) },
-        uHigh: { value: mixColor(INK, PRIMARY, 0.1) },
-        uStar: { value: mixColor(WHITE, ICE, 0.3) },
+        uLow: assets.uColor((c) => mixInto(c, INK, VIOLET, 0.13)),
+        uHigh: assets.uColor((c) => mixInto(c, INK, PRIMARY, 0.1)),
+        uStar: assets.uColor((c) => mixInto(c, WHITE, ICE, 0.3)),
       },
       VERT_DOME,
       /* glsl */ `
@@ -1860,7 +2548,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
         vec3 col = mix(uLow, uHigh, pow(h, 1.25));
         col *= 0.85 + 0.30 * vNoise3(vDir * 2.4);
         float dust = smoothstep(0.972, 1.0, vNoise3(vDir * 190.0));
-        col += uStar * dust * 0.5;
+        col += uStar * dust * 0.5 * uRoomSpark;
         gl_FragColor = vec4(col, uOpacity);
         ${GLSL_OUTPUT}
       }
@@ -1876,7 +2564,15 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const ribbonGeo = assets.geom(new THREE.PlaneGeometry(1, 1, 56, 22));
   const ribbonMat = makeShader(
     assets,
-    { uTime, uStrength: { value: 0.3 } },
+    {
+      uTime,
+      // Normal-blended over a pale sky the curtains are coverage rather than
+      // light, so they need a touch more of it to hold the same presence.
+      uStrength: assets.uScalar(() => 0.3 * (1 + 0.5 * roomLightness)),
+      // …and they must not be darkened towards black on the way, or a
+      // watercolour sky turns into a bruise.
+      uBody: assets.uScalar(() => 0.42 + 0.4 * roomLightness),
+    },
     /* glsl */ `
       attribute vec4 aParams;
       attribute vec2 aSeed;
@@ -1915,7 +2611,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
     `,
     /* glsl */ `
       ${GLSL_NOISE}
-      uniform float uTime, uStrength, uOpacity;
+      uniform float uTime, uStrength, uBody, uOpacity;
       varying vec2 vRib;
       varying vec3 vColA;
       varying vec3 vColB;
@@ -1941,38 +2637,51 @@ function auroraVoid(ctx: SceneContext): EnvScene {
         // Hold the mint base over most of the curtain and let only the fray go
         // violet — an early crossover averages the two into grey.
         vec3 col = mix(vColA, vColB, pow(v, 1.6));
-        gl_FragColor = vec4(col * (0.42 + 0.30 * rays), a * uOpacity);
+        gl_FragColor = vec4(col * (uBody + 0.30 * rays), a * uOpacity);
         ${GLSL_OUTPUT}
       }
     `,
-    { side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false },
+    { side: THREE.DoubleSide, light: "emit", depthWrite: false },
   );
   const ribbons = new THREE.InstancedMesh(ribbonGeo, ribbonMat, AURORA_RIBBONS.length);
   ribbons.frustumCulled = false;
   const params: number[] = [];
   const seeds: number[] = [];
-  const colA: number[] = [];
-  const colB: number[] = [];
+  const colA = new Float32Array(AURORA_RIBBONS.length * 3);
+  const colB = new Float32Array(AURORA_RIBBONS.length * 3);
   const identity = new THREE.Matrix4();
-  // Mint at the base through teal to violet at the fray — kept saturated,
-  // because additive light that runs past 1.0 washes the hue straight out.
-  const rampLow = mixColor(tint, ACCENT, 0.6);
-  const rampHigh = VIOLET.clone();
+  const rampLow = new THREE.Color();
   const tone = new THREE.Color();
-  AURORA_RIBBONS.forEach(([radius, span, height, baseY, phase, bearing, ca, cb], i) => {
+  AURORA_RIBBONS.forEach(([radius, span, height, baseY, phase, bearing], i) => {
     ribbons.setMatrixAt(i, identity);
     params.push(radius * reach, span, height * reach, baseY * reach);
     seeds.push(phase, bearing);
-    tone.copy(MINT).lerp(rampLow, ca);
-    colA.push(tone.r, tone.g, tone.b);
-    tone.copy(rampLow).lerp(rampHigh, cb);
-    colB.push(tone.r, tone.g, tone.b);
   });
   ribbons.instanceMatrix.needsUpdate = true;
   instanceAttr(ribbonGeo, "aParams", params, 4);
   instanceAttr(ribbonGeo, "aSeed", seeds, 2);
-  instanceAttr(ribbonGeo, "aColA", colA, 3);
-  instanceAttr(ribbonGeo, "aColB", colB, 3);
+  const aColA = instanceAttr(ribbonGeo, "aColA", colA, 3);
+  const aColB = instanceAttr(ribbonGeo, "aColB", colB, 3);
+  // Mint at the base through teal to violet at the fray — kept saturated,
+  // because additive light that runs past 1.0 washes the hue straight out, and
+  // because over a pale sky the saturation is the whole of the effect.
+  assets.themed(() => {
+    mixInto(rampLow, tint, ACCENT, 0.6);
+    for (let i = 0; i < AURORA_RIBBONS.length; i++) {
+      const ca = AURORA_RIBBONS[i][6];
+      const cb = AURORA_RIBBONS[i][7];
+      mixInto(tone, MINT, rampLow, ca);
+      colA[i * 3] = tone.r;
+      colA[i * 3 + 1] = tone.g;
+      colA[i * 3 + 2] = tone.b;
+      mixInto(tone, rampLow, VIOLET, cb);
+      colB[i * 3] = tone.r;
+      colB[i * 3 + 1] = tone.g;
+      colB[i * 3 + 2] = tone.b;
+    }
+    aColA.needsUpdate = true;
+    aColB.needsUpdate = true;
+  });
   assets.add(ribbons);
 
   // ── Particulate.
@@ -1981,28 +2690,31 @@ function auroraVoid(ctx: SceneContext): EnvScene {
   const moteScale = new Float32Array(moteCount);
   const motePhase = new Float32Array(moteCount);
   const moteColor = new Float32Array(moteCount * 3);
-  const rand = mulberry32(0xa0f0a0);
   const moteTone = new THREE.Color();
   const dir = new THREE.Vector3();
-  for (let i = 0; i < moteCount; i++) {
-    goldenSphere(i, moteCount, dir);
-    const radius = 2.5 + Math.pow(rand(), 0.6) * 22;
-    motePos[i * 3] = dir.x * radius;
-    motePos[i * 3 + 1] = -18 + rand() * 36;
-    motePos[i * 3 + 2] = dir.z * radius;
-    moteScale[i] = 0.35 + Math.pow(rand(), 3) * 2.6;
-    motePhase[i] = rand();
-    moteTone.copy(tint).lerp(WHITE, 0.25 + rand() * 0.6);
-    const gain = 0.35 + rand() * 0.65;
-    moteColor[i * 3] = moteTone.r * gain;
-    moteColor[i * 3 + 1] = moteTone.g * gain;
-    moteColor[i * 3 + 2] = moteTone.b * gain;
-  }
   const moteGeo = assets.geom(new THREE.BufferGeometry());
   moteGeo.setAttribute("position", new THREE.BufferAttribute(motePos, 3));
   moteGeo.setAttribute("aScale", new THREE.BufferAttribute(moteScale, 1));
   moteGeo.setAttribute("aPhase", new THREE.BufferAttribute(motePhase, 1));
   moteGeo.setAttribute("aColor", new THREE.BufferAttribute(moteColor, 3));
+  assets.themed(() => {
+    const rand = mulberry32(0xa0f0a0);
+    for (let i = 0; i < moteCount; i++) {
+      goldenSphere(i, moteCount, dir);
+      const radius = 2.5 + Math.pow(rand(), 0.6) * 22;
+      motePos[i * 3] = dir.x * radius;
+      motePos[i * 3 + 1] = -18 + rand() * 36;
+      motePos[i * 3 + 2] = dir.z * radius;
+      moteScale[i] = 0.35 + Math.pow(rand(), 3) * 2.6;
+      motePhase[i] = rand();
+      mixInto(moteTone, tint, WHITE, 0.25 + rand() * 0.6);
+      const gain = 0.35 + rand() * 0.65;
+      moteColor[i * 3] = moteTone.r * gain;
+      moteColor[i * 3 + 1] = moteTone.g * gain;
+      moteColor[i * 3 + 2] = moteTone.b * gain;
+    }
+    moteGeo.attributes.aColor.needsUpdate = true;
+  });
   const pixel = Math.min(2, Math.max(1, ctx.renderer.getPixelRatio()));
   const motes = new THREE.Points(
     moteGeo,
@@ -2042,7 +2754,7 @@ function auroraVoid(ctx: SceneContext): EnvScene {
         ${GLSL_OUTPUT}
       }
     `,
-      { blending: THREE.AdditiveBlending, depthWrite: false },
+      { light: "spark", depthWrite: false },
     ),
   );
   motes.frustumCulled = false;

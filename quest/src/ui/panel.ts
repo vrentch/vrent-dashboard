@@ -27,7 +27,18 @@
  */
 
 import * as THREE from "three";
-import { palette, rgba, text as ink, tokens } from "../../shared/brand.ts";
+import {
+  contrastRatio,
+  luminance,
+  mix,
+  onThemeChange,
+  palette,
+  readableOn,
+  rgba,
+  scene,
+  text as ink,
+  tokens,
+} from "../../shared/brand.ts";
 import type { PointerState } from "../contracts.ts";
 
 // ── Physical scale ──────────────────────────────────────────────────────────
@@ -133,43 +144,244 @@ export function gridIn(r: Rect, cols: number, rows: number, gapX: number, gapY =
 /**
  * Every colour in the in-headset UI resolves through here, and every value is
  * derived from `shared/brand.ts`. Re-skinning the product is a `palette` edit.
+ *
+ * Two rules keep this honest across the dark and light themes:
+ *
+ *  1. **Order, do not branch.** The three neutrals are sorted by luminance and
+ *     addressed as "darkest / middle / lightest" rather than by name. In dark
+ *     `surfaceAlt` is the lightest and `ink` the darkest; in light it is the
+ *     other way round, and the same rule produces the right answer in both. The
+ *     per-theme rendering strengths that cannot be derived — panel opacity,
+ *     border weight, shadow depth — come from `scene`, never from an `if`.
+ *
+ *  2. **Verify, do not assume.** Any value used to draw *text* is passed through
+ *     `readableText`, which nudges it toward the readable pole until it clears
+ *     4.5:1 against the surface behind it. A customer palette that would produce
+ *     an unreadable pairing self-corrects instead of shipping.
+ *
+ * The object is **mutated in place** on a theme change, exactly like `palette`,
+ * so every module can keep reading `theme.fg` with no indirection.
  */
-export const theme = {
+export interface PanelTheme {
   /** Panel body, top → bottom. */
-  panelTop: rgba(palette.surfaceAlt, 0.97),
-  panelBottom: rgba(palette.surface, 0.98),
-  panelEdge: rgba(ink.secondary, 0.22),
-  panelHighlight: rgba(ink.primary, 0.1),
-  scrim: rgba(palette.ink, 0.72),
+  panelTop: string;
+  panelBottom: string;
+  panelEdge: string;
+  panelHighlight: string;
+  /** Drop shadow under the slab. Light panels need a far weaker one. */
+  panelShadow: string;
+  panelShadowBlur: number;
+  panelShadowOffset: number;
+  scrim: string;
 
-  /** Raised surfaces on top of the panel. */
-  card: rgba(palette.ink, 0.42),
-  cardHover: rgba(palette.surfaceAlt, 0.9),
-  cardActive: rgba(palette.ink, 0.66),
-  cardSelected: rgba(palette.primary, 0.16),
+  /** Raised surfaces on top of the panel. Opaque, so contrast is computable. */
+  card: string;
+  cardHover: string;
+  cardSelected: string;
 
-  line: rgba(ink.secondary, 0.18),
-  lineStrong: rgba(ink.secondary, 0.34),
-  lineFaint: rgba(ink.secondary, 0.1),
+  line: string;
+  lineStrong: string;
+  lineFaint: string;
 
-  fg: ink.primary,
-  fg2: ink.secondary,
-  fgMuted: ink.muted,
-  onPrimary: ink.onPrimary,
-  onAccent: ink.onAccent,
+  fg: string;
+  fg2: string;
+  fgMuted: string;
+  onPrimary: string;
+  onAccent: string;
 
-  primary: palette.primary,
-  accent: palette.accent,
-  reward: palette.reward,
-  danger: palette.danger,
+  /** Brand colours as *fills*. Use the `…Text` variants for type. */
+  primary: string;
+  accent: string;
+  reward: string;
+  danger: string;
 
-  focusRing: palette.accent,
-  disabledFg: rgba(ink.muted, 0.55),
+  /** Brand colours corrected until they read as text on `card`. */
+  primaryText: string;
+  accentText: string;
+  rewardText: string;
+  dangerText: string;
+
+  focusRing: string;
+  disabledFg: string;
+
+  /**
+   * The darkest colour the palette offers. Imagery that has to stay dark in
+   * both themes — an environment preview, a shadow — is built on this rather
+   * than on `palette.ink`, which is a pale blue once the light theme is on.
+   */
+  deep: string;
 
   /** One device-independent pixel. */
-  hairline: 1,
-  radius: tokens.radius,
-} as const;
+  hairline: number;
+  radius: typeof tokens.radius;
+}
+
+/** The three neutral surfaces, ordered darkest → lightest. */
+function ramp(): [string, string, string] {
+  const n = [palette.ink, palette.surface, palette.surfaceAlt];
+  n.sort((a, b) => luminance(a) - luminance(b));
+  return [n[0], n[1], n[2]];
+}
+
+/** Darkest colour the palette offers — every shadow and veil is built on it. */
+function deepest(): string {
+  return [palette.surface, palette.surfaceAlt, ink.primary].reduce(
+    (a, b) => (luminance(b) < luminance(a) ? b : a),
+    palette.ink,
+  );
+}
+
+/** Lightest colour the palette offers — the lit lip along a panel's top edge. */
+function brightest(): string {
+  return [palette.surface, palette.surfaceAlt, ink.primary].reduce(
+    (a, b) => (luminance(b) > luminance(a) ? b : a),
+    palette.ink,
+  );
+}
+
+/**
+ * Both correction searches are called from inside draw passes — per seat chip,
+ * per tag — so the answers are memoised. Keys carry both colours, which means an
+ * entry can never be stale across a theme change; the cap only stops a
+ * pathological palette from growing the map without bound.
+ */
+const contrastCache = new Map<string, string>();
+
+function cached(key: string, compute: () => string): string {
+  const hit = contrastCache.get(key);
+  if (hit !== undefined) return hit;
+  const out = compute();
+  if (contrastCache.size > 512) contrastCache.clear();
+  contrastCache.set(key, out);
+  return out;
+}
+
+/**
+ * Returns `fg`, or the closest colour to it that clears `min` contrast against
+ * `bg`. Blends toward whichever pole actually reads on `bg`, so a saturated hue
+ * keeps as much of its identity as the ratio allows. Both arguments must be
+ * `#RRGGBB` — a composited `rgba()` has no single luminance to measure.
+ */
+export function readableText(fg: string, bg: string, min = 4.5): string {
+  return cached(`t${fg}|${bg}|${min}`, () => {
+    if (contrastRatio(fg, bg) >= min) return fg;
+    const target = readableOn(bg);
+    for (let i = 1; i <= 20; i++) {
+      const c = mix(fg, target, i / 20);
+      if (contrastRatio(c, bg) >= min) return c;
+    }
+    return target;
+  });
+}
+
+/**
+ * The mirror image: keeps `fg` and nudges the *fill* until the pair clears
+ * `min`. Used for brand-coloured buttons, where the label is already the only
+ * colour that reads on them and the fill is the thing with room to move. Capped
+ * at 40% so a brand colour is never blended past recognition.
+ */
+export function readableSurface(bg: string, fg: string, min = 4.5): string {
+  return cached(`s${bg}|${fg}|${min}`, () => {
+    if (contrastRatio(fg, bg) >= min) return bg;
+    const target = luminance(fg) > luminance(bg) ? deepest() : brightest();
+    for (let i = 1; i <= 8; i++) {
+      const c = mix(bg, target, i / 20);
+      if (contrastRatio(fg, c) >= min) return c;
+    }
+    return mix(bg, target, 0.4);
+  });
+}
+
+/**
+ * `readableText` satisfied against *every* surface the type can land on, not
+ * just the one it was designed for. Correcting sequentially is safe here only
+ * because a theme's surfaces all sit on the same side of the readability
+ * threshold, so every step moves the colour the same way.
+ */
+function readableAnywhere(fg: string, surfaces: readonly string[]): string {
+  let out = fg;
+  for (const bg of surfaces) out = readableText(out, bg);
+  return out;
+}
+
+function computeTheme(): PanelTheme {
+  const [low, mid, high] = ramp();
+  const deep = deepest();
+
+  // Panel: lightest neutral at the top so the slab always reads as lit from
+  // above, whichever way round the theme's neutrals happen to run.
+  const bodyTop = high;
+  const bodyBottom = mix(high, mid, 0.78);
+  const panelTop = rgba(bodyTop, scene.panelAlpha);
+  const panelBottom = rgba(bodyBottom, scene.panelAlpha);
+
+  // Cards sit on the darkest neutral in both themes: a recessed well in dark, a
+  // tinted card on white in light. Opaque, so text contrast is exactly known.
+  const card = low;
+  const cardHover = mix(low, high, 0.4);
+  // Selection is carried by the border, the tick and the badge. The fill only
+  // has to hint, and a heavier tint would drag text below the contrast floor.
+  const cardSelected = mix(low, palette.primary, 0.14);
+
+  /** Every surface small type is drawn on. Corrections must clear all of them. */
+  const surfaces = [card, cardHover, cardSelected, bodyTop, bodyBottom];
+
+  return {
+    panelTop,
+    panelBottom,
+    panelEdge: rgba(ink.secondary, scene.borderAlpha + 0.08),
+    // On a light theme `brightest()` is the panel itself, so the lip correctly
+    // vanishes rather than drawing a dark line where a highlight should be.
+    panelHighlight: rgba(brightest(), 0.1),
+    panelShadow: rgba(deep, scene.shadowAlpha + 0.1),
+    panelShadowBlur: 26 * (0.5 + scene.shadowAlpha),
+    panelShadowOffset: 6 * (0.4 + scene.shadowAlpha * 1.3),
+    scrim: rgba(deep, 0.55 + scene.shadowAlpha * 0.38),
+
+    card,
+    cardHover,
+    cardSelected,
+
+    line: rgba(ink.secondary, scene.borderAlpha + 0.04),
+    lineStrong: rgba(ink.secondary, scene.borderAlpha + 0.2),
+    lineFaint: rgba(ink.secondary, scene.borderAlpha * 0.6),
+
+    fg: ink.primary,
+    fg2: readableAnywhere(ink.secondary, surfaces),
+    fgMuted: readableAnywhere(ink.muted, surfaces),
+    onPrimary: ink.onPrimary,
+    onAccent: ink.onAccent,
+
+    primary: palette.primary,
+    accent: palette.accent,
+    reward: palette.reward,
+    danger: palette.danger,
+
+    primaryText: readableAnywhere(palette.primary, surfaces),
+    accentText: readableAnywhere(palette.accent, surfaces),
+    rewardText: readableAnywhere(palette.reward, surfaces),
+    dangerText: readableAnywhere(palette.danger, surfaces),
+
+    focusRing: palette.accent,
+    // Disabled type is exempt from the contrast floor by design — it has to read
+    // as unavailable. Half a step back from muted, never further.
+    disabledFg: mix(readableAnywhere(ink.muted, surfaces), card, 0.45),
+
+    deep,
+
+    hairline: 1,
+    radius: tokens.radius,
+  };
+}
+
+export const theme: PanelTheme = computeTheme();
+
+// Rebuilt in place, before any Panel's own listener runs — module listeners are
+// registered at import time, and `Set` iterates in insertion order. Every panel
+// that repaints in response to the same event therefore sees the new colours.
+onThemeChange(() => {
+  Object.assign(theme, computeTheme());
+});
 
 // ── Type scale ──────────────────────────────────────────────────────────────
 
@@ -387,6 +599,7 @@ export class Panel {
 
   private readonly raycaster = new THREE.Raycaster();
   private reticle: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial> | null = null;
+  private readonly unthemed: () => void;
 
   /** Mesh-level transition state — cheaper than animating the canvas. */
   private targetOpacity = 1;
@@ -442,6 +655,14 @@ export class Panel {
     if (options.reticle !== false) this.buildReticle();
 
     this.gfx = new GfxImpl(this);
+
+    // The canvas is a derived value: every pixel on it was drawn with the old
+    // theme's colours, so a switch invalidates the whole texture. The reticle's
+    // THREE.Color is derived too, and a material colour never re-reads itself.
+    this.unthemed = onThemeChange(() => {
+      if (this.reticle) this.reticle.material.color.set(theme.focusRing);
+      this.dirty = true;
+    });
   }
 
   // ── Placement ─────────────────────────────────────────────────────────────
@@ -733,6 +954,21 @@ export class Panel {
 
   private redraw(): void {
     const { ctx } = this;
+
+    // Cleared *before* the pass, never after.
+    //
+    // A renderer resolves clicks while it draws, and a click handler can ask for
+    // another repaint synchronously: tapping a nav chip runs the screen swap —
+    // and therefore `transition()` — from inside this very call. That sets
+    // `dirty` and clears the press animation that would otherwise have forced an
+    // animated redraw a frame later. Clearing the flags at the tail wiped that
+    // request, so the canvas kept showing the previous screen until some
+    // unrelated event dirtied the panel — which on touch input, where the
+    // pointer goes inactive on release, is never.
+    this.dirty = false;
+    this.animDirty = false;
+    this.sinceDraw = 0;
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
@@ -759,10 +995,8 @@ export class Panel {
     if (this.watermark) this.drawWatermark(body);
     if (this.highlightId) this.drawHighlight();
 
+    // Clicks stay readable for the whole pass and are consumed at the end of it.
     this.pendingClicks.clear();
-    this.dirty = false;
-    this.animDirty = false;
-    this.sinceDraw = 0;
     this.texture.needsUpdate = true;
   }
 
@@ -770,11 +1004,13 @@ export class Panel {
     const { ctx } = this;
     const r = tokens.radius.lg;
 
-    // A single soft shadow, low and wide. Depth, not drama.
+    // A single soft shadow, low and wide. Depth, not drama — and on a light
+    // theme `scene.shadowAlpha` pulls it back to a hint, because the same
+    // shadow that grounds a dark slab reads as grime under a white one.
     ctx.save();
-    ctx.shadowColor = rgba(palette.ink, 0.55);
-    ctx.shadowBlur = 26;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowColor = theme.panelShadow;
+    ctx.shadowBlur = theme.panelShadowBlur;
+    ctx.shadowOffsetY = theme.panelShadowOffset;
     pathRound(ctx, body, r);
     ctx.fillStyle = theme.panelBottom;
     ctx.fill();
@@ -839,7 +1075,7 @@ export class Panel {
   private buildReticle(): void {
     const geo = new THREE.RingGeometry(0.0035, 0.006, 24);
     const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(theme.accent),
+      color: new THREE.Color(theme.focusRing),
       transparent: true,
       opacity: 0.9,
       depthWrite: false,
@@ -929,6 +1165,7 @@ export class Panel {
   // ── Teardown ──────────────────────────────────────────────────────────────
 
   dispose(): void {
+    this.unthemed();
     this.group.removeFromParent();
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
