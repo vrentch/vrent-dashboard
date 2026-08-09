@@ -34,19 +34,36 @@ The consequence: **the customer database and the entire service catalogue are on
 old free site, not the live one.** Any plan that abandons the old site without
 migrating those first destroys 302 customer records.
 
-## Known-broken state on the live site
+## Standing decisions from the owner (2026-08-09)
 
-Verified via `GET /site-properties/v4/properties`:
+These are settled. Do not reopen them or design around alternatives.
 
-- `timeZone` = **`Europe/Kyiv`** — wrong; business is UK. Corrupts every date/time the
-  site produces (event times, invoice dates, automated emails, and any future booking).
-- `address` = **entirely empty** — no street, city or postcode. Correct value is
-  `61 Cleveland Street, London, W1T 4JH` (coordinates 51.5206123, -0.1390749).
-- `phone` = **absent**. Correct value is `07831753970`.
-- `businessSchedule` = **absent** — no opening hours anywhere.
-- `hello@blanchebeauty.co.uk` carries `deliverabilityStatus: BOUNCED` in the contact
-  record — outbound mail to the business address is failing. Verify before relying on
-  any email-based notification.
+1. **Phorest owns all bookings.** Wix Bookings is NOT to be installed on the live site.
+   The website's job is to route customers into Phorest cleanly.
+2. **Phorest owns all client records.** Wix contacts are not the system of record.
+3. **Site members have their own accounts in Phorest.** Wix Members is not the identity
+   system.
+4. **Nothing is deleted or moved without explicit per-item approval** — not the old
+   site, not the 302 contacts, not anything else. The old site stays published for now.
+5. The contact email `hello@blanchebeauty.co.uk` is **correct as written**. (It still
+   carries `deliverabilityStatus: BOUNCED` on the live site's own contact record, which
+   is a mail-delivery matter, not a typo — worth checking, not worth "fixing" in Wix.)
+
+## Live-site state
+
+Fixed on 2026-08-09, verified via `GET /site-properties/v4/properties` (version 29):
+
+- `timeZone` = **`Europe/London`** ✅ — was `Europe/Kyiv`. Corrected by updating the
+  default location record, which is what actually drives it.
+- `address` = **61 Cleveland Street, London, W1T 4JH** ✅ (51.5206123, -0.1390749)
+- `phone` = **07831753970** ✅
+
+Still outstanding:
+
+- `businessSchedule` = **absent** — opening hours are set on neither site, and the
+  owner has not yet supplied them. Do not invent salon hours.
+- Default location is still named **"Location 1"** — a template leftover.
+- No booking route to Phorest exists on the site yet.
 
 ## Rules
 
@@ -88,6 +105,54 @@ POST https://www.wixapis.com/events/v3/events/query              {"query":{"pagi
 **Paging note:** `services/query` responses are large. A limit above ~13 exceeds the
 tool's output cap and gets spilled to a file. Page at 13 and merge, deduping by
 service `id`.
+
+## Proven-working writes
+
+```
+POST https://www.wixapis.com/site-properties/v4/properties/business-contact
+     {"businessContact": {...}, "fields": {"paths": ["phone","address"]}}
+```
+`fields.paths` is a fieldmask — only the listed paths change. Always set it as narrowly
+as possible; it is the main safety rail on this endpoint.
+
+```
+PUT  https://www.wixapis.com/locations/v1/locations/{id}
+     {"location": { ...entire object..., "revision": "<current>" }}
+```
+**Full override, no partial update.** GET the location first, change one field, send the
+whole object back with its current `revision`. The site `timeZone` lives here — editing
+site properties alone does not move it.
+
+The live site's default location is `02fe6f44-4107-4ac2-a598-921378eab0e7`.
+
+## Getting code onto the site without Velo
+
+The **Custom Embeds API** injects HTML/JS into `HEAD`, `BODY_START` or `BODY_END`
+without Velo and without opening the Editor:
+
+```
+GET  https://www.wixapis.com/embeds/v1/custom-embeds     (list — was empty as of 2026-08-09)
+POST .../custom-embeds                                   (create)
+PATCH .../custom-embeds/{id}                             (update — needs id + revision)
+```
+
+Embeds are categorised `ESSENTIAL` / `FUNCTIONAL` / `ANALYTICS` / `ADVERTISING`, which
+controls whether cookie consent gates them. A booking widget that must always work is
+`ESSENTIAL`; get this wrong and the widget silently fails to load for visitors who
+decline cookies.
+
+**This is the route for a Phorest script or floating booking widget.**
+
+## What the API cannot do
+
+There is no public Wix API that edits page layout on a classic Editor site. You cannot
+add a section, place a button, or drop an inline iframe into the middle of a page
+through REST. Those changes require the Wix Editor UI.
+
+So any work of the form "put a Book Now button in the header" or "add a booking section
+to the homepage" must be **specified here and executed by a human in the Editor**. Write
+the spec precisely — exact text, exact link, exact placement — rather than pretending
+it can be automated.
 
 ## Environment limitation
 
