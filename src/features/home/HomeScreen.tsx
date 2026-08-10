@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, RefreshCw, Settings, Plus, Check, Sparkles, Droplets, ScanLine, Wand2, CalendarPlus, Timer } from "lucide-react";
-import { fetchQuotes, fetchNews, fetchHistory, type Quote, type NewsItem } from "../../lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, RefreshCw, Settings, Plus, Check, Sparkles, Droplets, Camera, Wand2, CalendarPlus, Timer } from "lucide-react";
+import { fetchQuotes, fetchNews, fetchHistory, analyzeImage, type Quote, type NewsItem, type FoodEstimate } from "../../lib/api";
 import { usePrefs } from "../../lib/store";
 import { usePoll } from "../../lib/usePoll";
 import { greeting } from "../../lib/marketStatus";
@@ -10,7 +10,9 @@ import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
 import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, spentInMonth, spendableMonthly, meterBreakdown, addExpense, lastNDaysSpend, todayKey as moneyToday } from "../../lib/money/store";
-import { useHealth, macrosOn, macroTargets, calorieTarget, addWater, waterOn, fastingStatus, todayKey as healthToday } from "../../lib/health";
+import { useHealth, macrosOn, macroTargets, calorieTarget, addWater, waterOn, fastingStatus, foodHints, todayKey as healthToday } from "../../lib/health";
+import { prepareImage } from "../../lib/image";
+import FoodConfirmSheet from "../health/FoodConfirmSheet";
 import StatRing from "../../components/StatRing";
 import Sparkline from "../../components/Sparkline";
 import { useCountUp } from "../../lib/useCountUp";
@@ -107,6 +109,36 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const monthPct = monthBudget > 0 ? Math.min(1, monthSpent / monthBudget) : 0;
   const trend = useMemo(() => lastNDaysSpend(money, 7), [money]);
   const leftShown = useCountUp(moneyOn ? leftToday : 0);
+
+  // Food photo straight from Home — same flow as the Health tab.
+  const foodFileRef = useRef<HTMLInputElement>(null);
+  const [foodOpen, setFoodOpen] = useState(false);
+  const [foodLoading, setFoodLoading] = useState(false);
+  const [foodErr, setFoodErr] = useState<string | null>(null);
+  const [foodEstimate, setFoodEstimate] = useState<FoodEstimate | null>(null);
+  const [foodPreview, setFoodPreview] = useState<string | null>(null);
+
+  async function onFoodPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFoodErr(null);
+    setFoodEstimate(null);
+    setFoodPreview(null);
+    setFoodOpen(true);
+    setFoodLoading(true);
+    try {
+      const img = await prepareImage(file);
+      setFoodPreview(img.dataUrl);
+      const res = await analyzeImage<FoodEstimate>("food", img.base64, img.mediaType, foodHints());
+      if (!res.ok || !res.data) setFoodErr(res.configured === false ? "AI isn't set up yet." : res.error || "Couldn't analyze that photo.");
+      else setFoodEstimate(res.data);
+    } catch (err) {
+      setFoodErr(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setFoodLoading(false);
+    }
+  }
 
   function note(msg: string) {
     setFlash(msg);
@@ -350,11 +382,11 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
                 <span className="text-[9.5px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">{(water / 1000).toFixed(1)}L</span>
               </button>
               <button
-                onClick={() => onNavigate("scan")}
+                onClick={() => foodFileRef.current?.click()}
                 className="flex flex-col items-center gap-0.5 py-1.5 rounded-lg glass-subtle transition-transform duration-150 active:scale-[0.93]"
               >
-                <ScanLine size={15} className="text-brand-600 dark:text-brand-400" />
-                <span className="text-[9.5px] font-semibold text-slate-500 dark:text-slate-400">Scan</span>
+                <Camera size={15} className="text-brand-600 dark:text-brand-400" />
+                <span className="text-[9.5px] font-semibold text-slate-500 dark:text-slate-400">Photo</span>
               </button>
               <button
                 onClick={() => onNavigate("health")}
@@ -451,6 +483,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
         </button>
       </div>
 
+      <input ref={foodFileRef} type="file" accept="image/*" capture="environment" onChange={onFoodPick} className="hidden" />
+      <FoodConfirmSheet
+        open={foodOpen}
+        onClose={() => { setFoodOpen(false); setFoodEstimate(null); setFoodPreview(null); setFoodErr(null); }}
+        loading={foodLoading}
+        error={foodErr}
+        estimate={foodEstimate}
+        preview={foodPreview}
+      />
       <StockDetail quote={selected} onClose={() => setSelected(null)} />
       <ArticleReader item={reading} onClose={() => setReading(null)} />
     </div>
