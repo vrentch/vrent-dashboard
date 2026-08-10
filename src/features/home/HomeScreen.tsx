@@ -12,7 +12,11 @@ import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
 import { ChevronRight as Chev, CalendarDays, Plus, Sparkles, ScanLine, HeartPulse, CalendarPlus, Wallet } from "lucide-react";
-import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, meterBreakdown, todayKey as moneyToday } from "../../lib/money/store";
+import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, spentInMonth, spendableMonthly, meterBreakdown, addExpense, lastNDaysSpend, CATEGORIES, todayKey as moneyToday } from "../../lib/money/store";
+import { useHealth, macrosOn, calorieTarget, stepsOn, addWater, waterOn, todayKey as healthToday } from "../../lib/health";
+import StatRing from "../../components/StatRing";
+import Sparkline from "../../components/Sparkline";
+import { useCountUp } from "../../lib/useCountUp";
 import { chf } from "../../lib/business/format";
 
 type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money";
@@ -75,7 +79,34 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const money = useMoney();
+  const health = useHealth();
   const events = useEvents();
+  const [spend, setSpend] = useState("");
+  const [spendCat, setSpendCat] = useState("food");
+
+  // Today at a glance — the three numbers worth seeing without tapping.
+  const hToday = healthToday();
+  const eaten = Math.round(macrosOn(health, hToday).calories);
+  const calTarget = calorieTarget(health.profile);
+  const steps = stepsOn(health, hToday);
+  const water = waterOn(health, hToday);
+  const moneyOn = moneyConfigured(money);
+  const cur = money.settings.currency || "CHF";
+  const daily = dailyAllowance(money);
+  const carry = (() => { const c = meterBreakdown(money).carryover; return Math.abs(c) >= 0.5 ? c : 0; })();
+  const spentToday = spentOnDay(money, moneyToday());
+  const leftToday = Math.max(0, daily + carry) - spentToday;
+  const trend = useMemo(() => lastNDaysSpend(money, 7), [money]);
+  const calShown = useCountUp(eaten);
+  const stepShown = useCountUp(steps);
+  const leftShown = useCountUp(moneyOn ? leftToday : 0);
+
+  function quickSpend() {
+    const a = parseFloat(spend.replace(",", "."));
+    if (!(a > 0)) return;
+    addExpense({ amount: a, category: spendCat });
+    setSpend("");
+  }
   const todayEvents = useMemo(() => eventsOn(events, todayKey()), [events]);
   const upcomingEvents = useMemo(() => upcoming(events, todayKey()).slice(0, 3), [events]);
   const avgChange = useMemo(() => {
@@ -112,6 +143,95 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
       </header>
 
       <div className="max-w-lg md:max-w-3xl mx-auto px-4 py-4 space-y-6">
+        {/* Today — live rings + inline edits, the app's command panel */}
+        <section className="rounded-3xl glass p-4">
+          <div className="flex items-baseline justify-between mb-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Today</h2>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> live
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={() => onNavigate("health")} className="flex flex-col items-center gap-1.5 transition-transform duration-150 active:scale-[0.96]">
+              <StatRing pct={calTarget ? eaten / calTarget : 0} from="#818cf8" to="#4f46e5">
+                <span className="text-[15px] font-extrabold tabular-nums text-slate-900 dark:text-slate-100">{Math.round(calShown)}</span>
+                <span className="block text-[9px] text-slate-400 dark:text-slate-500">kcal</span>
+              </StatRing>
+              <span className="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">of {calTarget}</span>
+            </button>
+
+            <button onClick={() => onNavigate("health")} className="flex flex-col items-center gap-1.5 transition-transform duration-150 active:scale-[0.96]">
+              <StatRing pct={steps / 10000} from="#5eead4" to="#0d9488">
+                <span className="text-[15px] font-extrabold tabular-nums text-slate-900 dark:text-slate-100">{Math.round(stepShown / 100) / 10}k</span>
+                <span className="block text-[9px] text-slate-400 dark:text-slate-500">steps</span>
+              </StatRing>
+              <span className="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">goal 10k</span>
+            </button>
+
+            <button onClick={() => onNavigate("money")} className="flex flex-col items-center gap-1.5 transition-transform duration-150 active:scale-[0.96]">
+              <StatRing pct={moneyOn && daily + carry > 0 ? leftToday / (daily + carry) : 0} from="#fbbf24" to="#f59e0b">
+                <span className="text-[13.5px] font-extrabold tabular-nums text-slate-900 dark:text-slate-100">{moneyOn ? Math.round(leftShown) : "—"}</span>
+                <span className="block text-[9px] text-slate-400 dark:text-slate-500">{moneyOn ? cur : "set up"}</span>
+              </StatRing>
+              <span className="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">left today</span>
+            </button>
+          </div>
+
+          {/* Inline quick edits — log without leaving the overview */}
+          <div className="mt-3.5 flex gap-1.5">
+            {[250, 500].map((ml) => (
+              <button
+                key={ml}
+                onClick={() => addWater(ml)}
+                className="flex-1 py-2 rounded-xl glass-subtle text-[11.5px] font-semibold text-slate-600 dark:text-slate-300 transition-transform duration-150 active:scale-[0.96]"
+              >
+                💧 +{ml}ml
+              </button>
+            ))}
+            <span className="flex-1 grid place-items-center py-2 rounded-xl glass-subtle text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
+              {(water / 1000).toFixed(1)}L today
+            </span>
+          </div>
+
+          {moneyOn && (
+            <div className="mt-1.5">
+              <div className="flex gap-1.5">
+                <input
+                  value={spend}
+                  onChange={(e) => setSpend(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") quickSpend(); }}
+                  type="text" inputMode="decimal" placeholder={`Spent… (${cur})`}
+                  className="flex-1 min-w-0 rounded-xl glass-subtle px-3 py-2 text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100 outline-none"
+                />
+                <button
+                  onClick={quickSpend}
+                  disabled={!(parseFloat(spend.replace(",", ".")) > 0)}
+                  className="grid place-items-center w-11 rounded-xl accent-gradient text-white shadow-accent transition-transform duration-150 active:scale-[0.94] disabled:opacity-40"
+                  aria-label="Add expense"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+              {parseFloat(spend.replace(",", ".")) > 0 && (
+                <div className="mt-1.5 flex gap-1.5 overflow-x-auto no-scrollbar animate-in">
+                  {CATEGORIES.slice(0, 5).map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => setSpendCat(c.key)}
+                      className={`shrink-0 px-2.5 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 ${
+                        spendCat === c.key ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "glass-subtle text-slate-600 dark:text-slate-300"
+                      }`}
+                    >
+                      {c.emoji} {c.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* Quick actions — one tap to the things used most */}
         <div className="grid grid-cols-4 gap-2.5">
           {([
@@ -120,7 +240,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
             { label: "Health", icon: HeartPulse, tab: "health" as Tab },
             { label: "Add event", icon: CalendarPlus, tab: "calendar" as Tab },
           ]).map(({ label, icon: Icon, tab }) => (
-            <button key={label} onClick={() => onNavigate(tab)} className="flex flex-col items-center gap-1.5 rounded-2xl glass py-3 active:scale-95 transition">
+            <button key={label} onClick={() => onNavigate(tab)} className="flex flex-col items-center gap-1.5 rounded-2xl glass py-3 transition-transform duration-150 active:scale-[0.95]">
               <span className="grid place-items-center w-9 h-9 rounded-xl accent-gradient-soft text-brand-600 dark:text-brand-300">
                 <Icon size={18} />
               </span>
@@ -140,23 +260,29 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
               <>
                 <div className="min-w-0">
                   {(() => {
-                    const cur = money.settings.currency || "CHF";
-                    const daily = dailyAllowance(money);
-                    const bd = meterBreakdown(money);
-                    const carry = Math.abs(bd.carryover) >= 0.5 ? bd.carryover : 0;
-                    const leftToday = Math.max(0, daily + carry) - spentOnDay(money, moneyToday());
+                    // "Left today" already has a ring above — this card earns its
+                    // place by showing the month, which nothing else does.
+                    const spentMonth = trend.reduce((a, t) => a + t.amount, 0);
+                    const monthBudget = spendableMonthly(money);
+                    const monthSpent = spentInMonth(money, moneyToday().slice(0, 7));
+                    const pct = monthBudget > 0 ? Math.min(1, monthSpent / monthBudget) : 0;
                     return (
                       <>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">Left to spend today</p>
-                        <p className={`text-[30px] leading-tight font-extrabold display-num tabular-nums ${leftToday <= -0.005 ? "text-rose-200" : ""}`}>{chf(leftToday, cur)}</p>
-                        <p className="text-xs text-white/80">
-                          {chf(daily, cur)} a day · {chf(spentOnDay(money, moneyToday()), cur)} spent today
-                        </p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-white/75">This month</p>
+                        <p className="text-[26px] leading-tight font-extrabold display-num tabular-nums">{chf(monthSpent, cur)}</p>
+                        <p className="text-xs text-white/80">of {chf(monthBudget, cur)} · {chf(spentMonth, cur)} in the last 7 days</p>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-white/25 overflow-hidden">
+                          <div className="h-full rounded-full bg-white/90 transition-[width] duration-700" style={{ width: `${Math.round(pct * 100)}%` }} />
+                        </div>
                       </>
                     );
                   })()}
                 </div>
-                <span className="grid place-items-center w-11 h-11 rounded-2xl bg-white/15 shrink-0"><Wallet size={20} /></span>
+                {/* Last 7 days of spending — the shape of the week at a glance */}
+                <div className="shrink-0 w-24 opacity-90">
+                  <Sparkline values={trend.map((t) => t.amount)} width={96} height={38} className="w-full h-[38px]" color="#ffffff" fill strokeWidth={2} />
+                  <p className="text-[9px] text-white/70 text-center mt-0.5">last 7 days</p>
+                </div>
               </>
             ) : (
               <>
