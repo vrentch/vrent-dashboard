@@ -28,8 +28,12 @@ on:
         description: "Realtime server URL for multiplayer (blank = solo and AI only)"
         type: string
         default: ""
+  # This repository has no `main`; its default branch is the one below. That
+  # matters twice over — GitHub only offers "Run workflow" for workflows that
+  # exist on the DEFAULT branch, so this file has to be merged there before the
+  # manual trigger appears at all.
   push:
-    branches: [main]
+    branches: [claude/news-stocks-mobile-app-n3jkse]
     paths: ["quest/**", ".github/workflows/quest-pages.yml"]
 
 permissions:
