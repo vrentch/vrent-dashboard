@@ -424,8 +424,9 @@
 /* ============================== constants ============================== */
 const LS = {profile:'clearhead.v1.profile', session:'clearhead.v1.session', history:'clearhead.v1.history'};
 const API = '/api/clearhead';
-// Same VAPID keypair as the rest of this deployment (one origin, one identity).
-const VAPID_PUBLIC = 'BNxnJi4BuHQzkMrh9pFVr3sJq70P15NklzGvjIJCO3EdA-Kxx3Siwr9aHTzZ3iPBQ8eJOdI4cmyxdT6FkYzuOPU';
+// Clearhead's own standalone VAPID identity (public half; the private half
+// lives only in the deployment's VAPID_PRIVATE env var).
+const VAPID_PUBLIC = 'BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs';
 const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5};
 const ETH = 0.789;               // g of ethanol per ml
 const ABSORB_MS = 30 * 60000;    // linear absorption ramp per drink

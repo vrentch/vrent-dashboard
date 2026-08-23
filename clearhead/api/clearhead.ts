@@ -1,10 +1,10 @@
-// Push-alarm scheduler for Clearhead (the standalone app in public/clearhead/).
-//
-// Deliberately its own serverless function — it shares nothing with the AC App
-// except the deployment's existing Vercel KV (Upstash REST) and VAPID env
-// configuration, so real lock-screen push alarms work without touching the
-// AC App's code. Like api/[...path].ts, this file must not use relative
-// imports (Vercel runs it as native ESM).
+// Push-alarm scheduler for Clearhead — the whole backend of this standalone
+// app. Requires two things in the deployment's env to be active (otherwise
+// every op reports configured:false and the app quietly runs in-app-only):
+//   VAPID_PRIVATE                     — private half of the app's VAPID pair
+//   KV_REST_API_URL + KV_REST_API_TOKEN (or the UPSTASH_REDIS_REST_* names)
+//                                     — an Upstash Redis (Vercel Marketplace)
+// No relative imports (Vercel runs this file as native ESM).
 //
 // Ops (single route /api/clearhead, selected via ?op=):
 //   POST ?op=schedule  {subscription, alarms:[{id,at,title,body,urgent?}]}
@@ -20,8 +20,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import * as webpush from "web-push";
 
-// Same keypair as the AC App — one origin, one VAPID identity.
-const VAPID_PUBLIC = "BNxnJi4BuHQzkMrh9pFVr3sJq70P15NklzGvjIJCO3EdA-Kxx3Siwr9aHTzZ3iPBQ8eJOdI4cmyxdT6FkYzuOPU";
+// Clearhead's own standalone VAPID identity (public half).
+const VAPID_PUBLIC = "BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs";
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
@@ -101,7 +101,7 @@ async function sendPush(rec: Rec, alarm: { title: string; body: string; urgent?:
   try {
     await webpush.sendNotification(
       rec.subscription as unknown as webpush.PushSubscription,
-      JSON.stringify({ title: alarm.title, body: alarm.body, urgent: !!alarm.urgent, tag: alarm.tag || "clearhead-alarm", url: "/clearhead/" }),
+      JSON.stringify({ title: alarm.title, body: alarm.body, urgent: !!alarm.urgent, tag: alarm.tag || "clearhead-alarm", url: "./" }),
       { TTL: 1800, urgency: "high" }
     );
     return true;

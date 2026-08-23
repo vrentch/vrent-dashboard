@@ -24,9 +24,7 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png}"],
         // pdf.js is only needed when a user adds a PDF invoice — keep it out of
         // the install bundle and let it load on demand (saves ~1.6 MB precache).
-        // clearhead/ is a standalone app with its own service worker — the
-        // AC App must not precache or control it.
-        globIgnores: ["**/pdf.worker*.js", "**/pdf-*.js", "clearhead/**"],
+        globIgnores: ["**/pdf.worker*.js", "**/pdf-*.js"],
       },
       includeAssets: ["favicon.svg", "icon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
       manifest: {

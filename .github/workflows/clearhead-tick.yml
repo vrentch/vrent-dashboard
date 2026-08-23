@@ -1,10 +1,12 @@
 name: Clearhead alarm scheduler
 
-# Pings /api/clearhead?op=tick so scheduled drink/water push alarms get
-# delivered to locked phones. Separate from notify-tick.yml on purpose —
-# Clearhead is a standalone app that only shares the deployment's push
-# plumbing. GitHub's scheduler runs roughly every 5 minutes (delays under
-# load are fine: the endpoint fires anything due and de-dupes by removal).
+# Pings the standalone Clearhead deployment's tick endpoint so scheduled
+# drink/water push alarms get delivered to locked phones. Harmless while the
+# deployment has no push env (it answers configured:false); becomes active
+# the moment VAPID_PRIVATE + Upstash KV are configured on the Vercel project.
+# GitHub's scheduler runs roughly every 5 minutes (delays under load are
+# fine: the endpoint fires anything due and de-dupes by removal).
+# Note: scheduled workflows only run from the repository's default branch.
 on:
   schedule:
     - cron: "*/5 * * * *"
@@ -15,4 +17,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Clearhead tick endpoint
-        run: curl -sS --max-time 60 "https://ac-news-tau.vercel.app/api/clearhead?op=tick" || true
+        run: curl -sS --max-time 60 "https://clearhead-vrentchs-projects.vercel.app/api/clearhead?op=tick" || true
