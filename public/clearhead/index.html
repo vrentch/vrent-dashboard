@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#171208">
 <title>Clearhead</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clearhead">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap">
@@ -164,6 +170,9 @@
   @keyframes apulse{0%,100%{box-shadow:0 0 0 0 rgba(224,75,85,.5);}55%{box-shadow:0 0 0 14px rgba(224,75,85,0);}}
   .alarm-actions{display:flex; flex-direction:column; gap:9px;}
   .alarm-actions .second{color:var(--faint); font-size:14px; padding:9px;}
+  .overlay.alarm.strobing{animation:strobebg .5s steps(1) infinite; backdrop-filter:none; -webkit-backdrop-filter:none;}
+  @keyframes strobebg{0%{background:rgba(10,7,3,.78);}50%{background:rgba(243,233,215,.94);}}
+  .rearm{background:linear-gradient(180deg,#2b5560,#1f3d46); color:var(--aqua2); border:1px solid #3a6b78; border-radius:12px; padding:11px 14px; font-size:14px; font-weight:600; text-align:center; margin-bottom:12px;}
 
   /* ---------- summary ---------- */
   .sumgrid{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:14px 0 6px;}
@@ -194,10 +203,12 @@
     <div class="wordmark">CLEAR<em>HEAD</em></div>
     <div class="top-right">
       <span id="elapsed" class="pill" hidden>0h 00m</span>
+      <button id="watchBtn" class="iconbtn" title="Night watch (strong alarms)" aria-label="Night watch">🛡</button>
       <button id="wakeBtn" class="iconbtn" hidden title="Keep screen awake" aria-label="Keep screen awake">🔆</button>
       <button id="setBtn" class="iconbtn" title="Settings" aria-label="Settings">⚙︎</button>
     </div>
   </header>
+  <div id="rearmBanner" class="rearm" hidden>🛡 Tap anywhere to re-arm night watch</div>
 
   <section class="gauge-card">
     <div id="demoBanner" class="demo" hidden><span>DEMO NIGHT</span><button id="demoExit">exit demo</button></div>
@@ -240,6 +251,7 @@
   <footer class="foot">
     <button id="endBtn" class="ghost-btn">🏁 End the night</button>
     <p class="fineprint">Estimates only (Widmark / Watson formulas). Food, medication and your body change the real number — if you can feel the drinks, don't drive. Not medical advice.</p>
+    <p class="fineprint">Strongest alarms: install on your phone (⚙︎ → Install), enable lock-screen alarms, and keep Clearhead open during the night with 🛡 armed.</p>
   </footer>
 </div>
 
@@ -320,8 +332,29 @@
       </div>
     </div>
     <div class="row2">
-      <button id="seNotif" class="ghost-btn" type="button">🔔 Phone notifications</button>
-      <button id="seTest" class="ghost-btn" type="button">Test the alarm</button>
+      <div class="field"><label>Siren (loud)</label>
+        <select id="seSiren"><option value="1" selected>On</option><option value="0">Off — soft chimes</option></select>
+      </div>
+      <div class="field"><label>Screen flash</label>
+        <select id="seStrobe"><option value="1" selected>On</option><option value="0">Off</option></select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Flashlight blink</label>
+        <select id="seTorch"><option value="0" selected>Off</option><option value="1">On (needs camera OK)</option></select>
+      </div>
+      <div class="field"><label>Auto night watch</label>
+        <select id="seAutoWatch"><option value="1" selected>Arm on first drink</option><option value="0">Manual (🛡 button)</option></select>
+      </div>
+    </div>
+    <div class="row2">
+      <button id="sePush" class="ghost-btn" type="button">🔒 Lock-screen alarms</button>
+      <button id="seInstall" class="ghost-btn" type="button">📲 Install on phone</button>
+    </div>
+    <p id="iosHint" class="tiny" hidden>iPhone: open this page in Safari → Share → <b>Add to Home Screen</b>. Lock-screen alarms need the installed app.</p>
+    <div class="row2" style="margin-top:10px">
+      <button id="seTest" class="ghost-btn" type="button">🚨 Test the full alarm</button>
+      <span></span>
     </div>
     <details class="math">
       <summary>About the math</summary>
@@ -390,6 +423,10 @@
 'use strict';
 /* ============================== constants ============================== */
 const LS = {profile:'clearhead.v1.profile', session:'clearhead.v1.session', history:'clearhead.v1.history'};
+const API = '/api/clearhead';
+// Same VAPID keypair as the rest of this deployment (one origin, one identity).
+const VAPID_PUBLIC = 'BNxnJi4BuHQzkMrh9pFVr3sJq70P15NklzGvjIJCO3EdA-Kxx3Siwr9aHTzZ3iPBQ8eJOdI4cmyxdT6FkYzuOPU';
+const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5};
 const ETH = 0.789;               // g of ethanol per ml
 const ABSORB_MS = 30 * 60000;    // linear absorption ramp per drink
 const BETA = 0.15;               // elimination, permille per hour
@@ -465,6 +502,14 @@ let audioCtx = null;
 let wakeLock = null, wantWake = false;
 let alarmPrio = 0;           // 0 none, 1 water, 2 strong, 3 danger
 let toastSeq = 0;
+let watchArmed = false, keepNodes = null, keepEl = null;
+let swReg = null, pushSub = null, deferredInstall = null;
+let sirenStop = null, syncT = null;
+const storm = {rering:null, vib:null, torchStop:null, rings:0, active:false};
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const normProfile = p => p ? {...PROFILE_DEFAULTS, ...p} : null;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -596,11 +641,217 @@ function chime(kind){
   }catch(e){}
 }
 function buzz(pat){ try{ if (navigator.vibrate) navigator.vibrate(pat); }catch(e){} }
-function notify(title, body){
+
+// Notification via the service worker when possible (shows on the lock screen
+// with vibration), plain Notification as fallback. Safe no-op elsewhere.
+async function swNotify(title, body, urgent){
   try{
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.hidden)
-      new Notification(title, {body, tag:'clearhead'});
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const opts = {body, tag:'clearhead-alarm', renotify:true, requireInteraction:!!urgent,
+      vibrate:[400,150,400,150,600], icon:'icon-192.png', data:{url:'./'}};
+    if (swReg && swReg.showNotification) await swReg.showNotification(title, opts);
+    else new Notification(title, opts);
   }catch(e){}
+}
+
+/* ============================== night watch ============================== */
+// A whisper-quiet audio loop keeps the tab alive while the phone is locked
+// (browsers exempt audio-playing pages from freezing), so timers still fire
+// and the siren can ring straight over the lock screen.
+function keepWavURI(){
+  const sr = 8000, secs = 2, n = sr * secs, amp = 700;
+  const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4, 36 + n*2, true); w(8,'WAVE'); w(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40, n*2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i*2, Math.round(Math.sin(2*Math.PI*46*i/sr) * amp), true);
+  let bin = '';
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i+8192));
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+function armWatch(){ // must run inside a user gesture
+  ensureAudio();
+  try{
+    if (audioCtx && !keepNodes){
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = 46; g.gain.value = 0.012;
+      o.connect(g); g.connect(audioCtx.destination); o.start();
+      keepNodes = {o, g};
+    }
+  }catch(e){}
+  try{
+    if (!keepEl){ keepEl = new Audio(keepWavURI()); keepEl.loop = true; keepEl.volume = 0.14; }
+    keepEl.play().catch(()=>{});
+  }catch(e){}
+  watchArmed = true;
+  $('rearmBanner').hidden = true;
+  updateWatchUI();
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default'){
+    try{ Notification.requestPermission().catch(()=>{}); }catch(e){}
+  }
+}
+function disarmWatch(){
+  try{ if (keepNodes){ keepNodes.o.stop(); keepNodes.g.disconnect(); keepNodes = null; } }catch(e){ keepNodes = null; }
+  try{ if (keepEl) keepEl.pause(); }catch(e){}
+  watchArmed = false;
+  updateWatchUI();
+}
+function updateWatchUI(){
+  $('watchBtn').classList.toggle('on', watchArmed);
+  $('watchBtn').textContent = watchArmed ? '🛡' : '🛡';
+  $('watchBtn').title = watchArmed ? 'Night watch ON — alarms ring even locked' : 'Night watch off — tap to arm';
+}
+
+/* ============================== siren & storm ============================== */
+function siren(seconds){
+  if (!profile || !profile.sound) return;
+  ensureAudio();
+  if (!audioCtx) return;
+  try{
+    if (sirenStop) sirenStop();
+    const t0 = audioCtx.currentTime + 0.02;
+    const g = audioCtx.createGain(); g.gain.value = 0.5; g.connect(audioCtx.destination);
+    const o = audioCtx.createOscillator(); o.type = 'square';
+    const o2 = audioCtx.createOscillator(); o2.type = 'sawtooth';
+    const g2 = audioCtx.createGain(); g2.gain.value = 0.35;
+    o.connect(g); o2.connect(g2); g2.connect(g);
+    for (let t = 0; t < seconds; t += 0.42){
+      const hi = Math.round(t / 0.42) % 2 === 0;
+      o.frequency.setValueAtTime(hi ? 932 : 622, t0 + t);
+      o2.frequency.setValueAtTime(hi ? 466 : 311, t0 + t);
+    }
+    g.gain.setValueAtTime(0.5, t0 + seconds - 0.05);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + seconds);
+    o.start(t0); o2.start(t0);
+    o.stop(t0 + seconds); o2.stop(t0 + seconds);
+    sirenStop = () => { try{ o.stop(); o2.stop(); g.disconnect(); }catch(e){} sirenStop = null; };
+    setTimeout(() => { sirenStop = null; }, seconds * 1000 + 100);
+  }catch(e){}
+}
+async function torchBlink(ms){
+  if (!profile || !profile.torch || document.hidden || storm.torchStop) return;
+  try{
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.torch){ track.stop(); return; }
+    let on = false;
+    const iv = setInterval(() => {
+      on = !on;
+      track.applyConstraints({advanced:[{torch:on}]}).catch(()=>{});
+    }, 350);
+    storm.torchStop = () => {
+      clearInterval(iv);
+      track.applyConstraints({advanced:[{torch:false}]}).catch(()=>{});
+      setTimeout(() => { try{ track.stop(); }catch(e){} }, 250);
+      storm.torchStop = null;
+    };
+    setTimeout(() => { if (storm.torchStop) storm.torchStop(); }, ms);
+  }catch(e){}
+}
+function startStorm(o){
+  stopStorm();
+  storm.active = true; storm.rings = 0;
+  const ringLen = o.prio >= 3 ? 12 : o.prio === 2 ? 8 : 4;
+  const ring = () => {
+    if (profile.siren) siren(ringLen);
+    else chime(o.kind === 'water' ? 'water' : o.kind);
+    buzz(o.prio >= 3 ? [400,120,400,120,400,120,700] : o.prio === 2 ? [300,110,300,110,300] : [220,100,220]);
+  };
+  ring();
+  swNotify(o.title, o.msg, o.prio >= 2);
+  if (profile.strobe && !REDUCED && o.prio >= 1) $('alarm').classList.add('strobing');
+  torchBlink(14000);
+  storm.vib = setInterval(() => { if (!document.hidden) buzz([320,140,320]); }, 1600);
+  storm.rering = setInterval(() => {
+    if (++storm.rings > 7){ stopStorm(true); return; }
+    ring();
+    if (storm.rings <= 2) swNotify(o.title, o.msg, o.prio >= 2);
+    if (!storm.torchStop) torchBlink(8000);
+  }, 26000);
+}
+function stopStorm(keepOverlay){
+  storm.active = false;
+  if (storm.rering){ clearInterval(storm.rering); storm.rering = null; }
+  if (storm.vib){ clearInterval(storm.vib); storm.vib = null; }
+  if (storm.torchStop) storm.torchStop();
+  if (sirenStop) sirenStop();
+  try{ if (navigator.vibrate) navigator.vibrate(0); }catch(e){}
+  $('alarm').classList.remove('strobing');
+  if (!keepOverlay) storm.rings = 0;
+}
+
+/* ============================== push alarms (server) ============================== */
+function b64ToU8(base64){
+  const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function apiCall(op, payload){
+  try{
+    const r = await fetch(API + '?op=' + op, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload || {})});
+    const j = await r.json();
+    return !!(j && j.ok);
+  }catch(e){ return false; }
+}
+async function initSW(){
+  if (!('serviceWorker' in navigator)) return;
+  try{ swReg = await navigator.serviceWorker.register('sw.js'); }catch(e){ swReg = null; }
+  try{ if (swReg) pushSub = await swReg.pushManager.getSubscription(); }catch(e){ pushSub = null; }
+  if (pushSub && profile && profile.push) syncPushSchedule();
+}
+async function enablePush(){
+  if (typeof Notification === 'undefined'){ toast('Not available here — in-app alarms still work.', 'warn'); return; }
+  if (!swReg || !('PushManager' in window)){
+    // No push here — at least get local notification permission.
+    try{
+      const p = await Notification.requestPermission();
+      toast(p === 'granted' ? '🔔 Notifications on (this device, app open).' : 'No permission — in-app alarms still work.', p === 'granted' ? '' : 'warn');
+    }catch(e){ toast('Not available here — in-app alarms still work.', 'warn'); }
+    return;
+  }
+  try{
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted'){ toast('No permission — in-app alarms still work.', 'warn'); return; }
+    pushSub = (await swReg.pushManager.getSubscription())
+      || (await swReg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC)}));
+    profile.push = true; store.set(LS.profile, profile);
+    const ok = await apiCall('test', {subscription: pushSub});
+    syncPushSchedule();
+    toast(ok ? '🔒 Lock-screen alarms armed — a test just hit your phone.' : 'Registered — server push not configured yet; in-app alarms still work.', ok ? '' : 'warn');
+  }catch(e){
+    toast('Push not available here — in-app alarms still work.', 'warn');
+  }
+}
+// The pending-alarm list for the server: derived from the session, replaced
+// wholesale on every change (and cleared when the night ends).
+function buildPushAlarms(){
+  const out = [];
+  if (session && !session.demo && session.drinks.length){
+    const last = session.drinks[session.drinks.length - 1];
+    if (!session.fired['water-' + last.id] && !session.waters.some(w => w.t > last.t))
+      out.push({id:'water-' + last.id, at:last.t + profile.waterMin * 60000, title:'Water o’clock 💧',
+        body:'Have a glass of water before the next drink. Your pace, your night.'});
+    const overCap = profile.cap && session.drinks.length >= profile.cap;
+    if (!session.fired['pace-' + last.id] && !overCap)
+      out.push({id:'pace-' + last.id, at:last.t + profile.gapMin * 60000, title:'Pace check ⏱',
+        body:'Gap done. If you’re having another you’re clear — water first?'});
+    out.push({id:'checkin-' + last.id, at:last.t + 95 * 60000, title:'Still out? 🍸',
+      body:'Nothing logged for a while. Log your drinks so I can keep watch — or switch to water and head home like a legend.', urgent:true});
+  }
+  return out;
+}
+function syncPushSchedule(){
+  if (!pushSub || !profile || !profile.push) return;
+  clearTimeout(syncT);
+  syncT = setTimeout(() => { apiCall('schedule', {subscription: pushSub, alarms: buildPushAlarms()}); }, 1200);
 }
 
 /* ============================== toasts & alarms ============================== */
@@ -616,7 +867,7 @@ function toast(msg, cls){
   while (host.children.length > 3) host.firstChild.remove();
 }
 function fireAlarm(o){ // {prio, kind:'water'|'strong'|'danger', icon, title, msg, waterAction}
-  if (!$('alarm').hidden && o.prio < alarmPrio) { notify(o.title, o.msg); return; }
+  if (!$('alarm').hidden && o.prio < alarmPrio) { swNotify(o.title, o.msg, o.prio >= 2); return; }
   alarmPrio = o.prio;
   $('alarmPanel').className = 'panel alarm-panel k-' + o.kind;
   $('alIcon').textContent = o.icon;
@@ -624,11 +875,9 @@ function fireAlarm(o){ // {prio, kind:'water'|'strong'|'danger', icon, title, ms
   $('alMsg').textContent = o.msg;
   $('alAction').hidden = !o.waterAction;
   $('alarm').hidden = false;
-  chime(o.kind === 'water' ? 'water' : o.kind);
-  buzz(o.kind === 'danger' ? [280,120,280,120,280,120,500] : o.kind === 'strong' ? [220,100,220,100,220] : [160,90,160]);
-  notify(o.title, o.msg);
+  startStorm(o);
 }
-function closeAlarm(){ $('alarm').hidden = true; alarmPrio = 0; }
+function closeAlarm(){ stopStorm(); $('alarm').hidden = true; alarmPrio = 0; }
 
 /* ============================== session logic ============================== */
 function freshSession(){
@@ -654,6 +903,8 @@ function logDrink(item, tOverride){
   renderAll();
   if (tOverride) return; // seeding demo — no coaching
 
+  if (profile.autoWatch && !watchArmed && !session.demo) armWatch();
+  syncPushSchedule();
   const count = session.drinks.length;
   const cap = profile.cap;
   const bac = simulate(session.drinks, Date.now()).bac;
@@ -686,6 +937,7 @@ function logWater(){
   const last = session.drinks[session.drinks.length - 1];
   if (last) session.fired['water-' + last.id] = 1;
   saveSession();
+  syncPushSchedule();
   toast(WATER_COACH[session.waters.length % WATER_COACH.length], 'water');
   renderAll();
 }
@@ -696,6 +948,7 @@ function removeEntry(kind, id){
   const bac = simulate(session.drinks, Date.now()).bac;
   session.maxZone = Math.min(session.maxZone, zoneOf(bac));
   saveSession();
+  syncPushSchedule();
   toast('Removed.');
   renderAll();
 }
@@ -710,6 +963,7 @@ function checkAlerts(now){
   const wid = 'water-' + last.id;
   if (!session.fired[wid] && now >= last.t + profile.waterMin * 60000){
     session.fired[wid] = 1; saveSession();
+    syncPushSchedule(); // fired in-app — the server copy must not fire too
     fireAlarm({prio:1, kind:'water', icon:'💧', title:'Water o’clock', waterAction:true,
       msg:'Grab a glass of water before the next drink — it keeps the night long and the morning kind.'});
   }
@@ -717,6 +971,7 @@ function checkAlerts(now){
   const pid = 'pace-' + last.id;
   if (!session.fired[pid] && now >= last.t + profile.gapMin * 60000){
     session.fired[pid] = 1; saveSession();
+    syncPushSchedule();
     const overCap = profile.cap && session.drinks.length >= profile.cap;
     if (bac < 0.8 && !overCap){
       toast('⏱ Gap done — if you’re having another, you’re clear. Water first?');
@@ -845,6 +1100,8 @@ function renderAll(){
 function endNight(){
   if (!session || !session.drinks.length){
     session = null; store.del(LS.session); renderAll();
+    syncPushSchedule();
+    disarmWatch();
     toast('Fresh slate. 🌙');
     return;
   }
@@ -875,13 +1132,15 @@ function finishSummary(){
   const wasDemo = session && session.demo;
   session = null;
   store.del(LS.session);
+  syncPushSchedule();
+  disarmWatch();
   if (wasDemo && !store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
 }
 
 /* ============================== demo ============================== */
 function startDemo(){
-  profile = profile || {sex:'m', weightKg:78, heightCm:180, age:30, cap:5, waterMin:20, gapMin:45, sound:true};
+  profile = profile || {...PROFILE_DEFAULTS, sex:'m', weightKg:78, heightCm:180, age:30};
   session = freshSession();
   session.demo = true;
   const now = Date.now();
@@ -903,6 +1162,7 @@ function startDemo(){
 }
 function exitDemo(){
   session = null; store.del(LS.session);
+  disarmWatch();
   if (!store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
 }
@@ -932,10 +1192,19 @@ function openSettings(){
   $('seWeight').value = profile.weightKg; $('seHeight').value = profile.heightCm; $('seAge').value = profile.age;
   $('seWater').value = profile.waterMin; $('seGap').value = profile.gapMin;
   $('seCap').value = profile.cap; $('seSound').value = profile.sound ? '1' : '0';
-  const nb = $('seNotif');
-  if (typeof Notification === 'undefined'){ nb.disabled = true; nb.textContent = '🔕 Notifications unavailable'; }
-  else if (Notification.permission === 'granted'){ nb.disabled = true; nb.textContent = '🔔 Notifications on'; }
-  else { nb.disabled = false; nb.textContent = '🔔 Phone notifications'; }
+  $('seSiren').value = profile.siren ? '1' : '0';
+  $('seStrobe').value = profile.strobe ? '1' : '0';
+  $('seTorch').value = profile.torch ? '1' : '0';
+  $('seAutoWatch').value = profile.autoWatch ? '1' : '0';
+  const pb = $('sePush');
+  if (typeof Notification === 'undefined'){ pb.disabled = true; pb.textContent = '🔕 Alarms: in-app only here'; }
+  else if (profile.push && pushSub){ pb.disabled = false; pb.textContent = '🔒 Lock-screen alarms ON'; }
+  else { pb.disabled = false; pb.textContent = '🔒 Enable lock-screen alarms'; }
+  const ib = $('seInstall');
+  if (STANDALONE){ ib.disabled = true; ib.textContent = '📲 Installed ✓'; }
+  else if (deferredInstall){ ib.disabled = false; ib.textContent = '📲 Install on phone'; }
+  else { ib.disabled = false; ib.textContent = IS_IOS ? '📲 How to install (iPhone)' : '📲 Install on phone'; }
+  $('iosHint').hidden = !(IS_IOS && !STANDALONE);
   const hist = store.get(LS.history) || [];
   $('histWrap').hidden = !hist.length;
   $('histList').innerHTML = hist.map(h =>
@@ -960,33 +1229,52 @@ function init(){
   buildGauge();
   renderMenu();
 
-  profile = store.get(LS.profile);
+  profile = normProfile(store.get(LS.profile));
   session = store.get(LS.session);
   if (session && !session.demo && Date.now() - lastActivity(session) > 16*3600000){
     session = null; store.del(LS.session); // stale night; start fresh
   }
   if (session && session.demo && !profile){
-    profile = {sex:'m', weightKg:78, heightCm:180, age:30, cap:5, waterMin:20, gapMin:45, sound:true};
+    profile = {...PROFILE_DEFAULTS, sex:'m', weightKg:78, heightCm:180, age:30};
   }
 
   if (!profile) showOnboard();
   else { $('app').hidden = false; renderAll(); }
 
   if ('wakeLock' in navigator) $('wakeBtn').hidden = false;
+  updateWatchUI();
+  initSW();
 
-  // one-time audio unlock on first touch
-  document.addEventListener('pointerdown', ensureAudio, {once:true, capture:true});
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; toast('📲 Installed — open Clearhead from your home screen tonight.'); });
+
+  // First touch: unlock audio, and re-arm night watch if a night is running
+  // (audio can only start inside a user gesture, so a reload needs one tap).
+  const hasActiveNight = !!(profile && session && session.drinks.length && !session.endedAt);
+  if (hasActiveNight && profile.autoWatch) $('rearmBanner').hidden = false;
+  document.addEventListener('pointerdown', () => {
+    ensureAudio();
+    if (profile && session && session.drinks.length && profile.autoWatch && !watchArmed && !session.demo) armWatch();
+    else $('rearmBanner').hidden = true;
+  }, {once:true, capture:true});
+
+  $('watchBtn').addEventListener('click', () => {
+    if (watchArmed){ disarmWatch(); toast('Night watch off — alarms only while the app is visible.', 'warn'); }
+    else { armWatch(); toast('🛡 Night watch armed — keep Clearhead open and alarms ring even with the screen locked.'); }
+  });
 
   // onboarding
   wireSeg('obSex'); wireSeg('seSex');
   $('obStart').addEventListener('click', () => {
     const p = readProfileForm('ob');
     if (!p) return;
-    profile = {...p, cap:parseInt($('obCap').value, 10), waterMin:20, gapMin:45, sound:true};
+    profile = {...PROFILE_DEFAULTS, ...p, cap:parseInt($('obCap').value, 10)};
     store.set(LS.profile, profile);
     $('onboard').hidden = true; $('app').hidden = false;
     renderAll();
     toast('Set. Have a good one — I’ve got the counting. 🍸');
+    if (!STANDALONE && (deferredInstall || IS_IOS))
+      setTimeout(() => toast('📲 Tip: install Clearhead on your phone (Settings ⚙︎ → Install) for lock-screen alarms.'), 4200);
   });
   $('obDemo').addEventListener('click', startDemo);
   $('demoExit').addEventListener('click', exitDemo);
@@ -1030,30 +1318,54 @@ function init(){
   // settings
   $('setBtn').addEventListener('click', openSettings);
   $('seClose').addEventListener('click', () => { $('settings').hidden = true; });
-  $('seSave').addEventListener('click', () => {
+  $('seSave').addEventListener('click', async () => {
     const p = readProfileForm('se');
     if (!p) return;
+    const wantTorch = $('seTorch').value === '1';
+    if (wantTorch && !profile.torch){
+      // Ask for the camera now (we're inside a tap), not mid-alarm.
+      let ok = false;
+      try{
+        const s = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+        const t = s.getVideoTracks()[0];
+        ok = !!(t.getCapabilities && t.getCapabilities().torch);
+        t.stop();
+      }catch(e){ ok = false; }
+      if (!ok){
+        $('seTorch').value = '0';
+        toast('No controllable flashlight on this device/browser — strobe & siren still on.', 'warn');
+      }
+    }
     profile = {...profile, ...p,
       waterMin:parseInt($('seWater').value,10), gapMin:parseInt($('seGap').value,10),
-      cap:parseInt($('seCap').value,10), sound:$('seSound').value === '1'};
+      cap:parseInt($('seCap').value,10), sound:$('seSound').value === '1',
+      siren:$('seSiren').value === '1', strobe:$('seStrobe').value === '1',
+      torch:$('seTorch').value === '1', autoWatch:$('seAutoWatch').value === '1'};
     store.set(LS.profile, profile);
     $('settings').hidden = true;
     toast('Saved.');
+    syncPushSchedule();
     renderAll();
   });
   $('seTest').addEventListener('click', () => {
-    fireAlarm({prio:1, kind:'water', icon:'💧', title:'Water o’clock', waterAction:false,
-      msg:'This is what a reminder looks (and sounds) like. Keep the tab open and the screen awake during the night.'});
+    fireAlarm({prio:2, kind:'strong', icon:'🚨', title:'Full alarm test',
+      msg:'Siren, flash, vibration, notification — a real alarm does all of this until you dismiss it. Keep Clearhead open tonight and it cuts through anything.'});
+    if (profile.push && pushSub) apiCall('test', {subscription: pushSub});
   });
-  $('seNotif').addEventListener('click', async () => {
-    try{
-      const perm = await Notification.requestPermission();
-      if (perm === 'granted'){ $('seNotif').disabled = true; $('seNotif').textContent = '🔔 Notifications on'; toast('Notifications enabled.'); }
-      else toast('No permission — in-app alarms still work.', 'warn');
-    }catch(e){ toast('Not available here — in-app alarms still work.', 'warn'); }
+  $('sePush').addEventListener('click', enablePush);
+  $('seInstall').addEventListener('click', async () => {
+    if (deferredInstall){
+      try{ deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; }catch(e){}
+    } else if (IS_IOS){
+      toast('Safari: tap Share, then "Add to Home Screen". Open Clearhead from that icon.', 'water');
+    } else {
+      toast('In your browser menu choose "Install app" / "Add to Home screen".', 'water');
+    }
   });
   $('seWipe').addEventListener('click', () => {
     if (!confirm('Erase your profile, tonight’s log and history?')) return;
+    if (pushSub) apiCall('schedule', {subscription: pushSub, alarms: []});
+    disarmWatch();
     store.del(LS.profile); store.del(LS.session); store.del(LS.history);
     profile = null; session = null;
     $('settings').hidden = true;
@@ -1066,6 +1378,7 @@ function init(){
     if (!document.hidden){
       if (wantWake) setWake(true);
       if (profile && session){ renderAll(); checkAlerts(Date.now()); }
+      if (storm.active) torchBlink(8000); // flashlight can only run while visible
     }
   });
 
