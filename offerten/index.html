@@ -151,6 +151,23 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
 .pick .p-price{font-family:var(--mono);font-weight:600}
 .pick small{color:var(--muted)}
 
+/* package builder (VR Corner) */
+.px{display:grid;gap:12px;padding:6px 10px 10px}
+.px-h{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:2px 0 -4px 1px}
+.px-hint{font-size:12.5px;color:var(--muted);margin:-6px 0 0 1px}
+.px .seg{flex-wrap:wrap}
+.px-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px}
+.px-row.base{background:var(--acc-soft);border-color:transparent}
+.px-row label{flex:1;display:flex;align-items:flex-start;gap:9px;cursor:pointer;min-width:0}
+.px-row label>span{min-width:0}
+.px-row small{display:block;color:var(--muted)}
+.px-row .in{max-width:70px;min-height:34px;padding:5px 8px;flex:none}
+.px-row select.in{max-width:190px}
+.px-row .p{font-family:var(--mono);font-weight:600;white-space:nowrap;margin-left:auto}
+.px input[type=checkbox]{width:17px;height:17px;accent-color:var(--acc);margin-top:2px;flex:none}
+.px-total{display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--ink);padding-top:10px;font-weight:700;margin-top:2px}
+.px-total .p{font-family:var(--mono);font-size:17px}
+
 /* toast */
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:99;box-shadow:0 10px 30px -10px rgba(21,26,35,.5)}
 #toast.on{opacity:1;transform:translateX(-50%)}
@@ -163,6 +180,8 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
   .item .amount{text-align:left;padding-top:4px}
   .doc .amt{min-width:0}
   .viewtitle h1{font-size:19px}
+  .px-row{flex-wrap:wrap}
+  .px-row .p{margin-left:0;width:100%;text-align:right}
 }
 @media print{.top,.viewtitle .sp,.filter,.acts{display:none}}
 </style>
@@ -365,7 +384,7 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
         <button class="btn" id="backupImportBtn">Backup importieren</button>
         <input type="file" id="backupImport" accept="application/json,.json" class="hide">
       </div>
-      <p class="muted" style="margin-bottom:0;font-size:13px">App-Version 2.0 · Cache <span class="mono">vrent-offerten-v2</span> · <span id="swState">Offline-Status wird geprüft …</span></p>
+      <p class="muted" style="margin-bottom:0;font-size:13px">App-Version 2.1 · Cache <span class="mono">vrent-offerten-v3</span> · <span id="swState">Offline-Status wird geprüft …</span></p>
     </div>
   </div>
 </section>
@@ -374,11 +393,16 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
 
 <!-- price picker -->
 <dialog id="dlgPrice">
-  <div class="hd"><h2 style="font-size:15px">Aus Preisliste einfügen</h2>
-    <input class="in" id="dlgPriceSearch" type="search" placeholder="Suchen …" style="margin-left:auto;max-width:220px;min-height:36px;padding:6px 10px">
+  <div class="hd">
+    <div class="seg" id="dlgTabs">
+      <button data-p="list" class="on">Artikel</button>
+      <button data-p="pkg">Pakete</button>
+    </div>
+    <input class="in" id="dlgPriceSearch" type="search" placeholder="Suchen …" style="margin-left:auto;max-width:200px;min-height:36px;padding:6px 10px">
     <button class="btn sm" id="dlgPriceClose">Schliessen</button>
   </div>
   <div class="bd" id="dlgPriceList"></div>
+  <div class="bd hide" id="dlgPkg"></div>
 </dialog>
 
 <div id="toast"></div>
@@ -751,7 +775,7 @@ function renderPricePicker(){
       <span class="p-price">CHF ${chf(p.price)}</span>
     </button>`).join("") : `<div class="empty">Keine Artikel gefunden.</div>`;
 }
-$("#edFromPrice").addEventListener("click", () => { $("#dlgPriceSearch").value = ""; renderPricePicker(); $("#dlgPrice").showModal(); });
+$("#edFromPrice").addEventListener("click", () => { $("#dlgPriceSearch").value = ""; renderPricePicker(); renderPkg(); applyDlgTab(); $("#dlgPrice").showModal(); });
 $("#dlgPriceSearch").addEventListener("input", renderPricePicker);
 $("#dlgPriceClose").addEventListener("click", () => $("#dlgPrice").close());
 $("#dlgPriceList").addEventListener("click", (e) => {
@@ -763,6 +787,134 @@ $("#dlgPriceList").addEventListener("click", (e) => {
   markDirty(); renderItems(); renderTotals();
   $("#dlgPrice").close();
 });
+
+/* VR-Corner package builder — prices mirror the builder on vrent.ch */
+const PKG_CFG = {
+  perHeadset: { day:96, week:120, month:150 },
+  durLabel: { day:"1 Tag", week:"1 Woche", month:"1 Monat" },
+  packages: [
+    { name:"Bronze",   hs:4,  people:"bis 10 Personen" },
+    { name:"Silver",   hs:10, people:"10–25 Personen" },
+    { name:"Gold",     hs:20, people:"25–50 Personen" },
+    { name:"Platinum", hs:50, people:"50+ Personen" }
+  ],
+  hostRate:120,
+  travel:[["Raum Zürich",60],["Zentralschweiz",120],["Basel · Bern · Ostschweiz",180],["West · Süd · Alpen",330]],
+  tour:2000, drone:600, consult:480, coursePerHs:20, tv:50, batt:15, hp:10,
+  included:"Meta Quest 3 · 14 Apps vorinstalliert · Hygiene-Kits · Lieferung & Rückholung schweizweit · geladen & konfiguriert"
+};
+let dlgTab = "list";
+const pkgSel = { pkg:1, dur:"week" };
+
+function applyDlgTab(){
+  $$("#dlgTabs button").forEach(b => b.classList.toggle("on", b.dataset.p === dlgTab));
+  $("#dlgPriceList").classList.toggle("hide", dlgTab !== "list");
+  $("#dlgPkg").classList.toggle("hide", dlgTab !== "pkg");
+  $("#dlgPriceSearch").classList.toggle("hide", dlgTab !== "list");
+}
+$("#dlgTabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  dlgTab = b.dataset.p; applyDlgTab();
+});
+
+function renderPkg(){
+  const P = PKG_CFG.packages[pkgSel.pkg];
+  const rate = PKG_CFG.perHeadset[pkgSel.dur];
+  const exRow = (id, label, sub, price, qty) => `
+    <div class="px-row">
+      <label><input type="checkbox" id="px-${id}"><span>${label}${sub ? `<small>${sub}</small>` : ""}</span></label>
+      ${qty !== undefined ? `<input class="in num" id="pxq-${id}" inputmode="numeric" value="${qty}">` : ""}
+      <span class="p" id="pxp-${id}">${price}</span>
+    </div>`;
+  $("#dlgPkg").innerHTML = `<div class="px">
+    <div><div class="px-h">Paket</div></div>
+    <div class="seg" id="pxPkg">${PKG_CFG.packages.map((p,i) =>
+      `<button data-i="${i}" class="${i === pkgSel.pkg ? "on" : ""}">${p.name}</button>`).join("")}</div>
+    <div class="px-hint">${P.hs} Headsets · ${P.people}</div>
+    <div><div class="px-h">Dauer</div></div>
+    <div class="seg" id="pxDur">${Object.entries(PKG_CFG.durLabel).map(([k,v]) =>
+      `<button data-d="${k}" class="${k === pkgSel.dur ? "on" : ""}">${v}</button>`).join("")}</div>
+    <div class="px-row base"><label style="cursor:default"><span><b>VR Corner ${P.name}</b> — ${P.hs} Headsets · ${PKG_CFG.durLabel[pkgSel.dur]}<small>${PKG_CFG.included}</small></span></label>
+      <span class="p">CHF ${chf(P.hs * rate)}</span></div>
+    <div><div class="px-h">Extras · pro Auftrag</div></div>
+    ${exRow("onspot", "On-Spot Service", `CHF ${PKG_CFG.hostRate}/Std. pro Betreuer · empfohlen: 1 pro 5 Headsets`, "—")}
+    <div class="px-row" id="px-onspot-detail" style="display:none">
+      <label style="cursor:default"><span class="muted" style="font-size:13px">Betreuer / Stunden / Anreise</span></label>
+      <input class="in num" id="pxq-hosts" inputmode="numeric" value="${Math.max(1, Math.ceil(P.hs / 5))}">
+      <input class="in num" id="pxq-hours" inputmode="numeric" value="4">
+      <select class="in" id="px-travel"><option value="">— keine Anreise —</option>${PKG_CFG.travel.map((t,i) =>
+        `<option value="${i}">${t[0]} · CHF ${t[1]}</option>`).join("")}</select>
+    </div>
+    ${exRow("xhs", "Zusatz-Headsets", `CHF ${chf(rate)} pro Headset · ${PKG_CFG.durLabel[pkgSel.dur]}`, "—", 0)}
+    ${exRow("tour", "360° VR-Tour", "ca. 16 Std. Produktion inkl., danach CHF 120/Std.", "CHF " + chf(PKG_CFG.tour))}
+    ${exRow("drone", "Drohnenaufnahmen", "5 Std. Dreh & Schnitt inkl., danach CHF 120/Std.", "CHF " + chf(PKG_CFG.drone))}
+    ${exRow("consult", "VR Consulting · Halbtag", "Eventplanung: Inhalte, Ablauf, Setup", "CHF " + chf(PKG_CFG.consult))}
+    ${exRow("courses", "VR-Lernkurse", `CHF ${PKG_CFG.coursePerHs} pro Headset`, "—")}
+    ${exRow("tv", "Portable TV", "Gäste verfolgen das Geschehen live", "CHF " + chf(PKG_CFG.tv))}
+    ${exRow("batt", "Zusatz-Akkus", "CHF 15/Stk. · empfohlen ab 5 Std. Einsatz", "—", P.hs)}
+    ${exRow("hp", "Kopfhörer", "CHF 10/Stk. · für laute Umgebungen", "—", P.hs)}
+    <div class="px-total"><span>Paket-Total</span><span class="p" id="pxTotal"></span></div>
+    <button class="btn pri" id="pxInsert">Positionen einfügen</button>
+  </div>`;
+  updatePkg();
+}
+function pkgOn(id){ const el = $("#px-" + id); return !!(el && el.checked); }
+function pkgQty(id, fb){ const el = $("#pxq-" + id); const n = el ? Math.max(0, Math.round(num(el.value))) : 0; return n || fb || 0; }
+function pkgLines(){
+  const P = PKG_CFG.packages[pkgSel.pkg];
+  const rate = PKG_CFG.perHeadset[pkgSel.dur];
+  const dl = PKG_CFG.durLabel[pkgSel.dur];
+  const lines = [{ desc:`VR Corner ${P.name} — ${P.hs} Headsets · ${dl}\n${PKG_CFG.included}`, qty:1, unit:"Pauschale", price:P.hs * rate }];
+  if (pkgOn("onspot")){
+    const hosts = pkgQty("hosts", 1), hrs = pkgQty("hours", 1);
+    lines.push({ desc:`On-Spot Service — ${hosts} Betreuer × ${hrs} Std. (Aufbau, Betreuung, Reinigung)`, qty:hosts * hrs, unit:"Std.", price:PKG_CFG.hostRate });
+    const trSel = $("#px-travel");
+    const tr = trSel && trSel.value !== "" ? PKG_CFG.travel[+trSel.value] : null;
+    if (tr) lines.push({ desc:`Anreise On-Spot-Team — ${tr[0]}`, qty:1, unit:"Pauschale", price:tr[1] });
+  }
+  const xhs = pkgOn("xhs") ? pkgQty("xhs") : 0;
+  if (xhs > 0) lines.push({ desc:`Zusatz-Headsets · ${dl}`, qty:xhs, unit:"Stk.", price:rate });
+  if (pkgOn("tour")) lines.push({ desc:"360° VR-Tour (ca. 16 Std. Produktion inkl.)", qty:1, unit:"Pauschale", price:PKG_CFG.tour });
+  if (pkgOn("drone")) lines.push({ desc:"Drohnenaufnahmen (5 Std. Dreh & Schnitt inkl.)", qty:1, unit:"Pauschale", price:PKG_CFG.drone });
+  if (pkgOn("consult")) lines.push({ desc:"VR Consulting — Eventplanung (Halbtag)", qty:1, unit:"Pauschale", price:PKG_CFG.consult });
+  if (pkgOn("courses")) lines.push({ desc:"VR-Lernkurse", qty:P.hs + xhs, unit:"Headset", price:PKG_CFG.coursePerHs });
+  if (pkgOn("tv")) lines.push({ desc:"Portable TV — Live-Mitverfolgung", qty:1, unit:"Pauschale", price:PKG_CFG.tv });
+  if (pkgOn("batt") && pkgQty("batt") > 0) lines.push({ desc:"Zusatz-Akkus", qty:pkgQty("batt"), unit:"Stk.", price:PKG_CFG.batt });
+  if (pkgOn("hp") && pkgQty("hp") > 0) lines.push({ desc:"Kopfhörer", qty:pkgQty("hp"), unit:"Stk.", price:PKG_CFG.hp });
+  return lines;
+}
+function updatePkg(){
+  const P = PKG_CFG.packages[pkgSel.pkg];
+  const rate = PKG_CFG.perHeadset[pkgSel.dur];
+  const det = $("#px-onspot-detail");
+  if (det) det.style.display = pkgOn("onspot") ? "" : "none";
+  const set = (id, val) => { const el = $("#pxp-" + id); if (el) el.textContent = val; };
+  const trSel = $("#px-travel");
+  const tr = pkgOn("onspot") && trSel && trSel.value !== "" ? PKG_CFG.travel[+trSel.value][1] : 0;
+  set("onspot", pkgOn("onspot") ? "CHF " + chf(PKG_CFG.hostRate * pkgQty("hosts", 1) * pkgQty("hours", 1) + tr) : "—");
+  set("xhs", pkgOn("xhs") && pkgQty("xhs") > 0 ? "CHF " + chf(rate * pkgQty("xhs")) : "—");
+  set("courses", pkgOn("courses") ? "CHF " + chf(PKG_CFG.coursePerHs * (P.hs + (pkgOn("xhs") ? pkgQty("xhs") : 0))) : "—");
+  set("batt", pkgOn("batt") ? "CHF " + chf(PKG_CFG.batt * pkgQty("batt")) : "—");
+  set("hp", pkgOn("hp") ? "CHF " + chf(PKG_CFG.hp * pkgQty("hp")) : "—");
+  $("#pxTotal").textContent = "CHF " + chf(pkgLines().reduce((a, l) => a + round2(l.qty * l.price), 0));
+}
+$("#dlgPkg").addEventListener("click", (e) => {
+  const pb = e.target.closest("#pxPkg button");
+  if (pb){ pkgSel.pkg = +pb.dataset.i; renderPkg(); return; }
+  const db = e.target.closest("#pxDur button");
+  if (db){ pkgSel.dur = db.dataset.d; renderPkg(); return; }
+  if (e.target.closest("#pxInsert")){
+    const lines = pkgLines();
+    const empty = ED.items.length === 1 && !String(ED.items[0].desc).trim() && !num(ED.items[0].price);
+    if (empty) ED.items = [];
+    ED.items.push(...lines);
+    markDirty(); renderItems(); renderTotals();
+    $("#dlgPrice").close();
+    toast("Paket eingefügt: VR Corner " + PKG_CFG.packages[pkgSel.pkg].name);
+  }
+});
+$("#dlgPkg").addEventListener("input", updatePkg);
+$("#dlgPkg").addEventListener("change", updatePkg);
 
 /* ---------- customers ---------- */
 function renderCustomers(){
