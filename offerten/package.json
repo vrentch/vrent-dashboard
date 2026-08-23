@@ -1,0 +1,12 @@
+{
+  "name": "vrent-offerten",
+  "version": "2.0.0",
+  "private": true,
+  "description": "VRENT Offerten — offline PWA für Offerten & Rechnungen (VRENT.CH)",
+  "scripts": {
+    "build": "bash build.sh"
+  },
+  "dependencies": {
+    "jspdf": "2.5.2"
+  }
+}

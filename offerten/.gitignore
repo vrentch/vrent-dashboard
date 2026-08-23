@@ -1,0 +1,8 @@
+node_modules/
+public/
+__pycache__/
+*.pyc
+# fetched from the vrent.ch CDN at build time (see gen_assets.py);
+# a committed logo.png/mark.png would take precedence over the fetch
+logo.png
+mark.png
