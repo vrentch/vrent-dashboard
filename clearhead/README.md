@@ -69,6 +69,7 @@ Never a green light to drive. Not medical advice. Emergencies in CH: 144.
 The app is deployed file-based to the Vercel project `clearhead`
 (production alias `clearhead-vrentchs-projects.vercel.app`). `build.mjs`
 generates the icons at build time and unpacks `index.html` from the
-`idx-*.b64` chunk files (gzip+base64 of `index.html`, split for transport;
-regenerate with `gzip -9 -c index.html | base64 -w0` and re-split if you
-edit the app). `index.html` in this folder is the canonical source.
+`chunk-NN.b64` files (gzip+base64 of `index.html`, split into ≤900-char
+pieces for transport; regenerate with `gzip -9 -c index.html | base64 -w0`
+and re-split if you edit the app). `index.html` in this folder is the
+canonical source.

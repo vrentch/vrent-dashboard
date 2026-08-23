@@ -92,15 +92,15 @@ png(render(512), 'public/icon-512.png');
 png(render(512, 0.74), 'public/icon-mask-512.png');
 png(render(192), 'public/icon-192.png');
 png(render(180), 'public/apple-touch-icon.png');
-// index.html travels as gzip+base64 in 8 chunk files (gzip's CRC catches any
-// transport error; per-chunk md5 logs pinpoint where). idx-0.b64 .. idx-7.b64
+// index.html travels as gzip+base64 in 34 chunk files (gzip's CRC catches any
+// transport error; per-chunk md5 logs pinpoint where). chunk-00.b64 .. chunk-33.b64
 const { createHash } = await import('node:crypto');
 const md5 = (s) => createHash('md5').update(s).digest('hex').slice(0, 12);
-const PARTS = ['0', '1', '2a', '2b', '2c', '2d', '3', '4', '5', '6', '7'];
+const PARTS = Array.from({ length: 34 }, (_, i) => String(i).padStart(2, '0'));
 let b64 = '';
 for (const p of PARTS) {
-  const part = readFileSync(`idx-${p}.b64`, 'utf8').replace(/\s+/g, '');
-  console.log(`idx-${p} md5 ${md5(part)} len ${part.length}`);
+  const part = readFileSync(`chunk-${p}.b64`, 'utf8').replace(/\s+/g, '');
+  console.log(`chunk-${p} md5 ${md5(part)} len ${part.length}`);
   b64 += part;
 }
 const html = gunzipSync(Buffer.from(b64, 'base64'));

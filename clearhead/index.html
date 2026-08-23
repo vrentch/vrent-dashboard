@@ -190,6 +190,18 @@
   .toast.bad{border-color:var(--bad); background:#38151b; color:#ffd9dc;}
   @keyframes tin{from{transform:translateY(14px); opacity:0;}to{transform:none; opacity:1;}}
 
+  /* ---------- table mode: dim always-on countdown ---------- */
+  .pace-chip{cursor:pointer;}
+  #tableMode{position:fixed; inset:0; background:#000; z-index:70; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; cursor:pointer;}
+  #tableMode .tm-eyebrow{font-family:var(--mono); font-size:13px; letter-spacing:.3em; color:#8a6f3f;}
+  #tableMode .tm-count{font-family:var(--disp); font-weight:800; font-size:min(26vw,150px); line-height:1; color:#d9b36a; font-variant-numeric:tabular-nums; letter-spacing:-.02em;}
+  #tableMode .tm-count.ready{color:#7dbf85; font-size:min(20vw,110px);}
+  #tableMode .tm-at{font-family:var(--mono); font-size:14px; color:#6e5c3f;}
+  #tableMode .tm-water{font-size:17px; font-weight:600; color:#5f99a3; margin-top:6px;}
+  #tableMode .tm-water.done{color:#4a5f52;}
+  #tableMode .tm-bac{font-family:var(--mono); font-size:13px; color:#5c4f38; margin-top:8px;}
+  #tableMode .tm-hint{position:absolute; bottom:calc(18px + env(safe-area-inset-bottom)); left:0; right:0; font-size:11px; color:#3d3527;}
+
   @media (max-width:370px){ .grid{grid-template-columns:repeat(2,1fr);} .bac-num{font-size:44px;} }
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important;}
@@ -417,6 +429,16 @@
   </div>
 </div>
 
+<!-- table mode: phone flat on the table, screen stays on, dim countdown -->
+<div id="tableMode" hidden>
+  <div class="tm-eyebrow" id="tmEyebrow">NEXT DRINK</div>
+  <div class="tm-count" id="tmCount">45:00</div>
+  <div class="tm-at" id="tmAt"></div>
+  <div class="tm-water" id="tmWater"></div>
+  <div class="tm-bac" id="tmBac"></div>
+  <div class="tm-hint">screen stays on · tap anywhere to close</div>
+</div>
+
 <div id="toastHost" aria-live="polite"></div>
 
 <script>
@@ -511,6 +533,7 @@ const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platf
 const STANDALONE = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
 const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const normProfile = p => p ? {...PROFILE_DEFAULTS, ...p} : null;
+let tableOpen = false, tmPrevWake = false, lastTimerMin = -1;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -855,6 +878,93 @@ function syncPushSchedule(){
   syncT = setTimeout(() => { apiCall('schedule', {subscription: pushSub, alarms: buildPushAlarms()}); }, 1200);
 }
 
+/* ============================== lock-screen countdown ============================== */
+// A silent, self-replacing notification acts as a live countdown on the lock
+// screen (Android). iOS can't update notifications silently, so there the
+// countdown lives in the app badge and table mode instead.
+async function updateTimerSurfaces(){
+  if (!profile || !session) return;
+  const now = Date.now();
+  const last = !session.demo && session.drinks.length ? session.drinks[session.drinks.length - 1] : null;
+  const gapEnd = last ? last.t + profile.gapMin * 60000 : 0;
+  const remMs = gapEnd - now;
+  const minLeft = Math.max(0, Math.ceil(remMs / 60000));
+  try{
+    if ('setAppBadge' in navigator){
+      if (last && remMs > 0) navigator.setAppBadge(minLeft);
+      else navigator.clearAppBadge();
+    }
+  }catch(e){}
+  if (IS_IOS || !swReg || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const curMin = Math.floor(now / 60000);
+  if (curMin === lastTimerMin) return; // refresh once a minute
+  lastTimerMin = curMin;
+  try{
+    if (last && watchArmed && remMs > 0){
+      const waterDone = session.waters.some(w => w.t > last.t);
+      const bac = simulate(session.drinks, now).bac;
+      await swReg.showNotification('⏱ Next drink in ' + minLeft + ' min — at ' + fmtClock(gapEnd), {
+        tag:'clearhead-timer', silent:true,
+        body:(waterDone ? '💧 water done ✓' : '💧 drink one water before the next') + ' · ' + bac.toFixed(2) + '‰ ' + ZONES[zoneOf(bac)].key,
+        icon:'icon-192.png', badge:'icon-192.png', data:{url:'./'},
+      });
+    } else {
+      const ns = await swReg.getNotifications({tag:'clearhead-timer'});
+      for (const n of ns) n.close();
+    }
+  }catch(e){}
+}
+async function clearTimerSurfaces(){
+  lastTimerMin = -1;
+  try{ if ('clearAppBadge' in navigator) navigator.clearAppBadge(); }catch(e){}
+  try{
+    if (swReg){ const ns = await swReg.getNotifications({tag:'clearhead-timer'}); for (const n of ns) n.close(); }
+  }catch(e){}
+}
+
+/* ============================== table mode ============================== */
+// Phone flat on the table: a dim, always-on countdown screen (wake lock held).
+function openTableMode(){
+  if (!session || !session.drinks.length){ toast('Log a drink first — then I have something to count. 🍸'); return; }
+  tableOpen = true;
+  tmPrevWake = wantWake;
+  setWake(true);
+  $('tableMode').hidden = false;
+  renderTableMode();
+}
+function closeTableMode(){
+  if (!tableOpen) return;
+  tableOpen = false;
+  $('tableMode').hidden = true;
+  if (!tmPrevWake) setWake(false);
+}
+function renderTableMode(){
+  if (!tableOpen) return;
+  const now = Date.now();
+  const last = session && session.drinks.length ? session.drinks[session.drinks.length - 1] : null;
+  if (!last){ closeTableMode(); return; }
+  const gapEnd = last.t + profile.gapMin * 60000;
+  const remMs = gapEnd - now;
+  const waterDone = session.waters.some(w => w.t > last.t);
+  const bac = simulate(session.drinks, now).bac;
+  const count = $('tmCount');
+  if (remMs > 0){
+    $('tmEyebrow').textContent = 'NEXT DRINK';
+    count.textContent = fmtMMSS(remMs);
+    count.classList.remove('ready');
+    $('tmAt').textContent = 'at ' + fmtClock(gapEnd);
+  } else {
+    const overCap = profile.cap && session.drinks.length >= profile.cap;
+    $('tmEyebrow').textContent = overCap ? 'CAP REACHED' : (bac >= 0.8 ? 'HOLD ON' : 'CLEAR');
+    count.textContent = overCap ? '🏁' : (bac >= 0.8 ? '🛑' : '✓');
+    count.classList.add('ready');
+    $('tmAt').textContent = overCap ? 'water rounds from here' : (bac >= 0.8 ? 'let the level drop first' : 'if you want one — no rush');
+  }
+  $('tmWater').textContent = waterDone ? '💧 water done ✓' : '💧 one water before the next';
+  $('tmWater').classList.toggle('done', waterDone);
+  $('tmBac').textContent = bac.toFixed(2) + '‰ · ' + ZONES[zoneOf(bac)].key;
+}
+
 /* ============================== toasts & alarms ============================== */
 function toast(msg, cls){
   const host = $('toastHost');
@@ -869,6 +979,7 @@ function toast(msg, cls){
 }
 function fireAlarm(o){ // {prio, kind:'water'|'strong'|'danger', icon, title, msg, waterAction}
   if (!$('alarm').hidden && o.prio < alarmPrio) { swNotify(o.title, o.msg, o.prio >= 2); return; }
+  closeTableMode(); // the alarm takes over the screen
   alarmPrio = o.prio;
   $('alarmPanel').className = 'panel alarm-panel k-' + o.kind;
   $('alIcon').textContent = o.icon;
@@ -906,6 +1017,7 @@ function logDrink(item, tOverride){
 
   if (profile.autoWatch && !watchArmed && !session.demo) armWatch();
   syncPushSchedule();
+  lastTimerMin = -1; // new gap — refresh the lock-screen countdown now
   const count = session.drinks.length;
   const cap = profile.cap;
   const bac = simulate(session.drinks, Date.now()).bac;
@@ -939,6 +1051,7 @@ function logWater(){
   if (last) session.fired['water-' + last.id] = 1;
   saveSession();
   syncPushSchedule();
+  lastTimerMin = -1; // water line in the countdown changes
   toast(WATER_COACH[session.waters.length % WATER_COACH.length], 'water');
   renderAll();
 }
@@ -974,9 +1087,11 @@ function checkAlerts(now){
     session.fired[pid] = 1; saveSession();
     syncPushSchedule();
     const overCap = profile.cap && session.drinks.length >= profile.cap;
+    clearTimerSurfaces();
     if (bac < 0.8 && !overCap){
       toast('⏱ Gap done — if you’re having another, you’re clear. Water first?');
       chime('soft');
+      swNotify('✓ Clear for the next round', 'Gap done — one water first? 💧', false);
     }
   }
   // zone crossings
@@ -1102,6 +1217,7 @@ function endNight(){
   if (!session || !session.drinks.length){
     session = null; store.del(LS.session); renderAll();
     syncPushSchedule();
+    clearTimerSurfaces();
     disarmWatch();
     toast('Fresh slate. 🌙');
     return;
@@ -1134,6 +1250,7 @@ function finishSummary(){
   session = null;
   store.del(LS.session);
   syncPushSchedule();
+  clearTimerSurfaces();
   disarmWatch();
   if (wasDemo && !store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
@@ -1163,6 +1280,7 @@ function startDemo(){
 }
 function exitDemo(){
   session = null; store.del(LS.session);
+  clearTimerSurfaces();
   disarmWatch();
   if (!store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
@@ -1299,6 +1417,8 @@ function init(){
   });
   $('endBtn').addEventListener('click', endNight);
   $('suDone').addEventListener('click', finishSummary);
+  $('paceChip').addEventListener('click', openTableMode);
+  $('tableMode').addEventListener('click', closeTableMode);
 
   // custom drink
   $('cuCancel').addEventListener('click', () => { $('customDlg').hidden = true; });
@@ -1366,6 +1486,7 @@ function init(){
   $('seWipe').addEventListener('click', () => {
     if (!confirm('Erase your profile, tonight’s log and history?')) return;
     if (pushSub) apiCall('schedule', {subscription: pushSub, alarms: []});
+    clearTimerSurfaces();
     disarmWatch();
     store.del(LS.profile); store.del(LS.session); store.del(LS.history);
     profile = null; session = null;
@@ -1388,7 +1509,9 @@ function init(){
   setInterval(() => {
     if (!profile || $('app').hidden) return;
     renderAll();
+    renderTableMode();
     checkAlerts(Date.now());
+    updateTimerSurfaces();
   }, 1000);
 }
 init();
