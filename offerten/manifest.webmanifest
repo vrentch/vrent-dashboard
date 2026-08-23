@@ -1,7 +1,7 @@
 {
   "name": "VRENT Offerten",
   "short_name": "VRENT",
-  "description": "Offerten & Rechnungen für VRENT — schnell, offline, mit PDF.",
+  "description": "Quotes & invoices for VRENT — fast, offline, with PDF.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

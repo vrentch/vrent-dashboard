@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="de-CH">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VRENT Offerten</title>
-<meta name="description" content="Offerten & Rechnungen für VRENT — schnell, offline, mit PDF.">
+<meta name="description" content="Quotes & invoices for VRENT — fast, offline, with PDF.">
 <meta name="theme-color" content="#eef1f6">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./favicon.png" type="image/png">
@@ -22,7 +22,7 @@
 :root{
   --bg:#eef1f6; --card:#ffffff; --ink:#151a23; --muted:#5d6779; --faint:#8b94a6;
   --line:#dde3ec; --line2:#e9edf4;
-  --acc:#3d43e2; --acc-soft:#e9ebff;
+  --acc:#8f11b5; --acc-soft:#f6e7fc;
   --ok:#0e8a4c; --ok-soft:#e1f4e9; --bad:#c02942; --bad-soft:#fbe4e8;
   --info:#2160d3; --info-soft:#e4edfd; --warn:#9a6a12; --warn-soft:#faf0da;
   --r:14px; --sans:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -191,33 +191,33 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
 <header class="top"><div class="wrap">
   <div class="brand">
     <img src="./mark.png" alt="VRENT">
-    <span><b>VRENT&nbsp;Offerten</b><small>Offerten · Rechnungen</small></span>
+    <span><b>VRENT&nbsp;Offerten</b><small>Quotes · Invoices</small></span>
   </div>
   <nav class="tabs" id="tabs">
-    <button data-v="docs" class="on">Dokumente</button>
-    <button data-v="customers">Kunden</button>
-    <button data-v="prices">Preisliste</button>
-    <button data-v="settings">Einstellungen</button>
+    <button data-v="docs" class="on">Documents</button>
+    <button data-v="customers">Customers</button>
+    <button data-v="prices">Price list</button>
+    <button data-v="settings">Settings</button>
   </nav>
 </div></header>
 
 <main class="wrap">
 
-<!-- ══════════ Dokumente ══════════ -->
+<!-- ══════════ Documents ══════════ -->
 <section id="v-docs">
   <div class="viewtitle">
-    <h1>Dokumente</h1>
+    <h1>Documents</h1>
     <div class="sp">
-      <button class="btn" id="newRechnung">+ Rechnung</button>
-      <button class="btn pri" id="newOfferte">+ Offerte</button>
+      <button class="btn" id="newRechnung">+ Invoice</button>
+      <button class="btn pri" id="newOfferte">+ Quote</button>
     </div>
   </div>
   <div class="stats" id="stats"></div>
   <div class="filter">
-    <span class="chip on" data-f="alle">Alle</span>
-    <span class="chip" data-f="offerte">Offerten</span>
-    <span class="chip" data-f="rechnung">Rechnungen</span>
-    <input class="in" id="docSearch" type="search" placeholder="Suchen (Nr., Kunde) …">
+    <span class="chip on" data-f="alle">All</span>
+    <span class="chip" data-f="offerte">Quotes</span>
+    <span class="chip" data-f="rechnung">Invoices</span>
+    <input class="in" id="docSearch" type="search" placeholder="Search (no., customer) …">
   </div>
   <div class="card" id="docList"></div>
 </section>
@@ -225,31 +225,31 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
 <!-- ══════════ Editor ══════════ -->
 <section id="v-editor" class="hide">
   <div class="viewtitle">
-    <h1 id="edTitle">Neue Offerte</h1>
+    <h1 id="edTitle">New quote</h1>
     <div class="sp">
-      <button class="btn" id="edBack">‹ Zurück</button>
-      <button class="btn" id="edPreview">Vorschau</button>
-      <button class="btn" id="edPdf">PDF speichern</button>
-      <button class="btn pri" id="edSave">Speichern</button>
+      <button class="btn" id="edBack">‹ Back</button>
+      <button class="btn" id="edPreview">Preview</button>
+      <button class="btn" id="edPdf">Save PDF</button>
+      <button class="btn pri" id="edSave">Save</button>
     </div>
   </div>
 
   <div class="card"><div class="bd grid g4">
     <div>
-      <label class="f">Dokument-Typ</label>
+      <label class="f">Document type</label>
       <div class="seg" id="edType">
-        <button data-t="offerte" class="on">Offerte</button>
-        <button data-t="rechnung">Rechnung</button>
+        <button data-t="offerte" class="on">Quote</button>
+        <button data-t="rechnung">Invoice</button>
       </div>
     </div>
-    <div><label class="f">Nummer</label><input class="in mono" id="edNr"></div>
-    <div><label class="f">Datum</label><input class="in" id="edDate" type="date"></div>
-    <div><label class="f" id="edUntilLabel">Gültig bis</label><input class="in" id="edUntil" type="date"></div>
+    <div><label class="f">Number</label><input class="in mono" id="edNr"></div>
+    <div><label class="f">Date</label><input class="in" id="edDate" type="date"></div>
+    <div><label class="f" id="edUntilLabel">Valid until</label><input class="in" id="edUntil" type="date"></div>
     <div>
-      <label class="f">PDF-Sprache</label>
+      <label class="f">PDF language</label>
       <div class="seg" id="edLang">
-        <button data-l="de" class="on">Deutsch</button>
         <button data-l="en">English</button>
+        <button data-l="de">Deutsch</button>
       </div>
     </div>
     <div>
@@ -259,132 +259,146 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
   </div></div>
 
   <div class="card">
-    <div class="hd"><h2>Kunde</h2>
+    <div class="hd"><h2>Customer</h2>
       <select class="in" id="edCustomerSel" style="max-width:280px;margin-left:auto;min-height:36px;padding:6px 10px"></select>
     </div>
     <div class="bd grid g3">
-      <div><label class="f">Firma</label><input class="in" id="cCompany"></div>
+      <div><label class="f">Company</label><input class="in" id="cCompany"></div>
       <div><label class="f">Name</label><input class="in" id="cName"></div>
-      <div><label class="f">E-Mail</label><input class="in" id="cEmail" type="email"></div>
-      <div><label class="f">Strasse / Nr.</label><input class="in" id="cStreet"></div>
-      <div><label class="f">PLZ / Ort</label>
-        <div style="display:flex;gap:8px"><input class="in" id="cZip" style="max-width:90px" placeholder="PLZ"><input class="in" id="cCity" placeholder="Ort"></div>
+      <div><label class="f">Email</label><input class="in" id="cEmail" type="email"></div>
+      <div><label class="f">Street / no.</label><input class="in" id="cStreet"></div>
+      <div><label class="f">ZIP / city</label>
+        <div style="display:flex;gap:8px"><input class="in" id="cZip" style="max-width:90px" placeholder="ZIP"><input class="in" id="cCity" placeholder="City"></div>
       </div>
-      <div><label class="f">Land</label><input class="in" id="cCountry" placeholder="Schweiz"></div>
+      <div><label class="f">Country</label><input class="in" id="cCountry" placeholder="Switzerland"></div>
     </div>
   </div>
 
   <div class="card">
-    <div class="hd"><h2>Positionen</h2>
+    <div class="hd"><h2>Items</h2>
       <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="btn sm soft" id="edFromPrice">Aus Preisliste</button>
-        <button class="btn sm" id="edAddItem">+ Position</button>
+        <button class="btn sm soft" id="edFromPrice">From price list</button>
+        <button class="btn sm" id="edAddItem">+ Item</button>
       </div>
     </div>
     <div class="bd">
-      <div class="items-h"><span>Beschreibung</span><span class="right">Menge</span><span>Einheit</span><span class="right">Einzelpreis</span><span class="right">Betrag</span><span></span></div>
+      <div class="items-h"><span>Description</span><span class="right">Qty</span><span>Unit</span><span class="right">Unit price</span><span class="right">Amount</span><span></span></div>
       <div id="edItems"></div>
       <div class="grid g3" style="margin-top:16px">
-        <div><label class="f">Rabatt</label>
+        <div><label class="f">Discount</label>
           <div style="display:flex;gap:8px">
             <input class="in num" id="edDiscount" inputmode="decimal" placeholder="0">
             <select class="in" id="edDiscountMode" style="max-width:86px"><option value="pct">%</option><option value="chf">CHF</option></select>
           </div>
         </div>
-        <div><label class="f">MwSt-Satz %</label><input class="in num" id="edVat" inputmode="decimal"></div>
+        <div><label class="f">VAT rate %</label><input class="in num" id="edVat" inputmode="decimal"></div>
       </div>
       <div class="totals" id="edTotals"></div>
     </div>
   </div>
 
   <div class="card"><div class="bd">
-    <label class="f">Bemerkungen (erscheint auf dem PDF)</label>
+    <label class="f">Notes (shown on the PDF)</label>
     <textarea class="in" id="edNotes" rows="3"></textarea>
   </div></div>
 </section>
 
-<!-- ══════════ Kunden ══════════ -->
+<!-- ══════════ Customers ══════════ -->
 <section id="v-customers" class="hide">
-  <div class="viewtitle"><h1>Kunden</h1>
-    <div class="sp"><button class="btn pri" id="addCustomer">+ Kunde</button></div>
+  <div class="viewtitle"><h1>Customers</h1>
+    <div class="sp"><button class="btn pri" id="addCustomer">+ Customer</button></div>
   </div>
-  <div class="filter"><input class="in" id="custSearch" type="search" placeholder="Suchen …"></div>
+  <div class="filter"><input class="in" id="custSearch" type="search" placeholder="Search …"></div>
   <div class="card"><div class="bd" style="overflow-x:auto">
     <table class="tbl" id="custTable"></table>
   </div></div>
 </section>
 
-<!-- ══════════ Preisliste ══════════ -->
+<!-- ══════════ Price list ══════════ -->
 <section id="v-prices" class="hide">
-  <div class="viewtitle"><h1>Preisliste</h1>
+  <div class="viewtitle"><h1>Price list</h1>
     <div class="sp">
-      <button class="btn" id="resetPrices">Standardliste wiederherstellen</button>
-      <button class="btn pri" id="addPrice">+ Artikel</button>
+      <button class="btn" id="resetPrices">Restore default list</button>
+      <button class="btn pri" id="addPrice">+ Item</button>
     </div>
   </div>
-  <div class="filter"><input class="in" id="priceSearch" type="search" placeholder="Suchen …"></div>
+  <div class="filter"><input class="in" id="priceSearch" type="search" placeholder="Search …"></div>
   <div class="card"><div class="bd" style="overflow-x:auto">
     <table class="tbl" id="priceTable"></table>
   </div></div>
 </section>
 
-<!-- ══════════ Einstellungen ══════════ -->
+<!-- ══════════ Settings ══════════ -->
 <section id="v-settings" class="hide">
-  <div class="viewtitle"><h1>Einstellungen</h1>
-    <div class="sp"><button class="btn pri" id="saveSettings">Speichern</button></div>
+  <div class="viewtitle"><h1>Settings</h1>
+    <div class="sp"><button class="btn pri" id="saveSettings">Save</button></div>
   </div>
 
   <div class="card">
-    <div class="hd"><h2>Firmenangaben (Briefkopf)</h2></div>
+    <div class="hd"><h2>Company details (letterhead)</h2></div>
     <div class="bd grid g3">
-      <div><label class="f">Firma</label><input class="in" id="sName"></div>
-      <div><label class="f">Strasse / Nr.</label><input class="in" id="sStreet"></div>
-      <div><label class="f">PLZ / Ort</label>
+      <div><label class="f">Company</label><input class="in" id="sName"></div>
+      <div><label class="f">Street / no.</label><input class="in" id="sStreet"></div>
+      <div><label class="f">ZIP / city</label>
         <div style="display:flex;gap:8px"><input class="in" id="sZip" style="max-width:90px"><input class="in" id="sCity"></div>
       </div>
-      <div><label class="f">Telefon</label><input class="in" id="sPhone"></div>
-      <div><label class="f">E-Mail</label><input class="in" id="sEmail"></div>
+      <div><label class="f">Phone</label><input class="in" id="sPhone"></div>
+      <div><label class="f">Email</label><input class="in" id="sEmail"></div>
       <div><label class="f">Web</label><input class="in" id="sWeb"></div>
-      <div><label class="f">MwSt-Nr. (UID)</label><input class="in" id="sUid" placeholder="CHE-XXX.XXX.XXX MWST"></div>
+      <div><label class="f">VAT no. (UID)</label><input class="in" id="sUid" placeholder="CHE-XXX.XXX.XXX MWST"></div>
       <div><label class="f">IBAN</label><input class="in" id="sIban" placeholder="CH.."></div>
       <div><label class="f">Bank</label><input class="in" id="sBank"></div>
     </div>
   </div>
 
   <div class="card">
-    <div class="hd"><h2>Vorgaben</h2></div>
+    <div class="hd"><h2>Defaults</h2></div>
     <div class="bd grid g4">
-      <div><label class="f">MwSt-Satz %</label><input class="in num" id="sVat" inputmode="decimal"></div>
-      <div><label class="f">Offerten-Gültigkeit (Tage)</label><input class="in num" id="sOfferteDays" inputmode="numeric"></div>
-      <div><label class="f">Zahlungsfrist (Tage)</label><input class="in num" id="sDueDays" inputmode="numeric"></div>
+      <div><label class="f">VAT rate %</label><input class="in num" id="sVat" inputmode="decimal"></div>
+      <div><label class="f">Quote validity (days)</label><input class="in num" id="sOfferteDays" inputmode="numeric"></div>
+      <div><label class="f">Payment terms (days)</label><input class="in num" id="sDueDays" inputmode="numeric"></div>
       <div></div>
-      <div><label class="f">Offerten-Präfix</label><input class="in mono" id="sPrefOf"></div>
-      <div><label class="f">Nächste Offerten-Nr.</label><input class="in num" id="sNextOf" inputmode="numeric"></div>
-      <div><label class="f">Rechnungs-Präfix</label><input class="in mono" id="sPrefRe"></div>
-      <div><label class="f">Nächste Rechnungs-Nr.</label><input class="in num" id="sNextRe" inputmode="numeric"></div>
+      <div><label class="f">Quote prefix</label><input class="in mono" id="sPrefOf"></div>
+      <div><label class="f">Next quote no.</label><input class="in num" id="sNextOf" inputmode="numeric"></div>
+      <div><label class="f">Invoice prefix</label><input class="in mono" id="sPrefRe"></div>
+      <div><label class="f">Next invoice no.</label><input class="in num" id="sNextRe" inputmode="numeric"></div>
     </div>
   </div>
 
   <div class="card">
-    <div class="hd"><h2>PDF-Schlusstexte</h2></div>
-    <div class="bd grid g2">
-      <div><label class="f">Offerte — Deutsch</label><textarea class="in" id="sCloseDe" rows="2"></textarea></div>
-      <div><label class="f">Offerte — English</label><textarea class="in" id="sCloseEn" rows="2"></textarea></div>
-      <div><label class="f">Rechnung — Deutsch</label><textarea class="in" id="sCloseInvDe" rows="2"></textarea></div>
-      <div><label class="f">Rechnung — English</label><textarea class="in" id="sCloseInvEn" rows="2"></textarea></div>
+    <div class="hd"><h2>PDF</h2></div>
+    <div class="bd grid g3">
+      <div><label class="f">Design</label>
+        <select class="in" id="sDesign">
+          <option value="accent">Accent (brand purple)</option>
+          <option value="classic">Classic (Swiss)</option>
+          <option value="studio">Studio (bold)</option>
+          <option value="minimal">Minimal</option>
+        </select>
+      </div>
+      <div><label class="f">Accent color</label><input class="in" id="sAccent" type="color" style="padding:4px;height:40px"></div>
+      <div><label class="f">Default PDF language</label>
+        <select class="in" id="sDefLang"><option value="en">English</option><option value="de">Deutsch</option></select>
+      </div>
+    </div>
+    <div class="bd grid g2" style="border-top:1px solid var(--line2)">
+      <div><label class="f">Closing text — quote (English)</label><textarea class="in" id="sCloseEn" rows="2"></textarea></div>
+      <div><label class="f">Closing text — quote (German)</label><textarea class="in" id="sCloseDe" rows="2"></textarea></div>
+      <div><label class="f">Closing text — invoice (English)</label><textarea class="in" id="sCloseInvEn" rows="2"></textarea></div>
+      <div><label class="f">Closing text — invoice (German)</label><textarea class="in" id="sCloseInvDe" rows="2"></textarea></div>
     </div>
   </div>
 
   <div class="card">
-    <div class="hd"><h2>Datensicherung</h2></div>
+    <div class="hd"><h2>Backup</h2></div>
     <div class="bd">
-      <p class="muted" style="margin-top:0">Alle Daten (Dokumente, Kunden, Preisliste, Einstellungen) liegen nur auf diesem Gerät. Regelmässig ein Backup exportieren!</p>
+      <p class="muted" style="margin-top:0">All data (documents, customers, price list, settings) lives only on this device. Export a backup regularly!</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn pri" id="backupExport">Backup exportieren</button>
-        <button class="btn" id="backupImportBtn">Backup importieren</button>
+        <button class="btn pri" id="backupExport">Export backup</button>
+        <button class="btn" id="backupImportBtn">Import backup</button>
         <input type="file" id="backupImport" accept="application/json,.json" class="hide">
       </div>
-      <p class="muted" style="margin-bottom:0;font-size:13px">App-Version 2.1 · Cache <span class="mono">vrent-offerten-v3</span> · <span id="swState">Offline-Status wird geprüft …</span></p>
+      <p class="muted" style="margin-bottom:0;font-size:13px">App version 2.2 · cache <span class="mono">vrent-offerten-v4</span> · <span id="swState">Checking offline status …</span></p>
     </div>
   </div>
 </section>
@@ -395,11 +409,11 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
 <dialog id="dlgPrice">
   <div class="hd">
     <div class="seg" id="dlgTabs">
-      <button data-p="list" class="on">Artikel</button>
-      <button data-p="pkg">Pakete</button>
+      <button data-p="list" class="on">Items</button>
+      <button data-p="pkg">Packages</button>
     </div>
-    <input class="in" id="dlgPriceSearch" type="search" placeholder="Suchen …" style="margin-left:auto;max-width:200px;min-height:36px;padding:6px 10px">
-    <button class="btn sm" id="dlgPriceClose">Schliessen</button>
+    <input class="in" id="dlgPriceSearch" type="search" placeholder="Search …" style="margin-left:auto;max-width:200px;min-height:36px;padding:6px 10px">
+    <button class="btn sm" id="dlgPriceClose">Close</button>
   </div>
   <div class="bd" id="dlgPriceList"></div>
   <div class="bd hide" id="dlgPkg"></div>
@@ -423,6 +437,7 @@ const SETTINGS_SEED = {
   company: { name:"VRENT GmbH", street:"Salomon-Vögelin-Strasse 31", zip:"8038", city:"Zürich",
              phone:"+41 79 789 95 96", email:"info@vrent.ch", web:"www.vrent.ch", uid:"", iban:"", bank:"" },
   vatRate: 8.1, offerteDays: 30, dueDays: 30,
+  pdfDesign:"accent", pdfAccent:"#9812be", defaultLang:"en",
   counters: { offerte:{prefix:"OF-", year:0, next:1}, rechnung:{prefix:"RE-", year:0, next:1} },
   closing: {
     offerte: { de:"Wir danken für Ihr Interesse und freuen uns auf Ihren Auftrag.",
@@ -432,8 +447,8 @@ const SETTINGS_SEED = {
 };
 const PRICE_SEED = (() => {
   const rows = [];
-  const add = (name, prices) => ["1 Woche","2 Wochen","3 Wochen","1 Monat"].forEach((per, i) =>
-    rows.push({ id:"seed-"+rows.length, name:name+" · "+per, unit:"Pauschale", price:prices[i] }));
+  const add = (name, prices) => ["1 week","2 weeks","3 weeks","1 month"].forEach((per, i) =>
+    rows.push({ id:"seed-"+rows.length, name:name+" · "+per, unit:"flat rate", price:prices[i] }));
   add("Meta Quest 3", [120,150,160,170]);
   add("Meta Quest 3S", [100,120,140,150]);
   add("Meta Quest 2", [70,80,90,100]);
@@ -442,7 +457,7 @@ const PRICE_SEED = (() => {
   add("XREAL One", [100,120,140,150]);
   add("XREAL One + Beam Pro", [150,170,190,200]);
   add("XREAL Air 2 Pro", [100,130,140,150]);
-  rows.push({ id:"seed-"+rows.length, name:"Versand & Rückversand (Schweiz)", unit:"Pauschale", price:0 });
+  rows.push({ id:"seed-"+rows.length, name:"Shipping & return (Switzerland)", unit:"flat rate", price:0 });
   return rows;
 })();
 
@@ -474,6 +489,14 @@ const todayISO = () => new Date().toISOString().slice(0,10);
 const plusDays = (iso, d) => { const t = new Date(iso + "T12:00:00"); t.setDate(t.getDate() + d); return t.toISOString().slice(0,10); };
 const fmtDate = (iso) => { if(!iso) return ""; const [y,m,d] = iso.split("-"); return d + "." + m + "." + y; };
 const qtyFmt = (n) => (Math.round(n*100)/100).toString();
+const typeName = (t) => t === "offerte" ? "Quote" : "Invoice";
+const hexRgb = (h) => {
+  h = String(h || "").replace("#", "");
+  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  const n = parseInt(h, 16);
+  return (isFinite(n) && h.length === 6) ? [(n >> 16) & 255, (n >> 8) & 255, n & 255] : [152, 18, 190];
+};
+const tint = (rgb, f) => rgb.map(c => Math.round(c + (255 - c) * f));
 
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2400); }
 
@@ -505,12 +528,12 @@ function consumeNr(type, nr){
   saveSettings();
 }
 const STATUS = {
-  offerte: { entwurf:"Entwurf", gesendet:"Gesendet", angenommen:"Angenommen", abgelehnt:"Abgelehnt" },
-  rechnung:{ entwurf:"Entwurf", gesendet:"Gesendet", bezahlt:"Bezahlt" }
+  offerte: { entwurf:"Draft", gesendet:"Sent", angenommen:"Accepted", abgelehnt:"Declined" },
+  rechnung:{ entwurf:"Draft", gesendet:"Sent", bezahlt:"Paid" }
 };
 function statusOf(doc){
   if (doc.type === "rechnung" && doc.status === "gesendet" && doc.until && doc.until < todayISO())
-    return { key:"ueberfaellig", label:"Überfällig" };
+    return { key:"ueberfaellig", label:"Overdue" };
   return { key:doc.status, label:(STATUS[doc.type][doc.status] || doc.status) };
 }
 const custLabel = (c) => (c.company || c.name || "—");
@@ -523,7 +546,7 @@ function show(view){
 }
 $("#tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
-  if (!$("#v-editor").classList.contains("hide") && editorDirty && !confirm("Ungespeicherte Änderungen verwerfen?")) return;
+  if (!$("#v-editor").classList.contains("hide") && editorDirty && !confirm("Discard unsaved changes?")) return;
   if (!$("#v-editor").classList.contains("hide")) closeEditor(false);
   if (b.dataset.v === "docs") renderDocs();
   if (b.dataset.v === "customers") renderCustomers();
@@ -542,21 +565,21 @@ function renderDocs(){
     .sort((a,b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   const host = $("#docList");
   if (!docs.length){
-    host.innerHTML = `<div class="empty"><b>${S.docs.length ? "Nichts gefunden" : "Noch keine Dokumente"}</b>${S.docs.length ? "Suche oder Filter anpassen." : "Mit «+ Offerte» die erste Offerte erstellen — alles bleibt lokal auf diesem Gerät."}</div>`;
+    host.innerHTML = `<div class="empty"><b>${S.docs.length ? "Nothing found" : "No documents yet"}</b>${S.docs.length ? "Adjust the search or filters." : "Create your first quote with “+ Quote” — everything stays on this device."}</div>`;
   } else {
     host.innerHTML = docs.map(d => {
       const st = statusOf(d);
       return `<div class="doc" data-id="${d.id}">
-        <span class="badge b-${d.type}">${d.type === "offerte" ? "Offerte" : "Rechnung"}</span>
+        <span class="badge b-${d.type}">${typeName(d.type)}</span>
         <span class="nr">${esc(d.nr)}</span>
-        <span class="who">${esc(custLabel(d.customer))}<small>${fmtDate(d.date)}${d.ref ? " · zu " + esc(d.ref) : ""}</small></span>
+        <span class="who">${esc(custLabel(d.customer))}<small>${fmtDate(d.date)}${d.ref ? " · from " + esc(d.ref) : ""}</small></span>
         <span class="st st-${st.key}">${st.label}</span>
         <span class="amt">CHF ${chf(calc(d).total)}</span>
         <span class="acts">
           <button class="btn sm" data-act="pdf">PDF</button>
-          ${d.type === "offerte" ? `<button class="btn sm" data-act="conv" title="In Rechnung umwandeln">→ Rechnung</button>` : ""}
-          <button class="btn sm" data-act="dup" title="Duplizieren">⧉</button>
-          <button class="btn sm icon danger" data-act="del" title="Löschen">×</button>
+          ${d.type === "offerte" ? `<button class="btn sm" data-act="conv" title="Convert to invoice">→ Invoice</button>` : ""}
+          <button class="btn sm" data-act="dup" title="Duplicate">⧉</button>
+          <button class="btn sm icon danger" data-act="del" title="Delete">×</button>
         </span>
       </div>`;
     }).join("");
@@ -565,9 +588,9 @@ function renderDocs(){
   const openSum = open.reduce((a,d) => a + calc(d).total, 0);
   const pend = S.docs.filter(d => d.type === "offerte" && ["entwurf","gesendet"].includes(d.status)).length;
   $("#stats").innerHTML = `
-    <div class="stat"><div class="k">Dokumente</div><div class="v">${S.docs.length}</div></div>
-    <div class="stat"><div class="k">Offene Offerten</div><div class="v">${pend}</div></div>
-    <div class="stat"><div class="k">Unbezahlte Rechnungen</div><div class="v">CHF ${chf(openSum)}</div></div>`;
+    <div class="stat"><div class="k">Documents</div><div class="v">${S.docs.length}</div></div>
+    <div class="stat"><div class="k">Open quotes</div><div class="v">${pend}</div></div>
+    <div class="stat"><div class="k">Unpaid invoices</div><div class="v">CHF ${chf(openSum)}</div></div>`;
 }
 $("#docSearch").addEventListener("input", renderDocs);
 $$(".filter .chip").forEach(ch => ch.addEventListener("click", () => {
@@ -581,8 +604,8 @@ $("#docList").addEventListener("click", (e) => {
   if (!act){ openEditor(structuredClone(doc)); return; }
   e.stopPropagation();
   if (act.dataset.act === "pdf") makePdf(doc, "save");
-  if (act.dataset.act === "del" && confirm(`${doc.nr} wirklich löschen?`)){
-    S.docs = S.docs.filter(d => d.id !== doc.id); saveDocs(); renderDocs(); toast("Gelöscht");
+  if (act.dataset.act === "del" && confirm(`Really delete ${doc.nr}?`)){
+    S.docs = S.docs.filter(d => d.id !== doc.id); saveDocs(); renderDocs(); toast("Deleted");
   }
   if (act.dataset.act === "dup"){
     const copy = structuredClone(doc);
@@ -598,7 +621,7 @@ $("#docList").addEventListener("click", (e) => {
     re.status = "entwurf"; re.ref = doc.nr;
     doc.status = "angenommen"; saveDocs();
     openEditor(re, true);
-    toast("Offerte " + doc.nr + " → Rechnung");
+    toast("Quote " + doc.nr + " → invoice");
   }
 });
 $("#newOfferte").addEventListener("click", () => openEditor(newDoc("offerte"), true));
@@ -606,11 +629,12 @@ $("#newRechnung").addEventListener("click", () => openEditor(newDoc("rechnung"),
 
 function newDoc(type){
   const date = todayISO();
+  const lang = S.settings.defaultLang === "de" ? "de" : "en";
   return {
     id: uid(), type, nr: suggestedNr(type), date,
     until: plusDays(date, type === "offerte" ? S.settings.offerteDays : S.settings.dueDays),
-    lang:"de", customer:{ company:"", name:"", street:"", zip:"", city:"", country:"", email:"" },
-    items:[{ desc:"", qty:1, unit:"Pauschale", price:0 }],
+    lang, customer:{ company:"", name:"", street:"", zip:"", city:"", country:"", email:"" },
+    items:[{ desc:"", qty:1, unit:unitFlat(lang), price:0 }],
     discount:{ mode:"pct", value:0 }, vatRate:S.settings.vatRate,
     notes:"", status:"entwurf", ref:"",
     createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()
@@ -631,16 +655,16 @@ function markDirty(){
 
 function openEditor(doc, asNew){
   ED = doc; isNew = !!asNew; editorDirty = !!asNew;
-  $("#edTitle").textContent = (isNew ? "Neue " : "") + (doc.type === "offerte" ? "Offerte" : "Rechnung") + (isNew ? "" : " " + doc.nr);
+  $("#edTitle").textContent = (isNew ? "New " + typeName(doc.type).toLowerCase() : typeName(doc.type) + " " + doc.nr);
   $$("#edType button").forEach(b => b.classList.toggle("on", b.dataset.t === doc.type));
   $$("#edLang button").forEach(b => b.classList.toggle("on", b.dataset.l === doc.lang));
   $("#edNr").value = doc.nr; $("#edDate").value = doc.date; $("#edUntil").value = doc.until;
-  $("#edUntilLabel").textContent = doc.type === "offerte" ? "Gültig bis" : "Zahlbar bis";
+  $("#edUntilLabel").textContent = doc.type === "offerte" ? "Valid until" : "Payable by";
   $("#edStatus").innerHTML = Object.entries(STATUS[doc.type]).map(([k,v]) => `<option value="${k}"${k === doc.status ? " selected" : ""}>${v}</option>`).join("");
   const c = doc.customer;
   $("#cCompany").value = c.company || ""; $("#cName").value = c.name || ""; $("#cEmail").value = c.email || "";
   $("#cStreet").value = c.street || ""; $("#cZip").value = c.zip || ""; $("#cCity").value = c.city || ""; $("#cCountry").value = c.country || "";
-  $("#edCustomerSel").innerHTML = `<option value="">Kunde wählen …</option>` +
+  $("#edCustomerSel").innerHTML = `<option value="">Choose customer …</option>` +
     S.customers.map(k => `<option value="${k.id}">${esc(custLabel(k))}</option>`).join("");
   $("#edDiscount").value = doc.discount.value || ""; $("#edDiscountMode").value = doc.discount.mode;
   $("#edVat").value = doc.vatRate;
@@ -653,28 +677,28 @@ function closeEditor(toList){
   if (toList !== false){ renderDocs(); show("docs"); }
 }
 $("#edBack").addEventListener("click", () => {
-  if (editorDirty && !confirm("Ungespeicherte Änderungen verwerfen?")) return;
+  if (editorDirty && !confirm("Discard unsaved changes?")) return;
   closeEditor();
 });
 
 function renderItems(){
   $("#edItems").innerHTML = ED.items.map((it, i) => `
     <div class="item" data-i="${i}">
-      <div class="c-desc"><textarea class="in" data-k="desc" rows="1" placeholder="Beschreibung">${esc(it.desc)}</textarea></div>
+      <div class="c-desc"><textarea class="in" data-k="desc" rows="1" placeholder="Description">${esc(it.desc)}</textarea></div>
       <input class="in num" data-k="qty" inputmode="decimal" value="${esc(it.qty)}">
       <input class="in" data-k="unit" list="unitList" value="${esc(it.unit)}">
       <input class="in num" data-k="price" inputmode="decimal" value="${esc(it.price)}">
       <div class="amount">${chf(round2(num(it.qty) * num(it.price)))}</div>
-      <button class="del" title="Position entfernen">×</button>
+      <button class="del" title="Remove item">×</button>
     </div>`).join("");
 }
 function renderTotals(){
   const t = calc(collectDocLight());
   const rows = [
-    ["Zwischensumme", "CHF " + chf(t.sub)],
-    t.discount ? ["Rabatt" + (ED.discount.mode === "pct" ? " (" + qtyFmt(num(ED.discount.value)) + " %)" : ""), "− CHF " + chf(t.discount)] : null,
-    t.vatRate ? ["MwSt. " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat)] : null,
-    t.rounding ? ["Rundung", (t.rounding > 0 ? "" : "− ") + "CHF " + chf(Math.abs(t.rounding))] : null
+    ["Subtotal", "CHF " + chf(t.sub)],
+    t.discount ? ["Discount" + (ED.discount.mode === "pct" ? " (" + qtyFmt(num(ED.discount.value)) + " %)" : ""), "− CHF " + chf(t.discount)] : null,
+    t.vatRate ? ["VAT " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat)] : null,
+    t.rounding ? ["Rounding", (t.rounding > 0 ? "" : "− ") + "CHF " + chf(Math.abs(t.rounding))] : null
   ].filter(Boolean);
   $("#edTotals").innerHTML = rows.map(r => `<div class="trow"><span class="muted">${r[0]}</span><span class="v">${r[1]}</span></div>`).join("") +
     `<div class="trow total"><span>Total</span><span class="v">CHF ${chf(t.total)}</span></div>`;
@@ -711,10 +735,10 @@ $("#edItems").addEventListener("click", (e) => {
   if (!e.target.classList.contains("del")) return;
   const i = +e.target.closest(".item").dataset.i;
   ED.items.splice(i, 1);
-  if (!ED.items.length) ED.items.push({ desc:"", qty:1, unit:"Pauschale", price:0 });
+  if (!ED.items.length) ED.items.push({ desc:"", qty:1, unit:unitFlat(ED.lang), price:0 });
   markDirty(); renderItems(); renderTotals();
 });
-$("#edAddItem").addEventListener("click", () => { ED.items.push({ desc:"", qty:1, unit:"Pauschale", price:0 }); markDirty(); renderItems(); renderTotals(); });
+$("#edAddItem").addEventListener("click", () => { ED.items.push({ desc:"", qty:1, unit:unitFlat(ED.lang), price:0 }); markDirty(); renderItems(); renderTotals(); });
 ["edDiscount","edDiscountMode","edVat","edNotes","edNr","edDate","edUntil","cCompany","cName","cEmail","cStreet","cZip","cCity","cCountry"].forEach(id =>
   $("#" + id).addEventListener("input", () => { markDirty(); renderTotals(); }));
 $("#edStatus").addEventListener("change", markDirty);
@@ -740,8 +764,8 @@ $("#edCustomerSel").addEventListener("change", (e) => {
 });
 
 function validateDoc(doc){
-  if (!custLabel(doc.customer) || custLabel(doc.customer) === "—"){ toast("Bitte Kunde (Firma oder Name) angeben"); return false; }
-  if (!doc.items.some(it => String(it.desc).trim())){ toast("Bitte mindestens eine Position erfassen"); return false; }
+  if (!custLabel(doc.customer) || custLabel(doc.customer) === "—"){ toast("Please enter a customer (company or name)"); return false; }
+  if (!doc.items.some(it => String(it.desc).trim())){ toast("Please add at least one item"); return false; }
   return true;
 }
 function upsertCustomer(c){
@@ -759,7 +783,7 @@ $("#edSave").addEventListener("click", () => {
   const i = S.docs.findIndex(d => d.id === doc.id);
   if (i >= 0) S.docs[i] = doc; else S.docs.push(doc);
   saveDocs();
-  toast("Gespeichert: " + doc.nr);
+  toast("Saved: " + doc.nr);
   closeEditor();
 });
 $("#edPdf").addEventListener("click", () => { const d = collectEditor(); if (validateDoc(d)) makePdf(d, "save"); });
@@ -773,7 +797,7 @@ function renderPricePicker(){
     <button class="pick" data-id="${p.id}">
       <span class="p-name">${esc(p.name)}<br><small>${esc(p.unit)}</small></span>
       <span class="p-price">CHF ${chf(p.price)}</span>
-    </button>`).join("") : `<div class="empty">Keine Artikel gefunden.</div>`;
+    </button>`).join("") : `<div class="empty">No items found.</div>`;
 }
 $("#edFromPrice").addEventListener("click", () => { $("#dlgPriceSearch").value = ""; renderPricePicker(); renderPkg(); applyDlgTab(); $("#dlgPrice").showModal(); });
 $("#dlgPriceSearch").addEventListener("input", renderPricePicker);
@@ -791,18 +815,52 @@ $("#dlgPriceList").addEventListener("click", (e) => {
 /* VR-Corner package builder — prices mirror the builder on vrent.ch */
 const PKG_CFG = {
   perHeadset: { day:96, week:120, month:150 },
-  durLabel: { day:"1 Tag", week:"1 Woche", month:"1 Monat" },
-  packages: [
-    { name:"Bronze",   hs:4,  people:"bis 10 Personen" },
-    { name:"Silver",   hs:10, people:"10–25 Personen" },
-    { name:"Gold",     hs:20, people:"25–50 Personen" },
-    { name:"Platinum", hs:50, people:"50+ Personen" }
-  ],
+  packages: [ { name:"Bronze", hs:4 }, { name:"Silver", hs:10 }, { name:"Gold", hs:20 }, { name:"Platinum", hs:50 } ],
   hostRate:120,
-  travel:[["Raum Zürich",60],["Zentralschweiz",120],["Basel · Bern · Ostschweiz",180],["West · Süd · Alpen",330]],
-  tour:2000, drone:600, consult:480, coursePerHs:20, tv:50, batt:15, hp:10,
-  included:"Meta Quest 3 · 14 Apps vorinstalliert · Hygiene-Kits · Lieferung & Rückholung schweizweit · geladen & konfiguriert"
+  travel: [
+    { de:"Raum Zürich", en:"Zürich area", price:60 },
+    { de:"Zentralschweiz", en:"Central Switzerland", price:120 },
+    { de:"Basel · Bern · Ostschweiz", en:"Basel · Bern · East", price:180 },
+    { de:"West · Süd · Alpen", en:"West · South · Alps", price:330 }
+  ],
+  tour:2000, drone:600, consult:480, coursePerHs:20, tv:50, batt:15, hp:10
 };
+const PKG_T = {
+  en: {
+    people:["up to 10 people","10–25 people","25–50 people","50+ people"],
+    dur:{ day:"1 day", week:"1 week", month:"1 month" },
+    included:"Meta Quest 3 · 14 apps pre-installed · hygiene kits · delivery & return Switzerland-wide · charged & configured",
+    corner:(n,hs,dl) => `VR Corner ${n} — ${hs} headsets · ${dl}`,
+    onspot:(h,s) => `On-spot service — ${h} host${h > 1 ? "s" : ""} × ${s} h (setup, guidance, cleaning)`,
+    travel:(r) => `Travel for on-spot team — ${r}`,
+    xhs:(dl) => `Extra headsets · ${dl}`,
+    tour:"360° VR tour (approx. 16 h production included)",
+    drone:"Drone filming (5 h filming & editing included)",
+    consult:"VR consulting — event planning (half-day)",
+    courses:"VR learning courses",
+    tv:"Portable TV — live viewing for guests",
+    batt:"Extra batteries", hp:"Headphones",
+    units:{ flat:"flat rate", hrs:"h", pcs:"pcs", hs:"headset" }
+  },
+  de: {
+    people:["bis 10 Personen","10–25 Personen","25–50 Personen","50+ Personen"],
+    dur:{ day:"1 Tag", week:"1 Woche", month:"1 Monat" },
+    included:"Meta Quest 3 · 14 Apps vorinstalliert · Hygiene-Kits · Lieferung & Rückholung schweizweit · geladen & konfiguriert",
+    corner:(n,hs,dl) => `VR Corner ${n} — ${hs} Headsets · ${dl}`,
+    onspot:(h,s) => `On-Spot Service — ${h} Betreuer × ${s} Std. (Aufbau, Betreuung, Reinigung)`,
+    travel:(r) => `Anreise On-Spot-Team — ${r}`,
+    xhs:(dl) => `Zusatz-Headsets · ${dl}`,
+    tour:"360° VR-Tour (ca. 16 Std. Produktion inkl.)",
+    drone:"Drohnenaufnahmen (5 Std. Dreh & Schnitt inkl.)",
+    consult:"VR Consulting — Eventplanung (Halbtag)",
+    courses:"VR-Lernkurse",
+    tv:"Portable TV — Live-Mitverfolgung",
+    batt:"Zusatz-Akkus", hp:"Kopfhörer",
+    units:{ flat:"Pauschale", hrs:"Std.", pcs:"Stk.", hs:"Headset" }
+  }
+};
+const pkgT = (lang) => PKG_T[lang] || PKG_T.en;
+const unitFlat = (lang) => pkgT(lang).units.flat;
 let dlgTab = "list";
 const pkgSel = { pkg:1, dur:"week" };
 
@@ -820,6 +878,7 @@ $("#dlgTabs").addEventListener("click", (e) => {
 function renderPkg(){
   const P = PKG_CFG.packages[pkgSel.pkg];
   const rate = PKG_CFG.perHeadset[pkgSel.dur];
+  const T9 = PKG_T.en;
   const exRow = (id, label, sub, price, qty) => `
     <div class="px-row">
       <label><input type="checkbox" id="px-${id}"><span>${label}${sub ? `<small>${sub}</small>` : ""}</span></label>
@@ -827,34 +886,34 @@ function renderPkg(){
       <span class="p" id="pxp-${id}">${price}</span>
     </div>`;
   $("#dlgPkg").innerHTML = `<div class="px">
-    <div><div class="px-h">Paket</div></div>
+    <div><div class="px-h">Package</div></div>
     <div class="seg" id="pxPkg">${PKG_CFG.packages.map((p,i) =>
       `<button data-i="${i}" class="${i === pkgSel.pkg ? "on" : ""}">${p.name}</button>`).join("")}</div>
-    <div class="px-hint">${P.hs} Headsets · ${P.people}</div>
-    <div><div class="px-h">Dauer</div></div>
-    <div class="seg" id="pxDur">${Object.entries(PKG_CFG.durLabel).map(([k,v]) =>
+    <div class="px-hint">${P.hs} headsets · ${T9.people[pkgSel.pkg]}</div>
+    <div><div class="px-h">Duration</div></div>
+    <div class="seg" id="pxDur">${Object.entries(T9.dur).map(([k,v]) =>
       `<button data-d="${k}" class="${k === pkgSel.dur ? "on" : ""}">${v}</button>`).join("")}</div>
-    <div class="px-row base"><label style="cursor:default"><span><b>VR Corner ${P.name}</b> — ${P.hs} Headsets · ${PKG_CFG.durLabel[pkgSel.dur]}<small>${PKG_CFG.included}</small></span></label>
+    <div class="px-row base"><label style="cursor:default"><span><b>VR Corner ${P.name}</b> — ${P.hs} headsets · ${T9.dur[pkgSel.dur]}<small>${T9.included}</small></span></label>
       <span class="p">CHF ${chf(P.hs * rate)}</span></div>
-    <div><div class="px-h">Extras · pro Auftrag</div></div>
-    ${exRow("onspot", "On-Spot Service", `CHF ${PKG_CFG.hostRate}/Std. pro Betreuer · empfohlen: 1 pro 5 Headsets`, "—")}
+    <div><div class="px-h">Extras · per order</div></div>
+    ${exRow("onspot", "On-spot service", `CHF ${PKG_CFG.hostRate}/h per host · recommended: 1 per 5 headsets`, "—")}
     <div class="px-row" id="px-onspot-detail" style="display:none">
-      <label style="cursor:default"><span class="muted" style="font-size:13px">Betreuer / Stunden / Anreise</span></label>
+      <label style="cursor:default"><span class="muted" style="font-size:13px">Hosts / hours / travel</span></label>
       <input class="in num" id="pxq-hosts" inputmode="numeric" value="${Math.max(1, Math.ceil(P.hs / 5))}">
       <input class="in num" id="pxq-hours" inputmode="numeric" value="4">
-      <select class="in" id="px-travel"><option value="">— keine Anreise —</option>${PKG_CFG.travel.map((t,i) =>
-        `<option value="${i}">${t[0]} · CHF ${t[1]}</option>`).join("")}</select>
+      <select class="in" id="px-travel"><option value="">— no travel —</option>${PKG_CFG.travel.map((t,i) =>
+        `<option value="${i}">${t.en} · CHF ${t.price}</option>`).join("")}</select>
     </div>
-    ${exRow("xhs", "Zusatz-Headsets", `CHF ${chf(rate)} pro Headset · ${PKG_CFG.durLabel[pkgSel.dur]}`, "—", 0)}
-    ${exRow("tour", "360° VR-Tour", "ca. 16 Std. Produktion inkl., danach CHF 120/Std.", "CHF " + chf(PKG_CFG.tour))}
-    ${exRow("drone", "Drohnenaufnahmen", "5 Std. Dreh & Schnitt inkl., danach CHF 120/Std.", "CHF " + chf(PKG_CFG.drone))}
-    ${exRow("consult", "VR Consulting · Halbtag", "Eventplanung: Inhalte, Ablauf, Setup", "CHF " + chf(PKG_CFG.consult))}
-    ${exRow("courses", "VR-Lernkurse", `CHF ${PKG_CFG.coursePerHs} pro Headset`, "—")}
-    ${exRow("tv", "Portable TV", "Gäste verfolgen das Geschehen live", "CHF " + chf(PKG_CFG.tv))}
-    ${exRow("batt", "Zusatz-Akkus", "CHF 15/Stk. · empfohlen ab 5 Std. Einsatz", "—", P.hs)}
-    ${exRow("hp", "Kopfhörer", "CHF 10/Stk. · für laute Umgebungen", "—", P.hs)}
-    <div class="px-total"><span>Paket-Total</span><span class="p" id="pxTotal"></span></div>
-    <button class="btn pri" id="pxInsert">Positionen einfügen</button>
+    ${exRow("xhs", "Extra headsets", `CHF ${chf(rate)} per headset · ${T9.dur[pkgSel.dur]}`, "—", 0)}
+    ${exRow("tour", "360° VR tour", "approx. 16 h production incl., then CHF 120/h", "CHF " + chf(PKG_CFG.tour))}
+    ${exRow("drone", "Drone filming", "5 h filming & editing incl., then CHF 120/h", "CHF " + chf(PKG_CFG.drone))}
+    ${exRow("consult", "VR consulting · half-day", "Event planning: content, flow, setup", "CHF " + chf(PKG_CFG.consult))}
+    ${exRow("courses", "VR learning courses", `CHF ${PKG_CFG.coursePerHs} per headset`, "—")}
+    ${exRow("tv", "Portable TV", "Guests watch the action live", "CHF " + chf(PKG_CFG.tv))}
+    ${exRow("batt", "Extra batteries", "CHF 15/pc · recommended for 5+ hour sessions", "—", P.hs)}
+    ${exRow("hp", "Headphones", "CHF 10/pc · for loud venues", "—", P.hs)}
+    <div class="px-total"><span>Package total</span><span class="p" id="pxTotal"></span></div>
+    <button class="btn pri" id="pxInsert">Insert items</button>
   </div>`;
   updatePkg();
 }
@@ -863,24 +922,26 @@ function pkgQty(id, fb){ const el = $("#pxq-" + id); const n = el ? Math.max(0, 
 function pkgLines(){
   const P = PKG_CFG.packages[pkgSel.pkg];
   const rate = PKG_CFG.perHeadset[pkgSel.dur];
-  const dl = PKG_CFG.durLabel[pkgSel.dur];
-  const lines = [{ desc:`VR Corner ${P.name} — ${P.hs} Headsets · ${dl}\n${PKG_CFG.included}`, qty:1, unit:"Pauschale", price:P.hs * rate }];
+  const lang = (ED && ED.lang === "de") ? "de" : "en";
+  const K = pkgT(lang);
+  const dl = K.dur[pkgSel.dur];
+  const lines = [{ desc:K.corner(P.name, P.hs, dl) + "\n" + K.included, qty:1, unit:K.units.flat, price:P.hs * rate }];
   if (pkgOn("onspot")){
     const hosts = pkgQty("hosts", 1), hrs = pkgQty("hours", 1);
-    lines.push({ desc:`On-Spot Service — ${hosts} Betreuer × ${hrs} Std. (Aufbau, Betreuung, Reinigung)`, qty:hosts * hrs, unit:"Std.", price:PKG_CFG.hostRate });
+    lines.push({ desc:K.onspot(hosts, hrs), qty:hosts * hrs, unit:K.units.hrs, price:PKG_CFG.hostRate });
     const trSel = $("#px-travel");
     const tr = trSel && trSel.value !== "" ? PKG_CFG.travel[+trSel.value] : null;
-    if (tr) lines.push({ desc:`Anreise On-Spot-Team — ${tr[0]}`, qty:1, unit:"Pauschale", price:tr[1] });
+    if (tr) lines.push({ desc:K.travel(tr[lang]), qty:1, unit:K.units.flat, price:tr.price });
   }
   const xhs = pkgOn("xhs") ? pkgQty("xhs") : 0;
-  if (xhs > 0) lines.push({ desc:`Zusatz-Headsets · ${dl}`, qty:xhs, unit:"Stk.", price:rate });
-  if (pkgOn("tour")) lines.push({ desc:"360° VR-Tour (ca. 16 Std. Produktion inkl.)", qty:1, unit:"Pauschale", price:PKG_CFG.tour });
-  if (pkgOn("drone")) lines.push({ desc:"Drohnenaufnahmen (5 Std. Dreh & Schnitt inkl.)", qty:1, unit:"Pauschale", price:PKG_CFG.drone });
-  if (pkgOn("consult")) lines.push({ desc:"VR Consulting — Eventplanung (Halbtag)", qty:1, unit:"Pauschale", price:PKG_CFG.consult });
-  if (pkgOn("courses")) lines.push({ desc:"VR-Lernkurse", qty:P.hs + xhs, unit:"Headset", price:PKG_CFG.coursePerHs });
-  if (pkgOn("tv")) lines.push({ desc:"Portable TV — Live-Mitverfolgung", qty:1, unit:"Pauschale", price:PKG_CFG.tv });
-  if (pkgOn("batt") && pkgQty("batt") > 0) lines.push({ desc:"Zusatz-Akkus", qty:pkgQty("batt"), unit:"Stk.", price:PKG_CFG.batt });
-  if (pkgOn("hp") && pkgQty("hp") > 0) lines.push({ desc:"Kopfhörer", qty:pkgQty("hp"), unit:"Stk.", price:PKG_CFG.hp });
+  if (xhs > 0) lines.push({ desc:K.xhs(dl), qty:xhs, unit:K.units.pcs, price:rate });
+  if (pkgOn("tour")) lines.push({ desc:K.tour, qty:1, unit:K.units.flat, price:PKG_CFG.tour });
+  if (pkgOn("drone")) lines.push({ desc:K.drone, qty:1, unit:K.units.flat, price:PKG_CFG.drone });
+  if (pkgOn("consult")) lines.push({ desc:K.consult, qty:1, unit:K.units.flat, price:PKG_CFG.consult });
+  if (pkgOn("courses")) lines.push({ desc:K.courses, qty:P.hs + xhs, unit:K.units.hs, price:PKG_CFG.coursePerHs });
+  if (pkgOn("tv")) lines.push({ desc:K.tv, qty:1, unit:K.units.flat, price:PKG_CFG.tv });
+  if (pkgOn("batt") && pkgQty("batt") > 0) lines.push({ desc:K.batt, qty:pkgQty("batt"), unit:K.units.pcs, price:PKG_CFG.batt });
+  if (pkgOn("hp") && pkgQty("hp") > 0) lines.push({ desc:K.hp, qty:pkgQty("hp"), unit:K.units.pcs, price:PKG_CFG.hp });
   return lines;
 }
 function updatePkg(){
@@ -890,7 +951,7 @@ function updatePkg(){
   if (det) det.style.display = pkgOn("onspot") ? "" : "none";
   const set = (id, val) => { const el = $("#pxp-" + id); if (el) el.textContent = val; };
   const trSel = $("#px-travel");
-  const tr = pkgOn("onspot") && trSel && trSel.value !== "" ? PKG_CFG.travel[+trSel.value][1] : 0;
+  const tr = pkgOn("onspot") && trSel && trSel.value !== "" ? PKG_CFG.travel[+trSel.value].price : 0;
   set("onspot", pkgOn("onspot") ? "CHF " + chf(PKG_CFG.hostRate * pkgQty("hosts", 1) * pkgQty("hours", 1) + tr) : "—");
   set("xhs", pkgOn("xhs") && pkgQty("xhs") > 0 ? "CHF " + chf(rate * pkgQty("xhs")) : "—");
   set("courses", pkgOn("courses") ? "CHF " + chf(PKG_CFG.coursePerHs * (P.hs + (pkgOn("xhs") ? pkgQty("xhs") : 0))) : "—");
@@ -910,7 +971,7 @@ $("#dlgPkg").addEventListener("click", (e) => {
     ED.items.push(...lines);
     markDirty(); renderItems(); renderTotals();
     $("#dlgPrice").close();
-    toast("Paket eingefügt: VR Corner " + PKG_CFG.packages[pkgSel.pkg].name);
+    toast("Package added: VR Corner " + PKG_CFG.packages[pkgSel.pkg].name);
   }
 });
 $("#dlgPkg").addEventListener("input", updatePkg);
@@ -925,24 +986,24 @@ function renderCustomers(){
     <td>${esc(c.street || "")}<br><small class="muted">${esc((c.zip || "") + " " + (c.city || ""))}</small></td>
     <td>${esc(c.email || "")}</td>
     <td class="right" style="white-space:nowrap">
-      <button class="btn sm" data-act="new">+ Offerte</button>
-      <button class="btn sm" data-act="edit">Bearbeiten</button>
+      <button class="btn sm" data-act="new">+ Quote</button>
+      <button class="btn sm" data-act="edit">Edit</button>
       <button class="btn sm icon danger" data-act="del">×</button>
     </td></tr>`).join("");
-  $("#custTable").innerHTML = `<tr><th>Kunde</th><th>Adresse</th><th>E-Mail</th><th></th></tr>` +
-    (rows || `<tr><td colspan="4"><div class="empty"><b>Noch keine Kunden</b>Kunden werden beim Speichern eines Dokuments automatisch angelegt.</div></td></tr>`);
+  $("#custTable").innerHTML = `<tr><th>Customer</th><th>Address</th><th>Email</th><th></th></tr>` +
+    (rows || `<tr><td colspan="4"><div class="empty"><b>No customers yet</b>Customers are saved automatically when you save a document.</div></td></tr>`);
 }
 $("#custSearch").addEventListener("input", renderCustomers);
 $("#addCustomer").addEventListener("click", () => {
-  const name = prompt("Firma oder Name des Kunden:"); if (!name) return;
+  const name = prompt("Company or name of the customer:"); if (!name) return;
   S.customers.push({ id:uid(), company:name, name:"", street:"", zip:"", city:"", country:"", email:"" });
-  saveCustomers(); renderCustomers(); toast("Kunde angelegt — Details per «Bearbeiten»");
+  saveCustomers(); renderCustomers(); toast("Customer created — add details via “Edit”");
 });
 $("#custTable").addEventListener("click", (e) => {
   const tr = e.target.closest("tr[data-id]"); if (!tr) return;
   const c = S.customers.find(x => x.id === tr.dataset.id); if (!c) return;
   const act = e.target.closest("[data-act]"); if (!act) return;
-  if (act.dataset.act === "del" && confirm(`${custLabel(c)} löschen?`)){
+  if (act.dataset.act === "del" && confirm(`Delete ${custLabel(c)}?`)){
     S.customers = S.customers.filter(x => x.id !== c.id); saveCustomers(); renderCustomers();
   }
   if (act.dataset.act === "new"){
@@ -951,12 +1012,12 @@ $("#custTable").addEventListener("click", (e) => {
     openEditor(d, true);
   }
   if (act.dataset.act === "edit"){
-    const fields = [["company","Firma"],["name","Name"],["street","Strasse / Nr."],["zip","PLZ"],["city","Ort"],["country","Land"],["email","E-Mail"]];
+    const fields = [["company","Company"],["name","Name"],["street","Street / no."],["zip","ZIP"],["city","City"],["country","Country"],["email","Email"]];
     for (const [k, label] of fields){
       const v = prompt(label + ":", c[k] || ""); if (v === null) return;
       c[k] = v.trim();
     }
-    saveCustomers(); renderCustomers(); toast("Kunde aktualisiert");
+    saveCustomers(); renderCustomers(); toast("Customer updated");
   }
 });
 
@@ -969,8 +1030,8 @@ function renderPrices(){
     <td style="width:140px"><input class="in" data-k="unit" list="unitList" value="${esc(p.unit)}"></td>
     <td style="width:130px"><input class="in num" data-k="price" inputmode="decimal" value="${esc(p.price)}"></td>
     <td class="right" style="width:50px"><button class="btn sm icon danger" data-act="del">×</button></td></tr>`).join("");
-  $("#priceTable").innerHTML = `<tr><th>Bezeichnung</th><th>Einheit</th><th>Preis (CHF)</th><th></th></tr>` +
-    (rows || `<tr><td colspan="4"><div class="empty">Keine Artikel gefunden.</div></td></tr>`);
+  $("#priceTable").innerHTML = `<tr><th>Description</th><th>Unit</th><th>Price (CHF)</th><th></th></tr>` +
+    (rows || `<tr><td colspan="4"><div class="empty">No items found.</div></td></tr>`);
 }
 $("#priceSearch").addEventListener("input", renderPrices);
 $("#priceTable").addEventListener("input", (e) => {
@@ -987,12 +1048,12 @@ $("#priceTable").addEventListener("click", (e) => {
   savePrices(); renderPrices();
 });
 $("#addPrice").addEventListener("click", () => {
-  S.prices.unshift({ id:uid(), name:"", unit:"Pauschale", price:0 });
+  S.prices.unshift({ id:uid(), name:"", unit:unitFlat("en"), price:0 });
   savePrices(); renderPrices();
 });
 $("#resetPrices").addEventListener("click", () => {
-  if (!confirm("Preisliste auf die VRENT-Standardliste zurücksetzen? Eigene Artikel gehen verloren.")) return;
-  S.prices = PRICE_SEED.map(p => ({...p})); savePrices(); renderPrices(); toast("Standard-Preisliste geladen");
+  if (!confirm("Reset the price list to the VRENT defaults? Your custom items will be lost.")) return;
+  S.prices = PRICE_SEED.map(p => ({...p})); savePrices(); renderPrices(); toast("Default price list restored");
 });
 
 /* ---------- settings ---------- */
@@ -1002,6 +1063,9 @@ function fillSettings(){
   $("#sPhone").value = c.phone; $("#sEmail").value = c.email; $("#sWeb").value = c.web;
   $("#sUid").value = c.uid || ""; $("#sIban").value = c.iban || ""; $("#sBank").value = c.bank || "";
   $("#sVat").value = S.settings.vatRate; $("#sOfferteDays").value = S.settings.offerteDays; $("#sDueDays").value = S.settings.dueDays;
+  $("#sDesign").value = S.settings.pdfDesign || "accent";
+  $("#sAccent").value = /^#[0-9a-fA-F]{6}$/.test(S.settings.pdfAccent || "") ? S.settings.pdfAccent : "#9812be";
+  $("#sDefLang").value = S.settings.defaultLang === "de" ? "de" : "en";
   $("#sPrefOf").value = S.settings.counters.offerte.prefix; $("#sNextOf").value = S.settings.counters.offerte.next;
   $("#sPrefRe").value = S.settings.counters.rechnung.prefix; $("#sNextRe").value = S.settings.counters.rechnung.next;
   $("#sCloseDe").value = S.settings.closing.offerte.de; $("#sCloseEn").value = S.settings.closing.offerte.en;
@@ -1014,13 +1078,16 @@ $("#saveSettings").addEventListener("click", () => {
   c.uid = $("#sUid").value.trim(); c.iban = $("#sIban").value.trim(); c.bank = $("#sBank").value.trim();
   S.settings.vatRate = num($("#sVat").value); S.settings.offerteDays = Math.max(0, Math.round(num($("#sOfferteDays").value))) || 30;
   S.settings.dueDays = Math.max(0, Math.round(num($("#sDueDays").value))) || 30;
+  S.settings.pdfDesign = $("#sDesign").value;
+  S.settings.pdfAccent = $("#sAccent").value || "#9812be";
+  S.settings.defaultLang = $("#sDefLang").value === "de" ? "de" : "en";
   S.settings.counters.offerte.prefix = $("#sPrefOf").value || "OF-";
   S.settings.counters.offerte.next = Math.max(1, Math.round(num($("#sNextOf").value)) || 1);
   S.settings.counters.rechnung.prefix = $("#sPrefRe").value || "RE-";
   S.settings.counters.rechnung.next = Math.max(1, Math.round(num($("#sNextRe").value)) || 1);
   S.settings.closing.offerte.de = $("#sCloseDe").value.trim(); S.settings.closing.offerte.en = $("#sCloseEn").value.trim();
   S.settings.closing.rechnung.de = $("#sCloseInvDe").value.trim(); S.settings.closing.rechnung.en = $("#sCloseInvEn").value.trim();
-  saveSettings(); toast("Einstellungen gespeichert");
+  saveSettings(); toast("Settings saved");
 });
 
 /* backup */
@@ -1033,7 +1100,7 @@ $("#backupExport").addEventListener("click", () => {
   a.href = URL.createObjectURL(blob);
   a.download = "vrent-offerten-backup_" + todayISO() + ".json";
   a.click(); URL.revokeObjectURL(a.href);
-  toast("Backup exportiert");
+  toast("Backup exported");
 });
 $("#backupImportBtn").addEventListener("click", () => $("#backupImport").click());
 $("#backupImport").addEventListener("change", (e) => {
@@ -1042,20 +1109,20 @@ $("#backupImport").addEventListener("change", (e) => {
   rd.onload = () => {
     try{
       const data = JSON.parse(rd.result);
-      if (data.app !== "vrent-offerten") throw new Error("Kein VRENT-Offerten-Backup");
-      if (!confirm(`Backup vom ${fmtDate((data.exportedAt || "").slice(0,10))} importieren? Aktuelle Daten werden ersetzt.`)) return;
+      if (data.app !== "vrent-offerten") throw new Error("Not a VRENT Offerten backup");
+      if (!confirm(`Import backup from ${fmtDate((data.exportedAt || "").slice(0,10))}? Current data will be replaced.`)) return;
       if (data.settings) S.settings = Object.assign({}, SETTINGS_SEED, data.settings);
       S.customers = data.customers || []; S.prices = data.prices || []; S.docs = data.docs || [];
       saveSettings(); saveCustomers(); savePrices(); saveDocs();
       fillSettings(); renderDocs();
-      toast("Backup importiert");
-    }catch(err){ alert("Import fehlgeschlagen: " + err.message); }
+      toast("Backup imported");
+    }catch(err){ alert("Import failed: " + err.message); }
     e.target.value = "";
   };
   rd.readAsText(file);
 });
 
-/* ================= PDF (Swiss-Classic) ================= */
+/* ================= PDF ================= */
 const T = {
   de: { offerte:"Offerte", rechnung:"Rechnung", date:"Datum", nr:"Nr.", validUntil:"Gültig bis", due:"Zahlbar bis",
         pos:"Pos.", desc:"Bezeichnung", qty:"Menge", unit:"Einheit", price:"Preis", amount:"Betrag",
@@ -1080,23 +1147,26 @@ function makePdf(docData, mode){
       window.open(out.pdf.output("bloburl"), "_blank");
     } else {
       out.pdf.save(out.filename);
-      toast("PDF erstellt: " + out.filename);
+      toast("PDF created: " + out.filename);
     }
   }catch(err){
     console.error(err);
-    alert("PDF konnte nicht erstellt werden: " + err.message);
+    alert("Could not create the PDF: " + err.message);
   }
 }
 
 function buildPdf(d){
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit:"mm", format:"a4", compress:true });
-  const L = T[d.lang] || T.de;
+  const L = T[d.lang] || T.en;
   const co = S.settings.company;
   const t = calc(d);
   const M = 20, RIGHT = 190, BOTTOM = 262;
+  const DS = ["classic","studio","minimal","accent"].includes(S.settings.pdfDesign) ? S.settings.pdfDesign : "classic";
+  const ACC = hexRgb(S.settings.pdfAccent);
+  const INK = [21, 26, 35], GRAY = [100, 108, 122], LIGHT = [228, 232, 240];
   const A = window.VRENT_ASSETS || {};
-  let sans = "helvetica", mono = "courier";
+  let sans = "helvetica", mono = "courier", blackFace = null;
   try{
     if (A.fonts && A.fonts.archivoRegular){
       pdf.addFileToVFS("Archivo-Regular.ttf", A.fonts.archivoRegular);
@@ -1106,46 +1176,47 @@ function buildPdf(d){
       pdf.addFileToVFS("PlexMono.ttf", A.fonts.mono);
       pdf.addFont("PlexMono.ttf", "PlexMono", "normal");
       sans = "Archivo"; mono = "PlexMono";
+      if (A.fonts.archivoBlack){
+        pdf.addFileToVFS("Archivo-Black.ttf", A.fonts.archivoBlack);
+        pdf.addFont("Archivo-Black.ttf", "ArchivoBlack", "normal");
+        blackFace = "ArchivoBlack";
+      }
     }
   }catch(e){ console.warn("pdf fonts", e); }
-  const ink = () => pdf.setTextColor(21, 26, 35);
-  const gray = () => pdf.setTextColor(100, 108, 122);
+  const setT = (c) => pdf.setTextColor(c[0], c[1], c[2]);
+  const setD = (c) => pdf.setDrawColor(c[0], c[1], c[2]);
+  const setFillC = (c) => pdf.setFillColor(c[0], c[1], c[2]);
+  const ink = () => setT(INK);
+  const gray = () => setT(GRAY);
   const F = (family, style, size) => { pdf.setFont(family, style); pdf.setFontSize(size); };
+  const BIG = (size) => { if (blackFace) pdf.setFont(blackFace, "normal"); else pdf.setFont(sans, "bold"); pdf.setFontSize(size); };
   const typeLabel = L[d.type];
 
-  function headerFirst(){
-    let logoW = 0;
+  function drawLogo(x, y, h, maxW, alignRight){
     try{
       if (A.logo){
         const img = "data:image/png;base64," + A.logo;
         const p = pdf.getImageProperties(img);
-        const h = 17, w = Math.min(h * p.width / p.height, 42);
-        pdf.addImage(img, "PNG", M, 13, w, h);
-        logoW = w;
+        const w = Math.min(h * p.width / p.height, maxW);
+        pdf.addImage(img, "PNG", alignRight ? x - w : x, y, w, h);
+        return w;
       }
     }catch(e){ console.warn("pdf logo", e); }
-    if (!logoW){ F(sans, "bold", 16); ink(); pdf.text("VRENT", M, 22); }
-    F(sans, "bold", 9.5); ink();
-    pdf.text(co.name, RIGHT, 16, { align:"right" });
-    F(sans, "normal", 8); gray();
-    const coLines = [co.street, co.zip + " " + co.city, "", co.phone, co.email, co.web].filter(x => x !== null);
-    let cy = 20;
-    coLines.forEach(line => { if (line) pdf.text(line, RIGHT, cy, { align:"right" }); cy += 3.6; });
-
-    // recipient (right window, Swiss C5)
+    return 0;
+  }
+  function recipientBlock(y0){
     const c = d.customer;
-    let ry = 52;
-    F(sans, "normal", 10); ink();
+    let ry = y0;
     const rlines = [c.company, c.name, c.street, (c.zip + " " + c.city).trim(),
       (c.country && !/^(schweiz|switzerland|ch)$/i.test(c.country.trim())) ? c.country : ""].filter(Boolean);
     rlines.forEach((line, i) => {
-      F(sans, i === 0 ? "bold" : "normal", 10);
+      F(sans, i === 0 ? "bold" : "normal", 10); ink();
       pdf.text(line, 118, ry); ry += 4.8;
     });
-
-    // meta block, left
-    let my = 52;
-    const meta = [
+    return ry;
+  }
+  function metaRows(){
+    return [
       [typeLabel + " " + L.nr, d.nr, true],
       [L.date, fmtDate(d.date)],
       [d.type === "offerte" ? L.validUntil : L.due, fmtDate(d.until)],
@@ -1153,29 +1224,118 @@ function buildPdf(d){
       co.uid ? [L.uid, co.uid] : null,
       [L.contact, co.email]
     ].filter(Boolean);
-    meta.forEach(([k, v, isMono]) => {
-      F(sans, "normal", 8); gray(); pdf.text(k, M, my);
-      F(isMono ? mono : sans, "normal", 9); ink(); pdf.text(String(v), M + 30, my);
+  }
+  const noteLine = d.type === "offerte" ? L.validNote(fmtDate(d.until)) : L.payNote(S.settings.dueDays, fmtDate(d.until));
+
+  function headerFirst(){
+    if (DS === "studio"){
+      F(sans, "bold", 9); gray();
+      pdf.text(typeLabel.toUpperCase(), M, 21, { charSpace:1.2 });
+      BIG(24); ink();
+      pdf.text(d.nr, M, 33);
+      drawLogo(RIGHT, 13, 15, 40, true) || (F(sans, "bold", 13), pdf.text("VRENT", RIGHT, 22, { align:"right" }));
+      setD(INK); pdf.setLineWidth(1.1); pdf.line(M, 39, RIGHT, 39);
+      const cells = metaRows().slice(1, 5);
+      const xs = [M, 68, 112, 154];
+      cells.forEach(([k, v, isMono], i) => {
+        F(sans, "bold", 6.5); gray();
+        pdf.text(k.toUpperCase(), xs[i], 46, { charSpace:0.4 });
+        F(isMono ? mono : sans, "normal", 9); ink();
+        pdf.text(String(v), xs[i], 50.6);
+      });
+      F(sans, "bold", 8.5); ink(); pdf.text(co.name, M, 62);
+      F(sans, "normal", 8); gray();
+      [co.street, co.zip + " " + co.city, "", co.phone, co.email, co.web].forEach((line, i) => {
+        if (line) pdf.text(line, M, 66 + i * 3.6);
+      });
+      const rEnd = recipientBlock(62);
+      F(sans, "normal", 9); gray();
+      pdf.text(noteLine, M, Math.max(88, rEnd + 2));
+      return Math.max(96, rEnd + 10);
+    }
+
+    // classic / minimal / accent share the standard structure
+    const logoH = DS === "minimal" ? 11 : 17;
+    drawLogo(M, 13, logoH, 42, false) || (F(sans, "bold", 16), ink(), pdf.text("VRENT", M, 22));
+    F(sans, DS === "minimal" ? "normal" : "bold", DS === "minimal" ? 8 : 9.5); ink();
+    pdf.text(co.name, RIGHT, 16, { align:"right" });
+    F(sans, "normal", DS === "minimal" ? 7 : 8); gray();
+    let cy = 20;
+    [co.street, co.zip + " " + co.city, "", co.phone, co.email, co.web].forEach(line => {
+      if (line) pdf.text(line, RIGHT, cy, { align:"right" }); cy += DS === "minimal" ? 3.3 : 3.6;
+    });
+    recipientBlock(52);
+    let my = 52;
+    metaRows().forEach(([k, v, isMono]) => {
+      F(sans, "normal", DS === "minimal" ? 7 : 8); gray(); pdf.text(k, M, my);
+      F(isMono ? mono : sans, "normal", DS === "minimal" ? 8.5 : 9); ink(); pdf.text(String(v), M + 30, my);
       my += 4.8;
     });
-
-    // title
-    F(sans, "bold", 15); ink();
-    pdf.text(typeLabel + " " + d.nr, M, 92);
-    F(sans, "normal", 9); gray();
-    pdf.text(d.type === "offerte" ? L.validNote(fmtDate(d.until)) : L.payNote(S.settings.dueDays, fmtDate(d.until)), M, 97.5);
+    if (DS === "accent"){
+      setFillC(ACC); pdf.rect(M, 85.8, 2.4, 8, "F");
+      F(sans, "bold", 15); setT(ACC);
+      pdf.text(typeLabel + " " + d.nr, M + 6, 92);
+      F(sans, "normal", 9); gray();
+      pdf.text(noteLine, M + 6, 97.5);
+    } else if (DS === "minimal"){
+      F(sans, "normal", 15); gray();
+      pdf.text(typeLabel, M, 92);
+      const w = pdf.getTextWidth(typeLabel);
+      F(mono, "normal", 15); ink();
+      pdf.text(d.nr, M + w + 3, 92);
+      F(sans, "normal", 8.5); gray();
+      pdf.text(noteLine, M, 97.5);
+    } else {
+      F(sans, "bold", 15); ink();
+      pdf.text(typeLabel + " " + d.nr, M, 92);
+      F(sans, "normal", 9); gray();
+      pdf.text(noteLine, M, 97.5);
+    }
     return 106;
   }
 
   function headerNext(){
     F(sans, "bold", 9); ink(); pdf.text(co.name, M, 16);
     F(sans, "normal", 9); gray(); pdf.text(typeLabel + " " + d.nr, RIGHT, 16, { align:"right" });
-    pdf.setDrawColor(21, 26, 35); pdf.setLineWidth(0.3); pdf.line(M, 19, RIGHT, 19);
+    setD(DS === "accent" ? ACC : INK); pdf.setLineWidth(DS === "studio" ? 0.8 : 0.3); pdf.line(M, 19, RIGHT, 19);
     return 28;
   }
 
   const COLS = { pos:M, desc:M + 9, qty:118, unit:121.5, price:164, amount:RIGHT };
   function tableHead(y){
+    if (DS === "studio"){
+      setFillC(INK); pdf.rect(M, y - 4.4, RIGHT - M, 6.4, "F");
+      F(sans, "bold", 8); setT([255, 255, 255]);
+      pdf.text(L.pos, M + 2, y);
+      pdf.text(L.desc, COLS.desc, y);
+      pdf.text(L.qty, COLS.qty, y, { align:"right" });
+      pdf.text(L.unit, COLS.unit, y);
+      pdf.text(L.price, COLS.price, y, { align:"right" });
+      pdf.text(L.amount, COLS.amount - 2, y, { align:"right" });
+      return y + 6.4;
+    }
+    if (DS === "accent"){
+      setFillC(tint(ACC, 0.92)); pdf.rect(M, y - 4.4, RIGHT - M, 6.4, "F");
+      F(sans, "bold", 8); setT(ACC);
+      pdf.text(L.pos, M + 2, y);
+      pdf.text(L.desc, COLS.desc, y);
+      pdf.text(L.qty, COLS.qty, y, { align:"right" });
+      pdf.text(L.unit, COLS.unit, y);
+      pdf.text(L.price, COLS.price, y, { align:"right" });
+      pdf.text(L.amount, COLS.amount - 2, y, { align:"right" });
+      return y + 6.4;
+    }
+    if (DS === "minimal"){
+      F(sans, "bold", 6.8); gray();
+      pdf.text(L.pos.toUpperCase(), M, y, { charSpace:0.4 });
+      pdf.text(L.desc.toUpperCase(), COLS.desc, y, { charSpace:0.4 });
+      pdf.text(L.qty.toUpperCase(), COLS.qty, y, { align:"right", charSpace:0.4 });
+      pdf.text(L.unit.toUpperCase(), COLS.unit, y, { charSpace:0.4 });
+      pdf.text(L.price.toUpperCase(), COLS.price, y, { align:"right", charSpace:0.4 });
+      pdf.text(L.amount.toUpperCase(), COLS.amount, y, { align:"right", charSpace:0.4 });
+      setD([203, 209, 219]); pdf.setLineWidth(0.25); pdf.line(M, y + 1.8, RIGHT, y + 1.8);
+      return y + 6.6;
+    }
     F(sans, "bold", 8); ink();
     pdf.text(L.pos, M, y);
     pdf.text(L.desc, COLS.desc, y);
@@ -1183,18 +1343,19 @@ function buildPdf(d){
     pdf.text(L.unit, COLS.unit, y);
     pdf.text(L.price, COLS.price, y, { align:"right" });
     pdf.text(L.amount, COLS.amount, y, { align:"right" });
-    pdf.setDrawColor(21, 26, 35); pdf.setLineWidth(0.4);
+    setD(INK); pdf.setLineWidth(0.4);
     pdf.line(M, y + 1.6, RIGHT, y + 1.6);
     return y + 6.2;
   }
 
   let y = headerFirst();
   y = tableHead(y);
+  const rowGap = (DS === "studio" || DS === "minimal") ? 3.6 : 2.8;
   const items = d.items.filter(it => String(it.desc).trim());
   items.forEach((it, i) => {
     F(sans, "normal", 9);
     const lines = pdf.splitTextToSize(String(it.desc), 74);
-    const rowH = Math.max(lines.length * 4.2, 4.2) + 2.8;
+    const rowH = Math.max(lines.length * 4.2, 4.2) + rowGap;
     if (y + rowH > BOTTOM){
       pdf.addPage(); y = headerNext(); y = tableHead(y);
     }
@@ -1210,41 +1371,64 @@ function buildPdf(d){
     pdf.text(chf(num(it.price)), COLS.price, y, { align:"right" });
     pdf.text(chf(round2(num(it.qty) * num(it.price))), COLS.amount, y, { align:"right" });
     y += rowH;
-    pdf.setDrawColor(228, 232, 240); pdf.setLineWidth(0.12);
-    if (i < items.length - 1) pdf.line(M, y - 2, RIGHT, y - 2);
+    if (i < items.length - 1 && (DS === "classic" || DS === "accent")){
+      setD(DS === "accent" ? tint(ACC, 0.85) : LIGHT); pdf.setLineWidth(0.12);
+      pdf.line(M, y - 2, RIGHT, y - 2);
+    }
   });
 
   // totals
-  if (y + 46 > BOTTOM + 14){ pdf.addPage(); y = headerNext(); }
+  if (y + 48 > BOTTOM + 14){ pdf.addPage(); y = headerNext(); }
   y += 2;
   const TX = 118;
-  const trow = (label, val, opts = {}) => {
-    F(sans, opts.bold ? "bold" : "normal", opts.size || 9);
-    if (opts.gray) gray(); else ink();
+  const trow = (label, val) => {
+    F(sans, "normal", 9); gray();
     pdf.text(label, TX, y);
-    F(mono, "normal", opts.size || 9);
-    ink(); pdf.text(val, RIGHT, y, { align:"right" });
-    y += opts.gap || 5;
+    F(mono, "normal", 9); ink();
+    pdf.text(val, RIGHT, y, { align:"right" });
+    y += 5;
   };
-  trow(L.subtotal, "CHF " + chf(t.sub), { gray:true });
-  if (t.discount) trow(L.discount + (d.discount.mode === "pct" ? " (" + qtyFmt(num(d.discount.value)) + " %)" : ""), "− CHF " + chf(t.discount), { gray:true });
-  if (t.vatRate) trow(L.vat + " " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat), { gray:true });
-  if (t.rounding) trow(L.rounding, (t.rounding > 0 ? "" : "− ") + "CHF " + chf(Math.abs(t.rounding)), { gray:true });
-  pdf.setDrawColor(21, 26, 35); pdf.setLineWidth(0.4);
-  pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
-  y += 1.8;
-  F(sans, "bold", 11); ink(); pdf.text(L.total, TX, y);
-  F(mono, "normal", 11); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
-  pdf.setLineWidth(0.4);
-  pdf.line(TX, y + 2.2, RIGHT, y + 2.2);
-  pdf.line(TX, y + 3.0, RIGHT, y + 3.0);
-  y += 12;
+  trow(L.subtotal, "CHF " + chf(t.sub));
+  if (t.discount) trow(L.discount + (d.discount.mode === "pct" ? " (" + qtyFmt(num(d.discount.value)) + " %)" : ""), "− CHF " + chf(t.discount));
+  if (t.vatRate) trow(L.vat + " " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat));
+  if (t.rounding) trow(L.rounding, (t.rounding > 0 ? "" : "− ") + "CHF " + chf(Math.abs(t.rounding)));
+  if (DS === "studio"){
+    y += 0.6;
+    setFillC(INK); pdf.rect(TX - 4, y - 2, RIGHT - TX + 4, 9.4, "F");
+    F(sans, "bold", 10); setT([255, 255, 255]);
+    pdf.text(L.total.toUpperCase(), TX, y + 4.2, { charSpace:0.6 });
+    F(mono, "normal", 11);
+    pdf.text("CHF " + chf(t.total), RIGHT - 2, y + 4.2, { align:"right" });
+    y += 16;
+  } else if (DS === "accent"){
+    setD(ACC); pdf.setLineWidth(0.5); pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
+    y += 1.8;
+    F(sans, "bold", 11); setT(ACC); pdf.text(L.total, TX, y);
+    F(mono, "normal", 11); ink(); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
+    setD(ACC); pdf.setLineWidth(0.5); pdf.line(TX, y + 2.4, RIGHT, y + 2.4);
+    y += 12;
+  } else if (DS === "minimal"){
+    setD(INK); pdf.setLineWidth(0.3); pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
+    y += 2;
+    F(sans, "bold", 11.5); ink(); pdf.text(L.total, TX, y);
+    F(mono, "normal", 11.5); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
+    y += 12;
+  } else {
+    setD(INK); pdf.setLineWidth(0.4); pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
+    y += 1.8;
+    F(sans, "bold", 11); ink(); pdf.text(L.total, TX, y);
+    F(mono, "normal", 11); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
+    pdf.setLineWidth(0.4);
+    pdf.line(TX, y + 2.2, RIGHT, y + 2.2);
+    pdf.line(TX, y + 3.0, RIGHT, y + 3.0);
+    y += 12;
+  }
 
-  const block = (title, text, mono8) => {
+  const block = (title, text) => {
     if (y > BOTTOM - 8){ pdf.addPage(); y = headerNext(); }
     if (title){ F(sans, "bold", 8.5); ink(); pdf.text(title, M, y); y += 4.4; }
     if (text){
-      F(mono8 ? mono : sans, "normal", mono8 ? 8.7 : 9); ink();
+      F(sans, "normal", 9); ink();
       const lines = pdf.splitTextToSize(text, 150);
       pdf.text(lines, M, y); y += lines.length * 4.2 + 3;
     }
@@ -1253,8 +1437,9 @@ function buildPdf(d){
   if (d.type === "rechnung" && co.iban){
     block(L.payTo, null);
     F(sans, "normal", 9); ink();
-    const payLines = [co.iban + "  ·  " + co.name + (co.bank ? "  ·  " + co.bank : ""), L.ref + ": " + d.nr];
-    payLines.forEach(pl => { pdf.text(pl, M, y); y += 4.6; });
+    [co.iban + "  ·  " + co.name + (co.bank ? "  ·  " + co.bank : ""), L.ref + ": " + d.nr].forEach(pl => {
+      pdf.text(pl, M, y); y += 4.6;
+    });
     y += 2.4;
   }
   const closing = (S.settings.closing[d.type] || {})[d.lang] || "";
@@ -1272,11 +1457,16 @@ function buildPdf(d){
     .filter(Boolean).join("  ·  ");
   for (let i = 1; i <= pages; i++){
     pdf.setPage(i);
-    pdf.setDrawColor(228, 232, 240); pdf.setLineWidth(0.2);
-    pdf.line(M, 283, RIGHT, 283);
-    F(sans, "normal", 7); gray();
+    if (DS === "studio"){ setD(INK); pdf.setLineWidth(1.0); pdf.line(M, 283, RIGHT, 283); }
+    else if (DS === "accent"){
+      setD(ACC); pdf.setLineWidth(0.8); pdf.line(M, 283, M + 26, 283);
+      setD(LIGHT); pdf.setLineWidth(0.2); pdf.line(M + 30, 283, RIGHT, 283);
+    }
+    else if (DS === "classic"){ setD(LIGHT); pdf.setLineWidth(0.2); pdf.line(M, 283, RIGHT, 283); }
+    const fs = DS === "minimal" ? 6.5 : 7;
+    F(sans, "normal", fs); gray();
     pdf.text(footerText, M, 287.5);
-    F(mono, "normal", 7);
+    F(mono, "normal", fs);
     pdf.text(L.page + " " + i + " " + L.of + " " + pages, RIGHT, 287.5, { align:"right" });
   }
 
@@ -1286,13 +1476,13 @@ function buildPdf(d){
 
 /* ================= boot ================= */
 document.body.insertAdjacentHTML("beforeend",
-  `<datalist id="unitList"><option value="Pauschale"><option value="Stk."><option value="Std."><option value="Tag"><option value="Woche"><option value="Monat"></datalist>`);
+  `<datalist id="unitList"><option value="flat rate"><option value="pcs"><option value="h"><option value="day"><option value="week"><option value="month"><option value="Pauschale"><option value="Stk."><option value="Std."></datalist>`);
 
 const draft = LS.get("vo_draft", null);
 if (draft && draft.doc){
   openEditor(draft.doc, draft.isNew);
   editorDirty = true;
-  toast("Entwurf wiederhergestellt");
+  toast("Draft restored");
 } else {
   renderDocs(); show("docs");
 }
@@ -1300,10 +1490,10 @@ renderDocs();
 
 if ("serviceWorker" in navigator){
   navigator.serviceWorker.register("./sw.js")
-    .then(() => { $("#swState").textContent = "Offline-fähig ✓"; })
-    .catch(() => { $("#swState").textContent = "Offline-Modus nicht verfügbar"; });
+    .then(() => { $("#swState").textContent = "Offline ready ✓"; })
+    .catch(() => { $("#swState").textContent = "Offline mode unavailable"; });
 } else {
-  $("#swState").textContent = "Offline-Modus nicht verfügbar";
+  $("#swState").textContent = "Offline mode unavailable";
 }
 </script>
 </body>

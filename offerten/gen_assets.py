@@ -104,6 +104,8 @@ def build_fonts():
             pdf_fonts["archivoRegular"] = base64.b64encode(font_bytes(font, None)).decode()
         if wght == 700:
             pdf_fonts["archivoBold"] = base64.b64encode(font_bytes(font, None)).decode()
+        if wght == 800:
+            pdf_fonts["archivoBlack"] = base64.b64encode(font_bytes(font, None)).decode()
 
     for wght, url in PLEX_URLS.items():
         font = subset_font(load_font(fetch(url)))
@@ -144,15 +146,23 @@ def icon(img, size, pad_ratio, bg):
 
 
 def build_images():
-    logo = get_image("logo.png")
-    mark = get_image("mark.png")
+    from PIL import Image
 
-    if max(logo.size) > 1200:
-        logo.thumbnail((1200, 1200))
-        logo.save("logo.png", optimize=True)
+    def autocrop(img):
+        """Trim transparent padding so the artwork fills its box."""
+        bbox = img.getchannel("A").getbbox()
+        return img.crop(bbox) if bbox else img
+
+    logo = autocrop(get_image("logo.png"))
+    mark = autocrop(get_image("mark.png"))
+
+    # recompress: palette PNGs keep the flat brand artwork crisp at a
+    # fraction of the size (smaller fonts.js and smaller generated PDFs)
+    logo.thumbnail((1200, 1200))
+    logo.quantize(colors=256, method=Image.FASTOCTREE).save("logo.png", optimize=True)
     small = mark.copy()
     small.thumbnail((256, 256))
-    small.save("mark.png", optimize=True)
+    small.quantize(colors=256, method=Image.FASTOCTREE).save("mark.png", optimize=True)
 
     white = (255, 255, 255, 255)
     icon(mark, 192, 0.10, white).convert("RGB").save(os.path.join(OUT, "icon-192.png"), optimize=True)
