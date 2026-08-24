@@ -54,6 +54,10 @@ Then redeploy. Without these, layers 1–2 still work fully.
   warnings, a food break every 3rd drink, and a drinks-per-night cap.
 - **Drink catalog**: beer, wine, bubbles, G&T, Moscow Mule, spritz, shots and
   more — plus custom entries. Cocktails are counted by actual spirit content.
+- **Get home safe**: set your home + a "get home by" deadline. GPS watches your
+  distance; if the deadline passes and you're still not home, the app takes over
+  the screen and sounds the alarm until you arrive (or hold-to-stop). Location
+  stays on-device — only a plain deadline nudge is ever sent to the push server.
 - **Night log & summary**: per-night history, peak ‰, standard units, waters.
 
 The server stores only a push subscription plus pending alarm times,

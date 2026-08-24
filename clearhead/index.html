@@ -202,6 +202,49 @@
   #tableMode .tm-bac{font-family:var(--mono); font-size:13px; color:#5c4f38; margin-top:8px;}
   #tableMode .tm-hint{position:absolute; bottom:calc(18px + env(safe-area-inset-bottom)); left:0; right:0; font-size:11px; color:#3d3527;}
 
+  /* ---------- get home safe ---------- */
+  .safe-card{display:flex; align-items:center; gap:11px; width:100%; text-align:left; margin-top:10px;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:11px 13px;}
+  .safe-card:active{transform:translateY(1px);}
+  .safe-card .sc-ico{font-size:20px; line-height:1;}
+  .safe-card .sc-body{flex:1; display:flex; flex-direction:column; gap:1px; min-width:0;}
+  .safe-card .sc-title{font-weight:700; font-size:14px;}
+  .safe-card .sc-sub{font-family:var(--mono); font-size:11.5px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .safe-card .sc-badge{font-family:var(--mono); font-size:12px; font-weight:600; padding:4px 10px; border-radius:99px;
+    color:var(--dim); border:1px solid var(--line2); font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .safe-card.armed{border-color:color-mix(in srgb, var(--ok) 42%, transparent);}
+  .safe-card.armed .sc-badge{color:var(--ok); border-color:color-mix(in srgb, var(--ok) 45%, transparent);}
+  .safe-card.soon{border-color:color-mix(in srgb, var(--amber) 50%, transparent);}
+  .safe-card.soon .sc-badge{color:var(--amber2); border-color:color-mix(in srgb, var(--amber) 50%, transparent);}
+  .safe-card.over{border-color:var(--bad); background:#2a1418;}
+  .safe-card.over .sc-badge{color:#ffd9dc; background:var(--deep); border-color:var(--bad);}
+  .safe-card.over .sc-sub{color:#e79aa0;}
+
+  /* full-screen get-home takeover */
+  #safeMode{position:fixed; inset:0; z-index:75; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:8px; text-align:center; padding:24px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+    background:radial-gradient(120% 68% at 50% 2%, #241206, #0a0603);}
+  #safeMode.over{background:radial-gradient(120% 68% at 50% 2%, #3c0e13, #120304);}
+  #safeMode.reached{background:radial-gradient(120% 68% at 50% 2%, #10240f, #05100a);}
+  #safeMode .sm-eyebrow{font-family:var(--mono); font-size:13px; letter-spacing:.26em; color:#cf9552;}
+  #safeMode.over .sm-eyebrow{color:#ff9ba1; animation:smblink 1.05s steps(1) infinite;}
+  #safeMode.reached .sm-eyebrow{color:#7dbf85;}
+  @keyframes smblink{50%{opacity:.3;}}
+  #safeMode .sm-count{font-family:var(--disp); font-weight:800; font-size:min(19vw,104px); line-height:1;
+    color:#e9c07a; font-variant-numeric:tabular-nums; letter-spacing:-.02em;}
+  #safeMode.over .sm-count{color:#ff6a72;}
+  #safeMode.reached .sm-count{color:#7dbf85; font-size:min(26vw,150px);}
+  #safeMode .sm-at{font-family:var(--mono); font-size:14px; color:#93774a;}
+  #safeMode .sm-dist{font-family:var(--mono); font-size:12.5px; color:#7a6647;}
+  #safeMode .sm-actions{display:flex; flex-direction:column; gap:10px; width:100%; max-width:330px; margin-top:22px;}
+  #safeMode .sm-actions .cta{margin-top:0;}
+  #safeMode .sm-close{color:#9a7f57; font-size:14px; padding:9px; text-decoration:underline; text-underline-offset:3px;}
+  #safeMode .sm-stop{position:absolute; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    font-family:var(--mono); font-size:12px; color:#8a7048; border:1px solid #4a3c24; border-radius:99px; padding:10px 18px;
+    background:#160f06; overflow:hidden; -webkit-user-select:none; user-select:none; touch-action:none;}
+  #safeMode .sm-stop .lbl{position:relative; z-index:1;}
+  #safeMode .sm-stop .fill{position:absolute; inset:0; background:#5a2a2e; transform-origin:left; transform:scaleX(0); z-index:0;}
+
   @media (max-width:370px){ .grid{grid-template-columns:repeat(2,1fr);} .bac-num{font-size:44px;} }
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important;}
@@ -240,6 +283,15 @@
     <div id="paceChip" class="pace-chip">no drinks yet</div>
   </section>
   <div id="upnext" class="upnext" hidden></div>
+
+  <button id="safeCard" class="safe-card" type="button">
+    <span class="sc-ico">🏠</span>
+    <span class="sc-body">
+      <span class="sc-title">Get home safe</span>
+      <span class="sc-sub" id="scSub">off — tap to set up</span>
+    </span>
+    <span class="sc-badge" id="scBadge" hidden></span>
+  </button>
 
   <section class="stats" aria-label="Tonight so far">
     <div class="stat"><b id="stDrinks">0</b><span>drinks</span></div>
@@ -400,6 +452,48 @@
   </div>
 </div>
 
+<!-- get home safe -->
+<div id="safeDlg" class="overlay" hidden>
+  <div class="panel">
+    <h2>Get home safe</h2>
+    <p class="sub">Set your home and a time to be back by. If you’re not home by then, Clearhead takes over the screen and sounds the alarm until you arrive. Your location never leaves this phone.</p>
+    <div class="field">
+      <label>Home</label>
+      <button id="sfSetHome" class="ghost-btn" type="button" style="width:100%">📍 Use my current location</button>
+      <p id="sfHomeState" class="tiny">Home not set yet.</p>
+    </div>
+    <div class="field">
+      <label>Be home by</label>
+      <div class="seg" id="sfWhen">
+        <button type="button" data-v="60">in 1 h</button>
+        <button type="button" data-v="120">in 2 h</button>
+        <button type="button" data-v="180">in 3 h</button>
+      </div>
+      <input id="sfTime" type="time" style="margin-top:8px" aria-label="Exact time to be home by">
+      <p class="tiny">Pick a rough window, or set an exact time.</p>
+    </div>
+    <div class="sheet-actions">
+      <button id="sfClose" class="ghost-btn" type="button">Close</button>
+      <button id="sfArm" class="cta" type="button">Arm get-home</button>
+    </div>
+    <button id="sfDisarm" class="danger-link" type="button" hidden>Turn get-home off</button>
+    <p class="tiny">Works best with Clearhead open in your pocket — background tracking with the app closed isn’t reliable on phones. A helper, not a guarantee: for real trouble call 144 / 112.</p>
+  </div>
+</div>
+
+<!-- get-home takeover: the screen turns over to a countdown / alarm until you're home -->
+<div id="safeMode" hidden>
+  <div class="sm-eyebrow" id="smEyebrow">HEAD HOME BY</div>
+  <div class="sm-count" id="smCount">--:--</div>
+  <div class="sm-at" id="smAt"></div>
+  <div class="sm-dist" id="smDist"></div>
+  <div class="sm-actions">
+    <button id="smHome" class="cta" type="button">🏠 I’m home</button>
+    <button id="smClose" class="sm-close" type="button">Keep watching in background</button>
+  </div>
+  <button id="smStop" class="sm-stop" type="button"><span class="fill" id="smStopFill"></span><span class="lbl">Hold to turn off</span></button>
+</div>
+
 <!-- alarm -->
 <div id="alarm" class="overlay" hidden>
   <div class="panel alarm-panel" id="alarmPanel">
@@ -534,6 +628,7 @@ const STANDALONE = (window.matchMedia && matchMedia('(display-mode: standalone)'
 const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const normProfile = p => p ? {...PROFILE_DEFAULTS, ...p} : null;
 let tableOpen = false, tmPrevWake = false, lastTimerMin = -1;
+let safeModeOpen = false, smPrevWake = false, geoWatchId = null, holdTimer = null;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -541,6 +636,8 @@ const two = n => String(n).padStart(2,'0');
 const fmtClock = ms => { const d = new Date(ms); return two(d.getHours()) + ':' + two(d.getMinutes()); };
 const fmtDur = ms => { const m = Math.max(0, Math.round(ms/60000)); return Math.floor(m/60) + 'h ' + two(m%60) + 'm'; };
 const fmtMMSS = ms => { const s = Math.max(0, Math.round(ms/1000)); return Math.floor(s/60) + ':' + two(s%60); };
+const fmtHMS = ms => { let s = Math.max(0, Math.round(ms/1000)); const h = Math.floor(s/3600); s -= h*3600; const m = Math.floor(s/60); s -= m*60; return (h ? h + ':' + two(m) : String(m)) + ':' + two(s); };
+const fmtLeft = ms => { const m = Math.max(0, Math.ceil(ms/60000)); return m >= 60 ? Math.floor(m/60) + 'h' + two(m%60) : m + ' min'; };
 const gramsOf = (ml, abv) => ml * (abv/100) * ETH;
 
 /* ============================== BAC engine ============================== */
@@ -788,7 +885,7 @@ function startStorm(o){
   };
   ring();
   swNotify(o.title, o.msg, o.prio >= 2);
-  if (profile.strobe && !REDUCED && o.prio >= 1) $('alarm').classList.add('strobing');
+  if (profile.strobe && !REDUCED && o.prio >= 1 && !o.noStrobe) $('alarm').classList.add('strobing');
   torchBlink(14000);
   storm.vib = setInterval(() => { if (!document.hidden) buzz([320,140,320]); }, 1600);
   storm.rering = setInterval(() => {
@@ -869,6 +966,10 @@ function buildPushAlarms(){
         body:'Gap done. If you’re having another you’re clear — water first?'});
     out.push({id:'checkin-' + last.id, at:last.t + 95 * 60000, title:'Still out? 🍸',
       body:'Nothing logged for a while. Log your drinks so I can keep watch — or switch to water and head home like a legend.', urgent:true});
+  }
+  if (session && session.safe && session.safe.armed && !session.safe.reached && session.safe.deadline > Date.now()){
+    out.push({id:'home', at:session.safe.deadline, title:'🏠 Head home',
+      body:'Your get-home time is up — start heading back. Clearhead sounds the alarm here until you arrive.', urgent:true});
   }
   return out;
 }
@@ -963,6 +1064,185 @@ function renderTableMode(){
   $('tmWater').textContent = waterDone ? '💧 water done ✓' : '💧 one water before the next';
   $('tmWater').classList.toggle('done', waterDone);
   $('tmBac').textContent = bac.toFixed(2) + '‰ · ' + ZONES[zoneOf(bac)].key;
+}
+
+/* ============================== get home safe ============================== */
+// A "get home by" deadline plus your home location. If the time passes and GPS
+// still says you're not home, the app takes over the screen and rings until you
+// arrive. Everything — location included — stays on this device; only a plain
+// deadline nudge (no coordinates) is ever handed to the push server.
+const HOME_RADIUS = 75; // metres — close enough counts as "home"
+function distM(a, b){
+  if (!a || !b) return null;
+  const E = 6371000, toR = Math.PI/180;
+  const dLa = (b.lat-a.lat)*toR, dLng = (b.lng-a.lng)*toR;
+  const s = Math.sin(dLa/2)**2 + Math.cos(a.lat*toR)*Math.cos(b.lat*toR)*Math.sin(dLng/2)**2;
+  return 2*E*Math.asin(Math.min(1, Math.sqrt(s)));
+}
+function fmtDist(m){
+  if (m == null) return 'location off';
+  if (m <= HOME_RADIUS) return 'at home';
+  return m < 950 ? Math.round(m/10)*10 + ' m away' : (m/1000).toFixed(m < 9500 ? 1 : 0) + ' km away';
+}
+function geoOnce(){
+  return new Promise(res => {
+    if (!navigator.geolocation){ res(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      p => res({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, t:Date.now()}),
+      () => res(null), {enableHighAccuracy:true, timeout:12000, maximumAge:15000});
+  });
+}
+function startGeoWatch(){
+  if (geoWatchId != null || !navigator.geolocation) return;
+  try{
+    geoWatchId = navigator.geolocation.watchPosition(p => {
+      if (session && session.safe){ session.safe.lastFix = {lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, t:Date.now()}; saveSession(); }
+    }, () => {}, {enableHighAccuracy:true, timeout:20000, maximumAge:10000});
+  }catch(e){}
+}
+function stopGeoWatch(){ try{ if (geoWatchId != null) navigator.geolocation.clearWatch(geoWatchId); }catch(e){} geoWatchId = null; }
+
+function armSafe(deadline){
+  if (!profile.home){ toast('Set your home first — one tap on “Use my current location”.', 'warn'); return; }
+  if (!(deadline > Date.now())){ toast('Pick a time that’s still ahead.', 'warn'); return; }
+  session = session || freshSession();
+  session.safe = {armed:true, deadline, reached:false, overdue:false, startedAt:Date.now(),
+    lastFix:(session.safe && session.safe.lastFix) || null};
+  saveSession();
+  if (profile.autoWatch && !watchArmed && !session.demo) armWatch(); // keep the tab alive to watch
+  startGeoWatch();
+  geoOnce().then(f => { if (f && session && session.safe){ session.safe.lastFix = f; saveSession(); renderSafe(); } });
+  syncPushSchedule();
+  renderSafe();
+  $('safeDlg').hidden = true;
+  toast('🏠 Get-home armed — be back by ' + fmtClock(deadline) + '. I’ve got you.');
+}
+function disarmSafe(msg){
+  if (session){ session.safe = null; saveSession(); }
+  stopGeoWatch(); stopStorm(); closeSafeMode();
+  syncPushSchedule(); renderSafe();
+  if (msg) toast(msg);
+}
+function markHome(){
+  if (!session || !session.safe) return;
+  session.safe.reached = true; session.safe.armed = false; session.safe.overdue = false;
+  saveSession();
+  stopGeoWatch(); stopStorm(); syncPushSchedule();
+  buzz([90,60,90]);
+  safeModeOpen = true; $('safeMode').hidden = false; renderSafeMode();
+  setWake(false);
+  toast('🏠 Home safe. Sleep well.', 'water');
+  renderSafe();
+  setTimeout(() => { closeSafeMode(); if (session){ session.safe = null; saveSession(); } syncPushSchedule(); renderSafe(); }, 6500);
+}
+function checkSafe(now){
+  const s = session && session.safe;
+  if (!s || !s.armed || s.reached) return;
+  const dist = (profile.home && s.lastFix) ? distM(s.lastFix, profile.home) : null;
+  if (dist != null && dist <= HOME_RADIUS){ markHome(); return; }
+  if (now >= s.deadline){
+    if (!s.overdue){ s.overdue = true; saveSession(); openSafeMode(); }
+    // ring, and keep re-ringing, until they're home (or hit hold-to-stop)
+    if (!storm.active && $('alarm').hidden){
+      startStorm({prio:3, kind:'danger', noStrobe:true, title:'🏠 Get home — you’re overdue',
+        msg:'Your get-home time’s up. Head home now — the alarm stops when you arrive.'});
+    }
+    if (safeModeOpen) renderSafeMode();
+  }
+}
+async function claimHome(){
+  const s = session && session.safe; if (!s) return;
+  const btn = $('smHome'), label = btn.textContent; btn.textContent = 'checking…';
+  const fix = await geoOnce();
+  btn.textContent = label;
+  if (fix && session && session.safe){ session.safe.lastFix = fix; saveSession(); }
+  const dist = (profile.home && fix) ? distM(fix, profile.home) : null;
+  if (dist != null && dist > HOME_RADIUS){
+    toast('GPS puts you ' + fmtDist(dist) + ' — not home yet. Keep going, you’re close.', 'warn');
+    renderSafeMode();
+    return;
+  }
+  markHome(); // within range, or no GPS to check — trust the tap
+}
+function openSafeMode(){
+  const s = session && session.safe; if (!s || !s.armed) return;
+  safeModeOpen = true; smPrevWake = wantWake; setWake(true);
+  $('safeMode').hidden = false; renderSafeMode();
+}
+function closeSafeMode(){
+  if (!safeModeOpen) return;
+  safeModeOpen = false; $('safeMode').hidden = true;
+  if (!smPrevWake) setWake(false);
+}
+function renderSafeMode(){
+  if (!safeModeOpen) return;
+  const s = session && session.safe, el = $('safeMode');
+  if (!s){ closeSafeMode(); return; }
+  const now = Date.now();
+  const dist = (profile.home && s.lastFix) ? distM(s.lastFix, profile.home) : null;
+  if (s.reached){
+    el.className = 'reached';
+    $('smEyebrow').textContent = 'HOME SAFE';
+    $('smCount').textContent = '🏠';
+    $('smAt').textContent = 'You made it. Good night.';
+    $('smDist').textContent = '';
+    $('smHome').hidden = true; $('smClose').hidden = true; $('smStop').hidden = true;
+    return;
+  }
+  $('smDist').textContent = s.lastFix ? fmtDist(dist) : (navigator.geolocation ? 'finding your location…' : 'location not available on this device');
+  $('smHome').hidden = false; $('smStop').hidden = false;
+  const rem = s.deadline - now;
+  if (rem > 0){
+    el.className = '';
+    $('smEyebrow').textContent = 'HEAD HOME BY';
+    $('smCount').textContent = fmtHMS(rem);
+    $('smAt').textContent = 'home by ' + fmtClock(s.deadline);
+    $('smClose').hidden = false;
+  } else {
+    el.className = 'over';
+    $('smEyebrow').textContent = 'GET HOME NOW';
+    $('smCount').textContent = '+' + fmtHMS(-rem);
+    $('smAt').textContent = 'overdue since ' + fmtClock(s.deadline);
+    $('smClose').hidden = true;
+  }
+}
+function renderSafe(){
+  const card = $('safeCard'); if (!card) return;
+  const s = session && session.safe, now = Date.now(), badge = $('scBadge');
+  if (!s || (!s.armed && !s.reached)){
+    card.className = 'safe-card';
+    $('scSub').textContent = (profile && profile.home) ? 'off — tap to set a get-home time' : 'off — tap to set up';
+    badge.hidden = true; badge.textContent = '';
+    return;
+  }
+  badge.hidden = false;
+  if (s.reached){ card.className = 'safe-card armed'; $('scSub').textContent = 'home safe 🏠'; badge.textContent = '✓'; return; }
+  const rem = s.deadline - now;
+  if (rem > 0){
+    const mins = Math.ceil(rem/60000);
+    card.className = 'safe-card armed' + (mins <= 15 ? ' soon' : '');
+    $('scSub').textContent = 'home by ' + fmtClock(s.deadline);
+    badge.textContent = fmtLeft(rem);
+  } else {
+    card.className = 'safe-card over';
+    $('scSub').textContent = 'overdue — get home';
+    badge.textContent = '+' + fmtLeft(-rem);
+  }
+}
+function openSafeDlg(){
+  const home = profile && profile.home, s = session && session.safe;
+  $('sfHomeState').textContent = home ? '✓ Home is set. Tap again to update it.' : 'Home not set yet.';
+  $('sfDisarm').hidden = !(s && s.armed);
+  segSet('sfWhen', '120');
+  $('sfTime').value = '';
+  $('safeDlg').hidden = false;
+}
+function timeToDeadline(v){
+  if (!/^\d\d:\d\d$/.test(v)) return null;
+  const [h, m] = v.split(':').map(Number);
+  const d = new Date(); d.setHours(h, m, 0, 0);
+  if (d.getTime() <= Date.now() + 60000) d.setDate(d.getDate() + 1); // that time, tomorrow
+  return d.getTime();
 }
 
 /* ============================== toasts & alarms ============================== */
@@ -1210,6 +1490,7 @@ function renderAll(){
   $('upnext').innerHTML = chips.map(c => `<span class="chip">${c}</span>`).join('');
 
   renderLog();
+  renderSafe();
 }
 
 /* ============================== night end ============================== */
@@ -1218,6 +1499,7 @@ function endNight(){
     session = null; store.del(LS.session); renderAll();
     syncPushSchedule();
     clearTimerSurfaces();
+    stopGeoWatch(); closeSafeMode();
     disarmWatch();
     toast('Fresh slate. 🌙');
     return;
@@ -1251,6 +1533,7 @@ function finishSummary(){
   store.del(LS.session);
   syncPushSchedule();
   clearTimerSurfaces();
+  stopGeoWatch(); closeSafeMode();
   disarmWatch();
   if (wasDemo && !store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
@@ -1281,6 +1564,7 @@ function startDemo(){
 function exitDemo(){
   session = null; store.del(LS.session);
   clearTimerSurfaces();
+  stopGeoWatch(); closeSafeMode();
   disarmWatch();
   if (!store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
@@ -1356,6 +1640,7 @@ function init(){
   if (session && session.demo && !profile){
     profile = {...PROFILE_DEFAULTS, sex:'m', weightKg:78, heightCm:180, age:30};
   }
+  if (session && session.safe && session.safe.armed && !session.safe.reached) startGeoWatch();
 
   if (!profile) showOnboard();
   else { $('app').hidden = false; renderAll(); }
@@ -1419,6 +1704,40 @@ function init(){
   $('suDone').addEventListener('click', finishSummary);
   $('paceChip').addEventListener('click', openTableMode);
   $('tableMode').addEventListener('click', closeTableMode);
+
+  // get home safe
+  $('safeCard').addEventListener('click', () => {
+    const s = session && session.safe;
+    if (s && (s.armed || s.reached)) openSafeMode(); else openSafeDlg();
+  });
+  wireSeg('sfWhen');
+  $('sfSetHome').addEventListener('click', async () => {
+    if (!navigator.geolocation){ toast('This device can’t share a location.', 'warn'); return; }
+    $('sfHomeState').textContent = 'Getting your location…';
+    const f = await geoOnce();
+    if (!f){ $('sfHomeState').textContent = 'Couldn’t get a fix — allow location and try again.'; toast('Location permission is needed to set home.', 'warn'); return; }
+    profile.home = {lat:f.lat, lng:f.lng}; store.set(LS.profile, profile);
+    if (session && session.safe) session.safe.lastFix = f;
+    $('sfHomeState').textContent = '✓ Home set to where you are now.';
+    toast('🏠 Home saved on this device.');
+  });
+  $('sfArm').addEventListener('click', () => {
+    const t = $('sfTime').value.trim();
+    const deadline = t ? timeToDeadline(t) : Date.now() + parseInt(segVal('sfWhen') || '120', 10) * 60000;
+    if (!deadline){ toast('That time didn’t read right — try HH:MM.', 'warn'); return; }
+    armSafe(deadline);
+  });
+  $('sfClose').addEventListener('click', () => { $('safeDlg').hidden = true; });
+  $('sfDisarm').addEventListener('click', () => { disarmSafe('Get-home turned off. Stay safe out there.'); $('safeDlg').hidden = true; });
+  $('smHome').addEventListener('click', claimHome);
+  $('smClose').addEventListener('click', closeSafeMode);
+  const holdStart = e => { if (e && e.preventDefault) e.preventDefault(); const f = $('smStopFill'); if (f && !REDUCED){ f.style.transition = 'transform 1.2s linear'; f.style.transform = 'scaleX(1)'; } clearTimeout(holdTimer); holdTimer = setTimeout(() => disarmSafe('Get-home turned off. Stay safe out there.'), 1200); };
+  const holdCancel = () => { clearTimeout(holdTimer); holdTimer = null; const f = $('smStopFill'); if (f){ f.style.transition = 'transform .2s'; f.style.transform = 'scaleX(0)'; } };
+  const smStop = $('smStop');
+  smStop.addEventListener('pointerdown', holdStart);
+  smStop.addEventListener('pointerup', holdCancel);
+  smStop.addEventListener('pointerleave', holdCancel);
+  smStop.addEventListener('pointercancel', holdCancel);
 
   // custom drink
   $('cuCancel').addEventListener('click', () => { $('customDlg').hidden = true; });
@@ -1487,6 +1806,7 @@ function init(){
     if (!confirm('Erase your profile, tonight’s log and history?')) return;
     if (pushSub) apiCall('schedule', {subscription: pushSub, alarms: []});
     clearTimerSurfaces();
+    stopGeoWatch(); closeSafeMode();
     disarmWatch();
     store.del(LS.profile); store.del(LS.session); store.del(LS.history);
     profile = null; session = null;
@@ -1499,7 +1819,8 @@ function init(){
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden){
       if (wantWake) setWake(true);
-      if (profile && session){ renderAll(); checkAlerts(Date.now()); }
+      if (profile && session){ renderAll(); checkAlerts(Date.now()); checkSafe(Date.now()); }
+      if (session && session.safe && session.safe.armed && !session.safe.reached) startGeoWatch();
       if (storm.active) torchBlink(8000); // flashlight can only run while visible
     }
   });
@@ -1510,7 +1831,9 @@ function init(){
     if (!profile || $('app').hidden) return;
     renderAll();
     renderTableMode();
+    renderSafeMode();
     checkAlerts(Date.now());
+    checkSafe(Date.now());
     updateTimerSurfaces();
   }, 1000);
 }
