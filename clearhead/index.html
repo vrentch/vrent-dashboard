@@ -283,6 +283,13 @@
   .reflect-panel .rf-actions .water{border-color:#3a6b78; background:#1e3a42; color:var(--aqua2);}
   .reflect-panel .rf-actions .home{border-color:color-mix(in srgb, var(--amber) 50%, transparent); color:var(--amber2);}
 
+  .addr-row{display:flex; gap:8px;}
+  .addr-row input{flex:1; min-width:0; background:var(--bg2); color:var(--text); border:1px solid var(--line2); border-radius:10px; padding:12px; font-size:16px;}
+  .findbtn{flex:0 0 auto; border:1px solid var(--amber); color:#2a1c05; background:linear-gradient(180deg, var(--amber2), var(--amber)); border-radius:10px; padding:0 16px; font-weight:700; font-size:14px;}
+  .findbtn:active{transform:translateY(1px);}
+  .findbtn:disabled{opacity:.6;}
+  .tiny.okline{color:var(--aqua2);}
+
   @media (max-width:370px){ .grid{grid-template-columns:repeat(2,1fr);} .bac-num{font-size:44px;} }
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important;}
@@ -503,10 +510,14 @@
 <div id="safeDlg" class="overlay" hidden>
   <div class="panel">
     <h2>Get home safe</h2>
-    <p class="sub">Set your home and a time to be back by. If you’re not home by then, Clearhead takes over the screen and sounds the alarm until you arrive. Your location never leaves this phone.</p>
+    <p class="sub">Set your home and a time to be back by. If you’re not home by then, Clearhead takes over the screen and sounds the alarm until you arrive.</p>
     <div class="field">
-      <label>Home</label>
-      <button id="sfSetHome" class="ghost-btn" type="button" style="width:100%">📍 Use my current location</button>
+      <label>Home address</label>
+      <div class="addr-row">
+        <input id="sfAddr" type="text" autocomplete="street-address" placeholder="e.g. Bahnhofstrasse 1, Zürich">
+        <button id="sfFind" class="findbtn" type="button">Find</button>
+      </div>
+      <button id="sfSetHome" class="ghost-btn" type="button" style="width:100%; margin-top:8px">📍 Or use where I am right now</button>
       <p id="sfHomeState" class="tiny">Home not set yet.</p>
     </div>
     <div class="field">
@@ -524,7 +535,7 @@
       <button id="sfArm" class="cta" type="button">Arm get-home</button>
     </div>
     <button id="sfDisarm" class="danger-link" type="button" hidden>Turn get-home off</button>
-    <p class="tiny">Works best with Clearhead open in your pocket — background tracking with the app closed isn’t reliable on phones. A helper, not a guarantee: for real trouble call 144 / 112.</p>
+    <p class="tiny">Get-home needs location permission to tell when you’ve arrived — allow it when your phone asks. Typing an address looks it up once via OpenStreetMap; your live location while you’re out stays on this phone. Works best with Clearhead open in your pocket. A helper, not a guarantee — for real trouble call 144 / 112.</p>
   </div>
 </div>
 
@@ -1188,6 +1199,26 @@ function geoOnce(){
       () => res(null), {enableHighAccuracy:true, timeout:12000, maximumAge:15000});
   });
 }
+// Turn a typed address into coordinates — one lookup, on demand, via OpenStreetMap's
+// Nominatim (free, no key). This single address is the only location that ever leaves
+// the phone; the live location while you're out never does.
+async function geocode(q){
+  q = (q || '').trim();
+  if (!q) return null;
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(q);
+  const r = await fetch(url, {headers:{Accept:'application/json'}});
+  if (!r.ok) throw new Error('lookup failed');
+  const a = await r.json();
+  if (!Array.isArray(a) || !a.length) return null;
+  const h = a[0], lat = parseFloat(h.lat), lng = parseFloat(h.lon);
+  if (!isFinite(lat) || !isFinite(lng)) return null;
+  return {lat, lng, display:(h.display_name || q)};
+}
+// Best-effort read of the location permission (not supported on every browser).
+async function geoPermState(){
+  try{ if (navigator.permissions){ const s = await navigator.permissions.query({name:'geolocation'}); return s.state; } }catch(e){}
+  return 'unknown';
+}
 function startGeoWatch(){
   if (geoWatchId != null || !navigator.geolocation) return;
   try{
@@ -1199,7 +1230,7 @@ function startGeoWatch(){
 function stopGeoWatch(){ try{ if (geoWatchId != null) navigator.geolocation.clearWatch(geoWatchId); }catch(e){} geoWatchId = null; }
 
 function armSafe(deadline){
-  if (!profile.home){ toast('Set your home first — one tap on “Use my current location”.', 'warn'); return; }
+  if (!profile.home){ toast('Set your home first — type an address, or use where you are now.', 'warn'); return; }
   if (!(deadline > Date.now())){ toast('Pick a time that’s still ahead.', 'warn'); return; }
   session = session || freshSession();
   session.safe = {armed:true, deadline, reached:false, overdue:false, startedAt:Date.now(),
@@ -1327,11 +1358,22 @@ function renderSafe(){
 }
 function openSafeDlg(){
   const home = profile && profile.home, s = session && session.safe;
-  $('sfHomeState').textContent = home ? '✓ Home is set. Tap again to update it.' : 'Home not set yet.';
+  $('sfAddr').value = (home && home.src === 'addr') ? (home.label || '') : '';
+  $('sfHomeState').className = 'tiny' + (home ? ' okline' : '');
+  $('sfHomeState').textContent = home
+    ? ('✓ Home set: ' + (home.label || 'where you were'))
+    : 'No home yet — type your address and tap Find, or use where you are now.';
   $('sfDisarm').hidden = !(s && s.armed);
   segSet('sfWhen', '120');
   $('sfTime').value = '';
   $('safeDlg').hidden = false;
+  // If the browser will tell us and location is blocked, flag it before they try to arm.
+  geoPermState().then(st => {
+    if (st === 'denied' && !$('safeDlg').hidden){
+      $('sfHomeState').className = 'tiny';
+      $('sfHomeState').textContent = 'Location is blocked for this site — switch it on in your browser so Clearhead can tell when you’re home.';
+    }
+  });
 }
 function timeToDeadline(v){
   if (!/^\d\d:\d\d$/.test(v)) return null;
@@ -1913,14 +1955,33 @@ function init(){
   wireSeg('sfWhen');
   $('sfSetHome').addEventListener('click', async () => {
     if (!navigator.geolocation){ toast('This device can’t share a location.', 'warn'); return; }
-    $('sfHomeState').textContent = 'Getting your location…';
+    $('sfHomeState').className = 'tiny'; $('sfHomeState').textContent = 'Getting your location…';
     const f = await geoOnce();
-    if (!f){ $('sfHomeState').textContent = 'Couldn’t get a fix — allow location and try again.'; toast('Location permission is needed to set home.', 'warn'); return; }
-    profile.home = {lat:f.lat, lng:f.lng}; store.set(LS.profile, profile);
+    if (!f){ $('sfHomeState').textContent = 'Couldn’t get a fix — allow location for this site, then try again.'; toast('Location permission is needed to set home.', 'warn'); return; }
+    profile.home = {lat:f.lat, lng:f.lng, label:'where you are now', src:'here'}; store.set(LS.profile, profile);
     if (session && session.safe) session.safe.lastFix = f;
-    $('sfHomeState').textContent = '✓ Home set to where you are now.';
-    toast('🏠 Home saved on this device.');
+    $('sfAddr').value = '';
+    $('sfHomeState').className = 'tiny okline'; $('sfHomeState').textContent = '✓ Home set to where you are now.';
+    toast('🏠 Home saved on this device.'); renderSafe();
   });
+  async function findHome(){
+    const q = $('sfAddr').value.trim();
+    if (q.length < 3){ $('sfHomeState').className = 'tiny'; $('sfHomeState').textContent = 'Type a street and town, then tap Find.'; return; }
+    const btn = $('sfFind'), lab = btn.textContent; btn.disabled = true; btn.textContent = '…';
+    $('sfHomeState').className = 'tiny'; $('sfHomeState').textContent = 'Looking up that address…';
+    try{
+      const g = await geocode(q);
+      if (!g){ $('sfHomeState').textContent = 'Couldn’t find that address — add the town, or use where you are now.'; return; }
+      profile.home = {lat:g.lat, lng:g.lng, label:q, src:'addr'}; store.set(LS.profile, profile);
+      $('sfHomeState').className = 'tiny okline';
+      $('sfHomeState').textContent = '✓ Home set: ' + (g.display.length > 64 ? g.display.slice(0, 63) + '…' : g.display);
+      toast('🏠 Home saved on this device.'); renderSafe();
+    }catch(e){
+      $('sfHomeState').textContent = 'Address lookup didn’t go through — check your connection, or use where you are now.';
+    }finally{ btn.disabled = false; btn.textContent = lab; }
+  }
+  $('sfFind').addEventListener('click', findHome);
+  $('sfAddr').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); findHome(); } });
   $('sfArm').addEventListener('click', () => {
     const t = $('sfTime').value.trim();
     const deadline = t ? timeToDeadline(t) : Date.now() + parseInt(segVal('sfWhen') || '120', 10) * 60000;
