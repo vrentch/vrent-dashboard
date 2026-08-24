@@ -35,8 +35,6 @@ export interface MoneySettings {
   currency: string;       // display currency (CHF, EUR, …)
   monthStartDay: number;  // 1–28 — your budget month runs from this day to the
                           // day before the next start (e.g. 25th → 25.–24.)
-  trackingSince: string;  // YYYY-MM-DD — budget never accrues earlier
-                          // (no phantom credit for pre-tracking days)
 }
 
 export interface MoneyState {
@@ -67,7 +65,7 @@ function uid(): string {
 
 function defaults(): Persisted {
   return {
-    settings: { monthlyBudget: 0, currency: "CHF", monthStartDay: 1, trackingSince: "" },
+    settings: { monthlyBudget: 0, currency: "CHF", monthStartDay: 1 },
     expenses: [],
     extras: [],
   };
@@ -121,15 +119,9 @@ function load(): Persisted {
     const expenses: Expense[] = Array.isArray(p.expenses) ? p.expenses : [];
     const fixed: { amount: number }[] = Array.isArray(p.fixed) ? p.fixed : [];
     const monthlyBudget = raw.monthlyBudget ?? legacyMonthlyBudget(raw, fixed);
-    // Budget must not accrue before the user actually began tracking — for
-    // existing data, the earliest logged expense is the honest start; a
-    // configured store with no expenses starts today.
-    const trackingSince =
-      raw.trackingSince ||
-      (expenses.length ? expenses.map((e) => e.date).sort()[0] : monthlyBudget > 0 ? todayKey() : "");
     const monthStartDay = Math.min(28, Math.max(1, Math.round(raw.monthStartDay || 1)));
     return {
-      settings: { monthlyBudget: Math.max(0, monthlyBudget || 0), currency: raw.currency || "CHF", monthStartDay, trackingSince },
+      settings: { monthlyBudget: Math.max(0, monthlyBudget || 0), currency: raw.currency || "CHF", monthStartDay },
       expenses,
       extras: Array.isArray(p.extras) ? p.extras : [],
     };
@@ -150,10 +142,6 @@ export function useMoney(): Persisted {
 export function setSettings(patch: Partial<MoneySettings>) {
   const next = { ...state.settings, ...patch };
   next.monthStartDay = Math.min(28, Math.max(1, Math.round(next.monthStartDay || 1)));
-  // Stamp the tracking start the moment the budget is first configured, so the
-  // meter never credits days that were never tracked. Only auto-stamp when the
-  // patch didn't touch trackingSince — an explicit user value must win.
-  if (!("trackingSince" in patch) && !next.trackingSince && next.monthlyBudget > 0) next.trackingSince = todayKey();
   set({ settings: next });
 }
 
@@ -256,20 +244,6 @@ export function dailyAllowance(s: Persisted, now = new Date()): number {
   return spendableForPeriod(s, p) / p.days;
 }
 
-// Days of the current budget month that count: from the later of the period
-// start and `trackingSince` through today (inclusive). Days before tracking
-// began earn nothing — that money was spent untracked, so crediting it would
-// inflate what's left.
-export function daysTracked(s: Persisted, now = new Date()): number {
-  const p = periodFor(s, now);
-  let from = p.start;
-  const ts = s.settings.trackingSince;
-  if (ts && ts > from) from = ts;
-  if (from > keyOf(now)) return 0; // tracking starts in the future
-  const [y, m, d] = from.split("-").map(Number);
-  return Math.max(0, daysBetween(new Date(y, (m || 1) - 1, d || 1), now) + 1);
-}
-
 export function spentInPeriod(s: Persisted, p: BudgetPeriod): number {
   return s.expenses.filter((e) => e.date >= p.start && e.date <= p.end).reduce((a, e) => a + (e.amount || 0), 0);
 }
@@ -284,37 +258,20 @@ export function spentOnDay(s: Persisted, date: string): number {
   return s.expenses.filter((e) => e.date === date).reduce((a, e) => a + (e.amount || 0), 0);
 }
 
-// What's left to spend today: every tracked day adds a full daily budget, and
-// whatever you didn't spend on earlier days rolls forward. Expenses dated
-// before `trackingSince` stay in the stats but don't drain it (those days
-// contributed no budget either).
+// What's left to spend today: today's budget minus what you spent today.
+// No carryover pot — every day (and every budget month) starts fresh; how the
+// whole month is going lives in `monthLeft` instead.
 export function liveBalance(s: Persisted, now = new Date()): number {
+  return dailyAllowance(s, now) - spentOnDay(s, keyOf(now));
+}
+// What's left of the whole budget month.
+export function monthLeft(s: Persisted, now = new Date()): number {
   const p = periodFor(s, now);
-  const budget = dailyAllowance(s, now) * daysTracked(s, now);
-  const ts = s.settings.trackingSince;
-  const spent = s.expenses
-    .filter((e) => e.date >= p.start && e.date <= p.end && (!ts || e.date >= ts))
-    .reduce((a, e) => a + (e.amount || 0), 0);
-  return budget - spent;
+  return spendableForPeriod(s, p) - spentInPeriod(s, p);
 }
 
 export function isConfigured(s: Persisted): boolean {
   return s.settings.monthlyBudget > 0;
-}
-
-// Transparent composition of what's left today, for display:
-// balance = today's budget + carryover from earlier days − spent today.
-export function meterBreakdown(s: Persisted, now = new Date()) {
-  const balance = liveBalance(s, now);
-  const tracked = daysTracked(s, now);
-  const todayBudget = tracked > 0 ? dailyAllowance(s, now) : 0;
-  const dayKey = keyOf(now);
-  const ts = s.settings.trackingSince;
-  const todaySpent = s.expenses
-    .filter((e) => e.date === dayKey && (!ts || e.date >= ts))
-    .reduce((a, e) => a + (e.amount || 0), 0);
-  const carryover = balance - todayBudget + todaySpent;
-  return { balance, todayBudget, todaySpent, carryover };
 }
 
 // Spending grouped by category for a set of expenses.

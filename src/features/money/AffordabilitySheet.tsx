@@ -72,24 +72,6 @@ export default function AffordabilitySheet({ open, onClose }: { open: boolean; o
           </p>
         </section>
 
-        {/* When the budget starts counting */}
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Start tracking</h3>
-          <label className="block">
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">Counting from</span>
-            <input
-              type="date"
-              value={st.trackingSince}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => { const v = e.target.value; if (v) setSettings({ trackingSince: v }); }}
-              className={inputCls}
-            />
-          </label>
-          <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
-            Each day from here adds one daily budget, and whatever you don't spend rolls over to the next day.
-          </p>
-        </section>
-
         {/* Summary */}
         {st.monthlyBudget > 0 && (
           <section className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(140deg, #312e81 0%, #0f0e20 100%)" }}>

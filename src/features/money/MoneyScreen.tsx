@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Settings2, Plus, Wallet, Clock, Gift } from "lucide-react";
 import {
   useMoney, addExpense, removeExpense, isConfigured,
-  spendableMonthly, dailyAllowance, meterBreakdown, spentOnDay, periodFor, spentInPeriod, expensesInPeriod,
+  spendableMonthly, dailyAllowance, spentOnDay, periodFor, spentInPeriod, expensesInPeriod,
   todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, categoryOf,
   extrasFor, removeExtra, boostFor,
 } from "../../lib/money/store";
@@ -73,11 +73,8 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
           <>
             {/* Today's budget — one number, plainly explained */}
             {(() => {
-              const bd = meterBreakdown(s, now);
-              const carry = Math.abs(bd.carryover) >= 0.5 ? bd.carryover : 0;
-              const todayPool = Math.max(0, daily + carry);   // what today can absorb
-              const leftToday = todayPool - todaySpent;       // budget (± rollover) − spent
-              const spentPct = todayPool > 0 ? Math.min(1, todaySpent / todayPool) : 1;
+              const leftToday = daily - todaySpent;           // today's budget − spent, plain
+              const spentPct = daily > 0 ? Math.min(1, todaySpent / daily) : 1;
               const monthLeft = spendableMonthly(s) - monthSpent;
               const endD = new Date(period.end + "T00:00:00");
               const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -93,10 +90,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                       {fmt(leftToday)}
                     </p>
                     <p className="text-xs text-white/80 mt-1.5 tabular-nums">
-                      {fmt(daily)} a day
-                      {carry > 0 && <> + {fmt(carry)} saved up</>}
-                      {carry < 0 && <> − {fmt(-carry)} overspent before</>}
-                      {" "}− {fmt(todaySpent)} spent today
+                      {fmt(daily)} a day − {fmt(todaySpent)} spent today
                     </p>
                     <div className="mt-3 h-2.5 rounded-full bg-white/20 overflow-hidden">
                       <div
