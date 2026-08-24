@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Settings2, Plus, Wallet, Clock, Gift } from "lucide-react";
 import {
   useMoney, addExpense, removeExpense, isConfigured,
-  spendableMonthly, dailyAllowance, spentOnDay, periodFor, spentInPeriod, expensesInPeriod,
+  spendableMonthly, dailyAllowance, spentOnDay, periodFor, spentTowardBudget, expensesInPeriod,
   todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, categoryOf,
   extrasFor, removeExtra, boostFor,
 } from "../../lib/money/store";
@@ -32,9 +32,10 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
   const configured = isConfigured(s);
   const daily = dailyAllowance(s, now);
   const todaySpent = spentOnDay(s, todayKey());
-  const monthSpent = spentInPeriod(s, period);
+  const monthSpent = spentTowardBudget(s, period); // countdown scope — history stays below
   const monthExpenses = useMemo(() => expensesInPeriod(s, period), [s, period.start, period.end]);
   const byCat = useMemo(() => categoryTotals(monthExpenses), [monthExpenses]);
+  const statsTotal = monthExpenses.reduce((a, e) => a + (e.amount || 0), 0);
   const trend = useMemo(() => lastNDaysSpend(s, 7), [s]);
   const maxTrend = Math.max(1, ...trend.map((t) => t.amount), daily);
 
@@ -222,7 +223,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                         <span className="text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">{fmt(c.amount)}</span>
                       </div>
                       <div className="mt-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
-                        <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200" style={{ width: `${Math.max(2, monthSpent ? (c.amount / monthSpent) * 100 : 0)}%` }} />
+                        <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200" style={{ width: `${Math.max(2, statsTotal ? (c.amount / statsTotal) * 100 : 0)}%` }} />
                       </div>
                     </div>
                   ))}

@@ -57,7 +57,14 @@ export function categoryOf(key: string) {
 }
 
 const KEY = "vrent.money.v1";
-interface Persisted extends MoneyState { extras: ExtraIncome[] }
+interface Persisted extends MoneyState {
+  extras: ExtraIncome[];
+  // The day the current budget went live. The countdown only counts spending
+  // from here; older expenses stay in the background stats without draining
+  // the budget. Stamped automatically — never a user-facing setting — and
+  // irrelevant from the next budget month on (each month starts at zero).
+  budgetFrom: string;
+}
 
 function uid(): string {
   try { return crypto.randomUUID(); } catch { return `m_${Date.now()}_${Math.floor(Math.random() * 1e6)}`; }
@@ -68,6 +75,7 @@ function defaults(): Persisted {
     settings: { monthlyBudget: 0, currency: "CHF", monthStartDay: 1 },
     expenses: [],
     extras: [],
+    budgetFrom: todayKey(),
   };
 }
 
@@ -124,12 +132,24 @@ function load(): Persisted {
       settings: { monthlyBudget: Math.max(0, monthlyBudget || 0), currency: raw.currency || "CHF", monthStartDay },
       expenses,
       extras: Array.isArray(p.extras) ? p.extras : [],
+      // Existing stores start their countdown the day this model arrives —
+      // never retroactively drained by history.
+      budgetFrom: typeof p.budgetFrom === "string" && p.budgetFrom ? p.budgetFrom : todayKey(),
     };
   } catch { return d; }
 }
 
 let state: Persisted = load();
+// The stamp must survive reloads, or "yesterday" would silently reset the
+// countdown on every app open.
+persistIfStampNew();
 const listeners = new Set<() => void>();
+function persistIfStampNew() {
+  try {
+    const p = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (p && !p.budgetFrom) localStorage.setItem(KEY, JSON.stringify(state));
+  } catch { /* quota */ }
+}
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* quota */ } }
 function set(patch: Partial<Persisted>) { state = { ...state, ...patch }; persist(); listeners.forEach((l) => l()); }
 
@@ -247,6 +267,12 @@ export function dailyAllowance(s: Persisted, now = new Date()): number {
 export function spentInPeriod(s: Persisted, p: BudgetPeriod): number {
   return s.expenses.filter((e) => e.date >= p.start && e.date <= p.end).reduce((a, e) => a + (e.amount || 0), 0);
 }
+// Spending that counts against the budget countdown: only from the day the
+// budget went live. From the next budget month on this equals spentInPeriod.
+export function spentTowardBudget(s: Persisted, p: BudgetPeriod): number {
+  const from = s.budgetFrom && s.budgetFrom > p.start ? s.budgetFrom : p.start;
+  return s.expenses.filter((e) => e.date >= from && e.date <= p.end).reduce((a, e) => a + (e.amount || 0), 0);
+}
 export function expensesInPeriod(s: Persisted, p: BudgetPeriod): Expense[] {
   return s.expenses.filter((e) => e.date >= p.start && e.date <= p.end).sort((a, b) => b.at - a.at);
 }
@@ -267,7 +293,7 @@ export function liveBalance(s: Persisted, now = new Date()): number {
 // What's left of the whole budget month.
 export function monthLeft(s: Persisted, now = new Date()): number {
   const p = periodFor(s, now);
-  return spendableForPeriod(s, p) - spentInPeriod(s, p);
+  return spendableForPeriod(s, p) - spentTowardBudget(s, p);
 }
 
 export function isConfigured(s: Persisted): boolean {

@@ -9,7 +9,7 @@ import { fmtPct } from "../../lib/format";
 import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
-import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, periodFor, spentInPeriod, spendableMonthly, addExpense, lastNDaysSpend, todayKey as moneyToday } from "../../lib/money/store";
+import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, periodFor, spentTowardBudget, spendableMonthly, addExpense, lastNDaysSpend, todayKey as moneyToday } from "../../lib/money/store";
 import { useHealth, macrosOn, macroTargets, calorieTarget, addWater, waterOn, fastingStatus, foodHints, todayKey as healthToday } from "../../lib/health";
 import { prepareImage } from "../../lib/image";
 import FoodConfirmSheet from "../health/FoodConfirmSheet";
@@ -104,7 +104,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const spentToday = spentOnDay(money, moneyToday());
   const leftToday = daily - spentToday;
   const monthBudget = spendableMonthly(money);
-  const monthSpent = spentInPeriod(money, periodFor(money));
+  const monthSpent = spentTowardBudget(money, periodFor(money));
   const monthPct = monthBudget > 0 ? Math.min(1, monthSpent / monthBudget) : 0;
   const trend = useMemo(() => lastNDaysSpend(money, 7), [money]);
   const leftShown = useCountUp(moneyOn ? leftToday : 0);
