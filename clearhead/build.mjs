@@ -2,7 +2,7 @@
 // unpack index.html from its gzip+base64 transport form, and assemble the
 // static output in public/. Runs on Vercel via `npm run build`.
 import { deflateSync, gunzipSync } from 'node:zlib';
-import { mkdirSync, writeFileSync, copyFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, copyFileSync, readFileSync, existsSync } from 'node:fs';
 
 const PAL = [
   [0x17, 0x12, 0x08], // bg
@@ -92,20 +92,44 @@ png(render(512), 'public/icon-512.png');
 png(render(512, 0.74), 'public/icon-mask-512.png');
 png(render(192), 'public/icon-192.png');
 png(render(180), 'public/apple-touch-icon.png');
-// index.html travels as gzip+base64 in 48 chunk files (gzip's CRC catches any
-// transport error; per-chunk md5 logs pinpoint where). chunk-00.b64 .. chunk-47.b64
+// index.html normally assembles from the local gzip+base64 chunks (chunk-00.b64 ..
+// chunk-47.b64; gzip's CRC catches any transport error, per-chunk md5 logs pinpoint
+// where). When those chunks aren't shipped — a size-limited inline deploy carries
+// only this script plus the static files — fall back to fetching the exact same
+// index.html from the app's own public repo, pinned to an immutable commit. The
+// bytes are identical either way; the md5 logged below proves which was produced.
 const { createHash } = await import('node:crypto');
 const md5 = (s) => createHash('md5').update(s).digest('hex').slice(0, 12);
-const PARTS = Array.from({ length: 48 }, (_, i) => String(i).padStart(2, '0'));
-let b64 = '';
-for (const p of PARTS) {
-  const part = readFileSync(`chunk-${p}.b64`, 'utf8').replace(/\s+/g, '');
-  console.log(`chunk-${p} md5 ${md5(part)} len ${part.length}`);
-  b64 += part;
+const HTML_SRC = 'https://raw.githubusercontent.com/vrentch/vrent-dashboard/7379b8d7985d0e43de89ea643f164d8a4a5818eb/clearhead/index.html';
+let html;
+if (existsSync('chunk-00.b64')) {
+  const PARTS = Array.from({ length: 48 }, (_, i) => String(i).padStart(2, '0'));
+  let b64 = '';
+  for (const p of PARTS) {
+    const part = readFileSync(`chunk-${p}.b64`, 'utf8').replace(/\s+/g, '');
+    console.log(`chunk-${p} md5 ${md5(part)} len ${part.length}`);
+    b64 += part;
+  }
+  html = gunzipSync(Buffer.from(b64, 'base64'));
+} else {
+  console.log('chunks absent — fetching index.html from', HTML_SRC);
+  const r = await fetch(HTML_SRC);
+  if (!r.ok) throw new Error('index.html fetch failed: ' + r.status);
+  html = Buffer.from(await r.arrayBuffer());
 }
-const html = gunzipSync(Buffer.from(b64, 'base64'));
 writeFileSync('public/index.html', html);
 console.log('index.html', html.length, 'bytes, md5', md5(html.toString('binary')));
 console.log('api md5', md5(readFileSync('api/clearhead.ts', 'utf8')));
-for (const f of ['sw.js', 'manifest.webmanifest']) copyFileSync(f, 'public/' + f);
+// sw.js / manifest.webmanifest: copy the local files when present, otherwise fetch
+// them from the same pinned commit (same size-limited-deploy fallback as above).
+const STATIC_SRC = 'https://raw.githubusercontent.com/vrentch/vrent-dashboard/7379b8d7985d0e43de89ea643f164d8a4a5818eb/clearhead/';
+for (const f of ['sw.js', 'manifest.webmanifest']) {
+  if (existsSync(f)) { copyFileSync(f, 'public/' + f); }
+  else {
+    const r = await fetch(STATIC_SRC + f);
+    if (!r.ok) throw new Error(f + ' fetch failed: ' + r.status);
+    writeFileSync('public/' + f, Buffer.from(await r.arrayBuffer()));
+    console.log('fetched', f);
+  }
+}
 console.log('build done');
