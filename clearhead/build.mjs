@@ -92,11 +92,11 @@ png(render(512), 'public/icon-512.png');
 png(render(512, 0.74), 'public/icon-mask-512.png');
 png(render(192), 'public/icon-192.png');
 png(render(180), 'public/apple-touch-icon.png');
-// index.html travels as gzip+base64 in 41 chunk files (gzip's CRC catches any
-// transport error; per-chunk md5 logs pinpoint where). chunk-00.b64 .. chunk-40.b64
+// index.html travels as gzip+base64 in 46 chunk files (gzip's CRC catches any
+// transport error; per-chunk md5 logs pinpoint where). chunk-00.b64 .. chunk-45.b64
 const { createHash } = await import('node:crypto');
 const md5 = (s) => createHash('md5').update(s).digest('hex').slice(0, 12);
-const PARTS = Array.from({ length: 41 }, (_, i) => String(i).padStart(2, '0'));
+const PARTS = Array.from({ length: 46 }, (_, i) => String(i).padStart(2, '0'));
 let b64 = '';
 for (const p of PARTS) {
   const part = readFileSync(`chunk-${p}.b64`, 'utf8').replace(/\s+/g, '');

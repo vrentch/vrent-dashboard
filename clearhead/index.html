@@ -245,6 +245,44 @@
   #safeMode .sm-stop .lbl{position:relative; z-index:1;}
   #safeMode .sm-stop .fill{position:absolute; inset:0; background:#5a2a2e; transform-origin:left; transform:scaleX(0); z-index:0;}
 
+  /* ---------- your why (motivation) ---------- */
+  .why-card{display:flex; align-items:center; gap:11px; width:100%; text-align:left; margin-top:10px;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:11px 13px;}
+  .why-card:active{transform:translateY(1px);}
+  .why-card .wc-ico{font-size:20px; line-height:1;}
+  .why-card .wc-body{flex:1; display:flex; flex-direction:column; gap:1px; min-width:0;}
+  .why-card .wc-title{font-weight:700; font-size:14px;}
+  .why-card .wc-sub{font-family:var(--mono); font-size:11.5px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .why-card.set{border-color:color-mix(in srgb, var(--amber) 38%, transparent);}
+  .why-card.set .wc-sub{color:var(--dim);}
+  .why-card .wc-go{font-family:var(--mono); font-size:18px; color:var(--faint);}
+
+  .rlist{list-style:none; margin:6px 0 0; padding:0; display:flex; flex-direction:column; gap:6px;}
+  .rlist li{display:flex; align-items:center; gap:10px; background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:9px 11px;}
+  .rlist .ri{font-size:17px;}
+  .rlist .rt{flex:1; font-size:14px; font-weight:500;}
+  .rlist .rx{width:28px; height:28px; border-radius:8px; color:var(--faint); font-size:14px; display:grid; place-items:center;}
+  .rlist .rx:active{color:var(--bad);}
+  .rlist .rempty{color:var(--faint); font-size:13px; line-height:1.4;}
+  .rkinds{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px;}
+  .rkind{border:1px solid var(--line2); border-radius:99px; padding:7px 11px; font-size:12.5px; color:var(--dim); background:var(--bg2);}
+  .rkind.on{background:var(--amber); border-color:var(--amber); color:#2a1c05; font-weight:600;}
+  .addrow{display:flex; gap:8px;}
+  .addrow input{flex:1;}
+  .addrow .addbtn{border:1px solid var(--amber); color:var(--amber2); border-radius:10px; padding:0 16px; font-weight:700; font-size:22px; background:color-mix(in srgb, var(--amber) 12%, transparent);}
+
+  .reflect-panel{text-align:center; border-color:color-mix(in srgb, var(--amber) 55%, transparent);}
+  .reflect-panel.firm{border-color:var(--hot); animation:apulse 1.4s ease-in-out infinite;}
+  .reflect-panel .rf-eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--faint);}
+  .reflect-panel .rf-icon{font-size:46px; line-height:1; margin:8px 0 2px;}
+  .reflect-panel .rf-reason{font-family:var(--disp); font-weight:800; font-size:23px; line-height:1.15; text-wrap:balance; margin:2px 0 8px;}
+  .reflect-panel .rf-coach{color:var(--dim); font-size:14.5px; text-wrap:balance; margin:0 0 10px;}
+  .reflect-panel .rf-meta{font-family:var(--mono); font-size:11.5px; color:var(--faint); font-variant-numeric:tabular-nums; margin-bottom:16px;}
+  .reflect-panel .rf-actions{display:flex; gap:9px;}
+  .reflect-panel .rf-actions button{flex:1; border-radius:11px; padding:12px 6px; font-weight:600; font-size:14px; border:1px solid var(--line2); background:var(--bg2); color:var(--dim);}
+  .reflect-panel .rf-actions .water{border-color:#3a6b78; background:#1e3a42; color:var(--aqua2);}
+  .reflect-panel .rf-actions .home{border-color:color-mix(in srgb, var(--amber) 50%, transparent); color:var(--amber2);}
+
   @media (max-width:370px){ .grid{grid-template-columns:repeat(2,1fr);} .bac-num{font-size:44px;} }
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important;}
@@ -291,6 +329,15 @@
       <span class="sc-sub" id="scSub">off — tap to set up</span>
     </span>
     <span class="sc-badge" id="scBadge" hidden></span>
+  </button>
+
+  <button id="whyCard" class="why-card" type="button">
+    <span class="wc-ico">💛</span>
+    <span class="wc-body">
+      <span class="wc-title">Your why</span>
+      <span class="wc-sub" id="wcSub">tap to add your reasons</span>
+    </span>
+    <span class="wc-go">›</span>
   </button>
 
   <section class="stats" aria-label="Tonight so far">
@@ -533,6 +580,53 @@
   <div class="tm-hint">screen stays on · tap anywhere to close</div>
 </div>
 
+<!-- your why: reasons editor -->
+<div id="whyDlg" class="overlay" hidden>
+  <div class="panel">
+    <h2>Your why</h2>
+    <p class="sub">The people, plans and goals that matter. Through the night Clearhead quietly reminds you of these — gently at first, firmer as the drinks add up.</p>
+    <ul id="rlist" class="rlist"></ul>
+    <div class="field" style="margin-top:14px">
+      <label>Add a reason — what kind?</label>
+      <div id="rfKindHost" class="rkinds"></div>
+      <div class="addrow">
+        <input id="whyText" type="text" maxlength="80" placeholder="What keeps you grounded?">
+        <button id="whyAdd" class="addbtn" type="button" aria-label="Add reason">+</button>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Remind me every</label>
+        <select id="whyEvery"><option value="20">20 min</option><option value="30" selected>30 min</option><option value="45">45 min</option></select>
+      </div>
+      <div class="field"><label>Reminders</label>
+        <select id="whyReflectOn"><option value="1" selected>On</option><option value="0">Off</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Avg price per drink (CHF — for the money tally; 0 to hide)</label>
+      <input id="whyCost" type="number" inputmode="decimal" min="0" max="100" placeholder="12"></div>
+    <div class="sheet-actions">
+      <button id="whyClose" class="ghost-btn" type="button">Close</button>
+      <button id="whySave" class="cta" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- reflection check-in: your reasons, on a timer -->
+<div id="reflect" class="overlay" hidden>
+  <div class="panel reflect-panel" id="reflectPanel">
+    <div class="rf-eyebrow">A quick check-in</div>
+    <div class="rf-icon" id="rfIcon">💛</div>
+    <div class="rf-reason" id="rfReason"></div>
+    <div class="rf-coach" id="rfCoach"></div>
+    <div class="rf-meta" id="rfMeta"></div>
+    <div class="rf-actions">
+      <button class="water" id="rfWater" type="button">💧 Water</button>
+      <button class="home" id="rfHome" type="button">🏠 Home</button>
+      <button id="rfOk" type="button">I’ve got this</button>
+    </div>
+  </div>
+</div>
+
 <div id="toastHost" aria-live="polite"></div>
 
 <script>
@@ -543,7 +637,8 @@ const API = '/api/clearhead';
 // Clearhead's own standalone VAPID identity (public half; the private half
 // lives only in the deployment's VAPID_PRIVATE env var).
 const VAPID_PUBLIC = 'BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs';
-const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5};
+const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5,
+  reasons:[], reflectMin:30, reflectOn:true, drinkCost:12, currency:'CHF'};
 const ETH = 0.789;               // g of ethanol per ml
 const ABSORB_MS = 30 * 60000;    // linear absorption ramp per drink
 const BETA = 0.15;               // elimination, permille per hour
@@ -629,6 +724,7 @@ const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const normProfile = p => p ? {...PROFILE_DEFAULTS, ...p} : null;
 let tableOpen = false, tmPrevWake = false, lastTimerMin = -1;
 let safeModeOpen = false, smPrevWake = false, geoWatchId = null, holdTimer = null;
+let reflectOpen = false, reflectTimer = null, whyPickTag = '';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1245,6 +1341,109 @@ function timeToDeadline(v){
   return d.getTime();
 }
 
+/* ============================== your why (motivation) ============================== */
+// The reasons you're keeping it together tonight, surfaced on a gentle timer that
+// firms up as the night gets heavier — plus a running tab of what you're spending.
+// All of it is yours and never leaves this device.
+const REASON_KINDS = [
+  {tag:'love',     icon:'💛', label:'someone I love'},
+  {tag:'money',    icon:'💰', label:'money / a goal'},
+  {tag:'tomorrow', icon:'☀️', label:'tomorrow'},
+  {tag:'health',   icon:'💪', label:'my body'},
+  {tag:'self',     icon:'🪞', label:'self-respect'},
+];
+const iconFor = tag => (REASON_KINDS.find(k => k.tag === tag) || {icon:'✨'}).icon;
+const spendTonight = () => (profile && profile.drinkCost > 0 && session && !session.demo) ? profile.drinkCost * session.drinks.length : 0;
+const fmtMoney = v => ((profile && profile.currency) || 'CHF') + ' ' + Math.round(v);
+
+function reflectCoach(bac){
+  if (bac >= 0.8) return 'This is the tipping point. One water, then start thinking about home while it’s still a good night.';
+  if (bac >= 0.5) return 'You’re over the line now. Slow the next one right down — water first.';
+  if (bac >= 0.2) return 'Good place to be. Keep this pace and you stay in the fun zone all night.';
+  return 'All clear. Easy does it and tomorrow-you stays happy.';
+}
+function nextReason(){
+  const rs = (profile && profile.reasons) || [];
+  if (!rs.length) return null;
+  const i = (session.reasonIdx || 0) % rs.length;
+  session.reasonIdx = i + 1;
+  return rs[i];
+}
+function checkReflect(now){
+  if (!profile || !profile.reflectOn || !session || session.demo || !session.drinks.length) return;
+  if (reflectOpen || !$('alarm').hidden || safeModeOpen || tableOpen) return; // never stack over a bigger moment
+  if (!session.lastReflect) session.lastReflect = session.drinks[0].t;
+  if (now - session.lastReflect < (profile.reflectMin || 30) * 60000) return;
+  const r = nextReason();
+  session.lastReflect = now; saveSession();
+  if (r) showReflect(r); // no reasons set yet → the timer just resets quietly
+}
+function showReflect(r){
+  const bac = simulate(session.drinks, Date.now()).bac;
+  $('reflectPanel').className = 'panel reflect-panel' + (bac >= 0.8 ? ' firm' : '');
+  $('rfIcon').textContent = r.icon || '✨';
+  $('rfReason').textContent = r.text;
+  $('rfCoach').textContent = reflectCoach(bac);
+  const bits = [bac.toFixed(2) + '‰ ' + ZONES[zoneOf(bac)].key];
+  const spend = spendTonight();
+  if (spend > 0) bits.push(fmtMoney(spend) + ' so far');
+  bits.push(fmtDur(Date.now() - session.drinks[0].t) + ' out');
+  $('rfMeta').textContent = bits.join('  ·  ');
+  $('reflect').hidden = false;
+  reflectOpen = true;
+  chime('soft'); buzz([120,90,120]);
+  swNotify((r.icon || '💛') + ' A moment — remember', r.text, false);
+  clearTimeout(reflectTimer);
+  reflectTimer = setTimeout(closeReflect, 40000); // fades on its own if ignored
+}
+function closeReflect(){
+  clearTimeout(reflectTimer); reflectTimer = null;
+  reflectOpen = false;
+  $('reflect').hidden = true;
+}
+function renderWhy(){
+  const card = $('whyCard'); if (!card) return;
+  const rs = (profile && profile.reasons) || [];
+  const bits = [];
+  if (rs.length){
+    bits.push(rs.length + (rs.length === 1 ? ' reason' : ' reasons'));
+    if (profile.reflectOn && session && !session.demo && session.drinks.length){
+      const next = (session.lastReflect || session.drinks[0].t) + (profile.reflectMin || 30) * 60000 - Date.now();
+      bits.push(next > 0 ? 'next in ' + fmtLeft(next) : 'check-in due');
+    } else if (!profile.reflectOn) bits.push('reminders off');
+  } else bits.push('tap to add your reasons');
+  const spend = spendTonight();
+  if (spend > 0) bits.push(fmtMoney(spend) + ' tonight');
+  $('wcSub').textContent = bits.join('  ·  ');
+  card.classList.toggle('set', rs.length > 0);
+}
+function renderReasonList(){
+  const rs = (profile.reasons || []);
+  $('rlist').innerHTML = rs.length
+    ? rs.map(r => `<li><span class="ri">${r.icon || '✨'}</span><span class="rt">${esc(r.text)}</span><button class="rx" data-rid="${esc(r.id)}" aria-label="Remove">✕</button></li>`).join('')
+    : '<li class="rempty">No reasons yet. Add the people, plans and goals that matter — they’ll pop up through the night.</li>';
+}
+function openWhyDlg(){
+  renderReasonList();
+  whyPickTag = '';
+  $('rfKindHost').innerHTML = REASON_KINDS.map(k => `<button type="button" class="rkind" data-tag="${k.tag}">${k.icon} ${k.label}</button>`).join('');
+  $('whyText').value = '';
+  $('whyEvery').value = String(profile.reflectMin || 30);
+  $('whyReflectOn').value = profile.reflectOn ? '1' : '0';
+  $('whyCost').value = profile.drinkCost || 0;
+  $('whyDlg').hidden = false;
+}
+function addReasonFromForm(){
+  const text = $('whyText').value.trim();
+  if (!text){ toast('Type a reason first.', 'warn'); return; }
+  profile.reasons = profile.reasons || [];
+  profile.reasons.push({id:'r' + Date.now().toString(36), text:text.slice(0, 80), icon:iconFor(whyPickTag || 'self'), tag:whyPickTag || 'self'});
+  store.set(LS.profile, profile);
+  $('whyText').value = ''; whyPickTag = '';
+  for (const b of $('rfKindHost').querySelectorAll('.rkind')) b.classList.remove('on');
+  renderReasonList(); renderWhy();
+}
+
 /* ============================== toasts & alarms ============================== */
 function toast(msg, cls){
   const host = $('toastHost');
@@ -1273,7 +1472,7 @@ function closeAlarm(){ stopStorm(); $('alarm').hidden = true; alarmPrio = 0; }
 
 /* ============================== session logic ============================== */
 function freshSession(){
-  return {startedAt:Date.now(), drinks:[], waters:[], fired:{}, maxZone:0, nextId:1, demo:false};
+  return {startedAt:Date.now(), drinks:[], waters:[], fired:{}, maxZone:0, nextId:1, demo:false, lastReflect:0, reasonIdx:0};
 }
 function lastActivity(s){
   let t = s.startedAt;
@@ -1491,6 +1690,7 @@ function renderAll(){
 
   renderLog();
   renderSafe();
+  renderWhy();
 }
 
 /* ============================== night end ============================== */
@@ -1499,7 +1699,7 @@ function endNight(){
     session = null; store.del(LS.session); renderAll();
     syncPushSchedule();
     clearTimerSurfaces();
-    stopGeoWatch(); closeSafeMode();
+    stopGeoWatch(); closeSafeMode(); closeReflect();
     disarmWatch();
     toast('Fresh slate. 🌙');
     return;
@@ -1533,7 +1733,7 @@ function finishSummary(){
   store.del(LS.session);
   syncPushSchedule();
   clearTimerSurfaces();
-  stopGeoWatch(); closeSafeMode();
+  stopGeoWatch(); closeSafeMode(); closeReflect();
   disarmWatch();
   if (wasDemo && !store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
@@ -1564,7 +1764,7 @@ function startDemo(){
 function exitDemo(){
   session = null; store.del(LS.session);
   clearTimerSurfaces();
-  stopGeoWatch(); closeSafeMode();
+  stopGeoWatch(); closeSafeMode(); closeReflect();
   disarmWatch();
   if (!store.get(LS.profile)){ profile = null; showOnboard(); }
   renderAll();
@@ -1739,6 +1939,42 @@ function init(){
   smStop.addEventListener('pointerleave', holdCancel);
   smStop.addEventListener('pointercancel', holdCancel);
 
+  // your why (motivation)
+  $('whyCard').addEventListener('click', openWhyDlg);
+  $('whyClose').addEventListener('click', () => { $('whyDlg').hidden = true; });
+  $('rfKindHost').addEventListener('click', e => {
+    const b = e.target.closest('.rkind'); if (!b) return;
+    const was = b.classList.contains('on');
+    for (const x of $('rfKindHost').querySelectorAll('.rkind')) x.classList.remove('on');
+    if (!was){ b.classList.add('on'); whyPickTag = b.dataset.tag; } else whyPickTag = '';
+  });
+  $('whyAdd').addEventListener('click', addReasonFromForm);
+  $('whyText').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addReasonFromForm(); } });
+  $('rlist').addEventListener('click', e => {
+    const b = e.target.closest('[data-rid]'); if (!b) return;
+    profile.reasons = (profile.reasons || []).filter(r => r.id !== b.dataset.rid);
+    store.set(LS.profile, profile);
+    renderReasonList(); renderWhy();
+  });
+  $('whySave').addEventListener('click', () => {
+    profile.reflectMin = parseInt($('whyEvery').value, 10) || 30;
+    profile.reflectOn = $('whyReflectOn').value === '1';
+    const c = parseFloat($('whyCost').value);
+    profile.drinkCost = isFinite(c) && c >= 0 ? c : 0;
+    store.set(LS.profile, profile);
+    $('whyDlg').hidden = true;
+    toast(profile.reasons && profile.reasons.length ? '💛 Saved. I’ll keep you honest tonight.' : 'Saved.');
+    renderWhy();
+  });
+  $('reflect').addEventListener('click', e => { if (e.target === $('reflect')) closeReflect(); });
+  $('rfWater').addEventListener('click', () => { closeReflect(); logWater(); });
+  $('rfHome').addEventListener('click', () => {
+    closeReflect();
+    const s = session && session.safe;
+    if (s && (s.armed || s.reached)) openSafeMode(); else openSafeDlg();
+  });
+  $('rfOk').addEventListener('click', closeReflect);
+
   // custom drink
   $('cuCancel').addEventListener('click', () => { $('customDlg').hidden = true; });
   $('cuAdd').addEventListener('click', () => {
@@ -1806,7 +2042,7 @@ function init(){
     if (!confirm('Erase your profile, tonight’s log and history?')) return;
     if (pushSub) apiCall('schedule', {subscription: pushSub, alarms: []});
     clearTimerSurfaces();
-    stopGeoWatch(); closeSafeMode();
+    stopGeoWatch(); closeSafeMode(); closeReflect();
     disarmWatch();
     store.del(LS.profile); store.del(LS.session); store.del(LS.history);
     profile = null; session = null;
@@ -1834,6 +2070,7 @@ function init(){
     renderSafeMode();
     checkAlerts(Date.now());
     checkSafe(Date.now());
+    checkReflect(Date.now());
     updateTimerSurfaces();
   }, 1000);
 }

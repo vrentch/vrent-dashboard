@@ -58,6 +58,10 @@ Then redeploy. Without these, layers 1–2 still work fully.
   distance; if the deadline passes and you're still not home, the app takes over
   the screen and sounds the alarm until you arrive (or hold-to-stop). Location
   stays on-device — only a plain deadline nudge is ever sent to the push server.
+- **Your why**: your own reasons to keep it together (someone you love, money /
+  a goal, tomorrow's plans, your body, self-respect). Every 20–30 min a gentle
+  check-in surfaces one of them — softly early, firmer as the drinks add up —
+  alongside a running tally of what you've spent. All of it stays on-device.
 - **Night log & summary**: per-night history, peak ‰, standard units, waters.
 
 The server stores only a push subscription plus pending alarm times,
