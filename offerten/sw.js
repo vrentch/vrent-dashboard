@@ -1,5 +1,5 @@
 // VRENT Offerten — offline cache
-const CACHE = "vrent-offerten-v4";
+const CACHE = "vrent-offerten-v5";
 const ASSETS = [
   "./", "./index.html", "./jspdf.umd.min.js", "./fonts.js",
   "./manifest.webmanifest", "./favicon.png", "./mark.png", "./logo.png", "./icon-192.png", "./icon-512.png",

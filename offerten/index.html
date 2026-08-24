@@ -292,6 +292,12 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
           </div>
         </div>
         <div><label class="f">VAT rate %</label><input class="in num" id="edVat" inputmode="decimal"></div>
+        <div><label class="f">VAT mode</label>
+          <select class="in" id="edVatMode">
+            <option value="incl">Included in prices</option>
+            <option value="excl">Added on top</option>
+          </select>
+        </div>
       </div>
       <div class="totals" id="edTotals"></div>
     </div>
@@ -357,7 +363,12 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
       <div><label class="f">VAT rate %</label><input class="in num" id="sVat" inputmode="decimal"></div>
       <div><label class="f">Quote validity (days)</label><input class="in num" id="sOfferteDays" inputmode="numeric"></div>
       <div><label class="f">Payment terms (days)</label><input class="in num" id="sDueDays" inputmode="numeric"></div>
-      <div></div>
+      <div><label class="f">VAT mode</label>
+        <select class="in" id="sVatMode">
+          <option value="incl">Included in prices</option>
+          <option value="excl">Added on top</option>
+        </select>
+      </div>
       <div><label class="f">Quote prefix</label><input class="in mono" id="sPrefOf"></div>
       <div><label class="f">Next quote no.</label><input class="in num" id="sNextOf" inputmode="numeric"></div>
       <div><label class="f">Invoice prefix</label><input class="in mono" id="sPrefRe"></div>
@@ -398,7 +409,7 @@ dialog .bd{padding:10px 8px;overflow:auto;max-height:60vh}
         <button class="btn" id="backupImportBtn">Import backup</button>
         <input type="file" id="backupImport" accept="application/json,.json" class="hide">
       </div>
-      <p class="muted" style="margin-bottom:0;font-size:13px">App version 2.2 · cache <span class="mono">vrent-offerten-v4</span> · <span id="swState">Checking offline status …</span></p>
+      <p class="muted" style="margin-bottom:0;font-size:13px">App version 2.3 · cache <span class="mono">vrent-offerten-v5</span> · <span id="swState">Checking offline status …</span></p>
     </div>
   </div>
 </section>
@@ -436,7 +447,7 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() 
 const SETTINGS_SEED = {
   company: { name:"VRENT GmbH", street:"Salomon-Vögelin-Strasse 31", zip:"8038", city:"Zürich",
              phone:"+41 79 789 95 96", email:"info@vrent.ch", web:"www.vrent.ch", uid:"", iban:"", bank:"" },
-  vatRate: 8.1, offerteDays: 30, dueDays: 30,
+  vatRate: 8.1, vatMode:"incl", offerteDays: 30, dueDays: 30,
   pdfDesign:"accent", pdfAccent:"#9812be", defaultLang:"en",
   counters: { offerte:{prefix:"OF-", year:0, next:1}, rechnung:{prefix:"RE-", year:0, next:1} },
   closing: {
@@ -507,10 +518,17 @@ function calc(doc){
     ? round2(doc.discount.mode === "chf" ? Math.min(dv, sub) : sub * dv / 100) : 0;
   const net = round2(sub - discount);
   const vatRate = num(doc.vatRate);
+  // "incl": prices are gross, VAT is shown as an "of which" share.
+  // Documents saved before this option existed keep the added-on-top math.
+  if ((doc.vatMode || "excl") === "incl"){
+    const total = round5(net);
+    const vat = vatRate ? round2(total * vatRate / (100 + vatRate)) : 0;
+    return { sub, discount, net, vatRate, vat, gross: net, total, rounding: round2(total - net), vatIncl: true };
+  }
   const vat = round2(net * vatRate / 100);
   const gross = round2(net + vat);
   const total = round5(gross);
-  return { sub, discount, net, vatRate, vat, gross, total, rounding: round2(total - gross) };
+  return { sub, discount, net, vatRate, vat, gross, total, rounding: round2(total - gross), vatIncl: false };
 }
 
 function suggestedNr(type){
@@ -636,6 +654,7 @@ function newDoc(type){
     lang, customer:{ company:"", name:"", street:"", zip:"", city:"", country:"", email:"" },
     items:[{ desc:"", qty:1, unit:unitFlat(lang), price:0 }],
     discount:{ mode:"pct", value:0 }, vatRate:S.settings.vatRate,
+    vatMode:S.settings.vatMode === "excl" ? "excl" : "incl",
     notes:"", status:"entwurf", ref:"",
     createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()
   };
@@ -668,6 +687,7 @@ function openEditor(doc, asNew){
     S.customers.map(k => `<option value="${k.id}">${esc(custLabel(k))}</option>`).join("");
   $("#edDiscount").value = doc.discount.value || ""; $("#edDiscountMode").value = doc.discount.mode;
   $("#edVat").value = doc.vatRate;
+  $("#edVatMode").value = doc.vatMode === "incl" ? "incl" : "excl";
   $("#edNotes").value = doc.notes || "";
   renderItems(); renderTotals();
   show("editor");
@@ -697,16 +717,18 @@ function renderTotals(){
   const rows = [
     ["Subtotal", "CHF " + chf(t.sub)],
     t.discount ? ["Discount" + (ED.discount.mode === "pct" ? " (" + qtyFmt(num(ED.discount.value)) + " %)" : ""), "− CHF " + chf(t.discount)] : null,
-    t.vatRate ? ["VAT " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat)] : null,
+    (!t.vatIncl && t.vatRate) ? ["VAT " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat)] : null,
     t.rounding ? ["Rounding", (t.rounding > 0 ? "" : "− ") + "CHF " + chf(Math.abs(t.rounding))] : null
   ].filter(Boolean);
   $("#edTotals").innerHTML = rows.map(r => `<div class="trow"><span class="muted">${r[0]}</span><span class="v">${r[1]}</span></div>`).join("") +
-    `<div class="trow total"><span>Total</span><span class="v">CHF ${chf(t.total)}</span></div>`;
+    `<div class="trow total"><span>${t.vatIncl ? "Total incl. VAT" : "Total"}</span><span class="v">CHF ${chf(t.total)}</span></div>` +
+    (t.vatIncl && t.vat ? `<div class="trow" style="font-size:12.5px;margin-top:-2px"><span class="muted">of which VAT ${qtyFmt(t.vatRate)} %</span><span class="v muted">CHF ${chf(t.vat)}</span></div>` : "");
 }
 function collectDocLight(){
   return Object.assign({}, ED, {
     discount:{ mode:$("#edDiscountMode").value, value:num($("#edDiscount").value) },
-    vatRate:num($("#edVat").value)
+    vatRate:num($("#edVat").value),
+    vatMode:$("#edVatMode").value
   });
 }
 function collectEditor(){
@@ -720,6 +742,7 @@ function collectEditor(){
   };
   ED.discount = { mode:$("#edDiscountMode").value, value:num($("#edDiscount").value) };
   ED.vatRate = num($("#edVat").value);
+  ED.vatMode = $("#edVatMode").value;
   ED.notes = $("#edNotes").value.trim();
   ED.updatedAt = new Date().toISOString();
   return ED;
@@ -739,7 +762,7 @@ $("#edItems").addEventListener("click", (e) => {
   markDirty(); renderItems(); renderTotals();
 });
 $("#edAddItem").addEventListener("click", () => { ED.items.push({ desc:"", qty:1, unit:unitFlat(ED.lang), price:0 }); markDirty(); renderItems(); renderTotals(); });
-["edDiscount","edDiscountMode","edVat","edNotes","edNr","edDate","edUntil","cCompany","cName","cEmail","cStreet","cZip","cCity","cCountry"].forEach(id =>
+["edDiscount","edDiscountMode","edVat","edVatMode","edNotes","edNr","edDate","edUntil","cCompany","cName","cEmail","cStreet","cZip","cCity","cCountry"].forEach(id =>
   $("#" + id).addEventListener("input", () => { markDirty(); renderTotals(); }));
 $("#edStatus").addEventListener("change", markDirty);
 $("#edType").addEventListener("click", (e) => {
@@ -1063,6 +1086,7 @@ function fillSettings(){
   $("#sPhone").value = c.phone; $("#sEmail").value = c.email; $("#sWeb").value = c.web;
   $("#sUid").value = c.uid || ""; $("#sIban").value = c.iban || ""; $("#sBank").value = c.bank || "";
   $("#sVat").value = S.settings.vatRate; $("#sOfferteDays").value = S.settings.offerteDays; $("#sDueDays").value = S.settings.dueDays;
+  $("#sVatMode").value = S.settings.vatMode === "excl" ? "excl" : "incl";
   $("#sDesign").value = S.settings.pdfDesign || "accent";
   $("#sAccent").value = /^#[0-9a-fA-F]{6}$/.test(S.settings.pdfAccent || "") ? S.settings.pdfAccent : "#9812be";
   $("#sDefLang").value = S.settings.defaultLang === "de" ? "de" : "en";
@@ -1078,6 +1102,7 @@ $("#saveSettings").addEventListener("click", () => {
   c.uid = $("#sUid").value.trim(); c.iban = $("#sIban").value.trim(); c.bank = $("#sBank").value.trim();
   S.settings.vatRate = num($("#sVat").value); S.settings.offerteDays = Math.max(0, Math.round(num($("#sOfferteDays").value))) || 30;
   S.settings.dueDays = Math.max(0, Math.round(num($("#sDueDays").value))) || 30;
+  S.settings.vatMode = $("#sVatMode").value === "excl" ? "excl" : "incl";
   S.settings.pdfDesign = $("#sDesign").value;
   S.settings.pdfAccent = $("#sAccent").value || "#9812be";
   S.settings.defaultLang = $("#sDefLang").value === "de" ? "de" : "en";
@@ -1127,6 +1152,7 @@ const T = {
   de: { offerte:"Offerte", rechnung:"Rechnung", date:"Datum", nr:"Nr.", validUntil:"Gültig bis", due:"Zahlbar bis",
         pos:"Pos.", desc:"Bezeichnung", qty:"Menge", unit:"Einheit", price:"Preis", amount:"Betrag",
         subtotal:"Zwischensumme", discount:"Rabatt", vat:"MwSt.", rounding:"Rundung", total:"Total", page:"Seite", of:"von",
+        totalIncl:"Total inkl. MwSt.", inclVat:(r) => "davon " + r + " % MwSt.",
         notes:"Bemerkungen", refTo:"Gemäss Offerte", contact:"Kontakt", uid:"MwSt-Nr.",
         validNote:(d) => "Diese Offerte ist gültig bis " + d + ".",
         payNote:(days, d) => "Zahlbar innert " + days + " Tagen bis " + d + ".",
@@ -1134,6 +1160,7 @@ const T = {
   en: { offerte:"Quote", rechnung:"Invoice", date:"Date", nr:"No.", validUntil:"Valid until", due:"Payable by",
         pos:"Item", desc:"Description", qty:"Qty", unit:"Unit", price:"Price", amount:"Amount",
         subtotal:"Subtotal", discount:"Discount", vat:"VAT", rounding:"Rounding", total:"Total", page:"Page", of:"of",
+        totalIncl:"Total incl. VAT", inclVat:(r) => "of which VAT " + r + " %",
         notes:"Notes", refTo:"As per quote", contact:"Contact", uid:"VAT no.",
         validNote:(d) => "This quote is valid until " + d + ".",
         payNote:(days, d) => "Payable within " + days + " days by " + d + ".",
@@ -1390,39 +1417,48 @@ function buildPdf(d){
   };
   trow(L.subtotal, "CHF " + chf(t.sub));
   if (t.discount) trow(L.discount + (d.discount.mode === "pct" ? " (" + qtyFmt(num(d.discount.value)) + " %)" : ""), "− CHF " + chf(t.discount));
-  if (t.vatRate) trow(L.vat + " " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat));
+  if (!t.vatIncl && t.vatRate) trow(L.vat + " " + qtyFmt(t.vatRate) + " %", "CHF " + chf(t.vat));
   if (t.rounding) trow(L.rounding, (t.rounding > 0 ? "" : "− ") + "CHF " + chf(Math.abs(t.rounding)));
+  const totalLabel = t.vatIncl ? L.totalIncl : L.total;
   if (DS === "studio"){
     y += 0.6;
     setFillC(INK); pdf.rect(TX - 4, y - 2, RIGHT - TX + 4, 9.4, "F");
     F(sans, "bold", 10); setT([255, 255, 255]);
-    pdf.text(L.total.toUpperCase(), TX, y + 4.2, { charSpace:0.6 });
+    pdf.text(totalLabel.toUpperCase(), TX, y + 4.2, { charSpace:0.4 });
     F(mono, "normal", 11);
     pdf.text("CHF " + chf(t.total), RIGHT - 2, y + 4.2, { align:"right" });
-    y += 16;
+    y += 13;
   } else if (DS === "accent"){
     setD(ACC); pdf.setLineWidth(0.5); pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
     y += 1.8;
-    F(sans, "bold", 11); setT(ACC); pdf.text(L.total, TX, y);
+    F(sans, "bold", 11); setT(ACC); pdf.text(totalLabel, TX, y);
     F(mono, "normal", 11); ink(); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
     setD(ACC); pdf.setLineWidth(0.5); pdf.line(TX, y + 2.4, RIGHT, y + 2.4);
-    y += 12;
+    y += 8;
   } else if (DS === "minimal"){
     setD(INK); pdf.setLineWidth(0.3); pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
     y += 2;
-    F(sans, "bold", 11.5); ink(); pdf.text(L.total, TX, y);
+    F(sans, "bold", 11.5); ink(); pdf.text(totalLabel, TX, y);
     F(mono, "normal", 11.5); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
-    y += 12;
+    y += 6;
   } else {
     setD(INK); pdf.setLineWidth(0.4); pdf.line(TX, y - 2.6, RIGHT, y - 2.6);
     y += 1.8;
-    F(sans, "bold", 11); ink(); pdf.text(L.total, TX, y);
+    F(sans, "bold", 11); ink(); pdf.text(totalLabel, TX, y);
     F(mono, "normal", 11); pdf.text("CHF " + chf(t.total), RIGHT, y, { align:"right" });
     pdf.setLineWidth(0.4);
     pdf.line(TX, y + 2.2, RIGHT, y + 2.2);
     pdf.line(TX, y + 3.0, RIGHT, y + 3.0);
-    y += 12;
+    y += 8;
   }
+  if (t.vatIncl && t.vat){
+    F(sans, "normal", 8); gray();
+    pdf.text(L.inclVat(qtyFmt(t.vatRate)), TX, y);
+    F(mono, "normal", 8);
+    pdf.text("CHF " + chf(t.vat), RIGHT, y, { align:"right" });
+    y += 5;
+  }
+  y += 5;
 
   const block = (title, text) => {
     if (y > BOTTOM - 8){ pdf.addPage(); y = headerNext(); }
