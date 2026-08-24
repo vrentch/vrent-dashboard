@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, Settings2, Plus, Wallet, TrendingDown, PiggyBank, Clock, Gift } from "lucide-react";
+import { ChevronLeft, Settings2, Plus, Wallet, Clock, Gift } from "lucide-react";
 import {
-  useMoney, addExpense, removeExpense, isConfigured, afterTaxMonthly, estimatedTaxPct,
-  spendableMonthly, dailyAllowance, meterBreakdown, spentOnDay, spentInMonth,
-  savingsMonthly, fixedMonthly, todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, expensesInMonth, categoryOf,
+  useMoney, addExpense, removeExpense, isConfigured,
+  spendableMonthly, dailyAllowance, meterBreakdown, spentOnDay, periodFor, spentInPeriod, expensesInPeriod,
+  todayKey, CATEGORIES, categoryTotals, lastNDaysSpend, categoryOf,
   extrasFor, removeExtra, boostFor,
 } from "../../lib/money/store";
 import { chf } from "../../lib/business/format";
@@ -28,12 +28,12 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
   const cur = s.settings.currency || "CHF";
   const fmt = (n: number) => chf(n, cur);
   const now = new Date();
-  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const period = periodFor(s, now);
   const configured = isConfigured(s);
   const daily = dailyAllowance(s, now);
   const todaySpent = spentOnDay(s, todayKey());
-  const monthSpent = spentInMonth(s, ym);
-  const monthExpenses = useMemo(() => expensesInMonth(s, ym), [s, ym]);
+  const monthSpent = spentInPeriod(s, period);
+  const monthExpenses = useMemo(() => expensesInPeriod(s, period), [s, period.start, period.end]);
   const byCat = useMemo(() => categoryTotals(monthExpenses), [monthExpenses]);
   const trend = useMemo(() => lastNDaysSpend(s, 7), [s]);
   const maxTrend = Math.max(1, ...trend.map((t) => t.amount), daily);
@@ -66,8 +66,8 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
         {!configured ? (
           <button onClick={() => setSetupOpen(true)} className="w-full text-left rounded-3xl p-5 text-white active:scale-[0.99] transition" style={{ background: "linear-gradient(140deg, #312e81 0%, #1e1b4b 52%, #0b0b14 100%)", boxShadow: "0 12px 40px rgba(0,0,0,0.28)" }}>
             <Wallet size={26} className="mb-2 text-white/90" />
-            <p className="text-lg font-bold">Set up Affordability</p>
-            <p className="text-[13px] text-white/80 mt-1">Enter what lands on your bank account, your canton and your fixed costs — I'll reserve your taxes and work out a simple daily budget you can actually stick to.</p>
+            <p className="text-lg font-bold">Set your budget</p>
+            <p className="text-[13px] text-white/80 mt-1">One number — what you can spend per month. I'll turn it into a simple daily budget that rolls over what you don't spend.</p>
           </button>
         ) : (
           <>
@@ -79,7 +79,9 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               const leftToday = todayPool - todaySpent;       // budget (± rollover) − spent
               const spentPct = todayPool > 0 ? Math.min(1, todaySpent / todayPool) : 1;
               const monthLeft = spendableMonthly(s) - monthSpent;
-              const daysLeft = Math.max(1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1);
+              const endD = new Date(period.end + "T00:00:00");
+              const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const daysLeft = Math.max(1, Math.round((endD.getTime() - today0.getTime()) / 86_400_000) + 1);
               const perDayRest = monthLeft / daysLeft;
               const over = leftToday <= -0.005;
               return (
@@ -166,7 +168,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
             {/* Month stats */}
             <section className="rounded-3xl glass p-5 space-y-4">
               <div className="flex items-baseline justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">This month</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">This month · {period.label}</p>
                 {/* "monthly budget", not "spendable" — the live meter above draws
                     on a smaller, tracking-prorated pool and must not be conflated */}
                 <p className="text-xs text-slate-400 dark:text-slate-500">{fmt(monthSpent)} spent · budget {fmt(spendableMonthly(s))}</p>
@@ -176,12 +178,12 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
               </div>
 
               {/* This month's extra income */}
-              {extrasFor(s, ym).length > 0 && (
+              {extrasFor(s, period.anchorYm).length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                    Extra income · +{fmt(boostFor(s, ym))} to budget
+                    Extra income · +{fmt(boostFor(s, period.anchorYm))} to budget
                   </p>
-                  {extrasFor(s, ym).map((x) => (
+                  {extrasFor(s, period.anchorYm).map((x) => (
                     <SwipeRow key={x.id} onDelete={() => removeExtra(x.id)}>
                       <div className="flex items-center gap-3 glass-subtle p-3">
                         <span className="grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><Gift size={15} /></span>
@@ -233,12 +235,6 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
                 </div>
               )}
 
-              {/* Budget summary */}
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                <Mini icon={Wallet} label="After tax" value={fmt(afterTaxMonthly(s.settings))} sub={`tax −${estimatedTaxPct(s.settings)}%`} />
-                <Mini icon={TrendingDown} label="Fixed costs" value={fmt(fixedMonthly(s))} sub={`${s.fixed.length} items`} />
-                <Mini icon={PiggyBank} label="Savings" value={fmt(savingsMonthly(s))} sub="reserved first" />
-              </div>
             </section>
 
             {/* Expense list */}
@@ -269,17 +265,7 @@ export default function MoneyScreen({ onBack }: { onBack: () => void }) {
       </div>
 
       <AffordabilitySheet open={setupOpen} onClose={() => setSetupOpen(false)} />
-      <ExtraIncomeSheet open={extraOpen} onClose={() => setExtraOpen(false)} month={ym} />
-    </div>
-  );
-}
-
-function Mini({ icon: Icon, label, value, sub }: { icon: typeof Wallet; label: string; value: string; sub: string }) {
-  return (
-    <div className="rounded-2xl glass-subtle px-2.5 py-2.5 text-center">
-      <Icon size={14} className="mx-auto text-slate-400 dark:text-slate-500 mb-1" />
-      <p className="text-[12.5px] font-bold text-slate-900 dark:text-slate-100 tabular-nums leading-tight">{value}</p>
-      <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">{label} · {sub}</p>
+      <ExtraIncomeSheet open={extraOpen} onClose={() => setExtraOpen(false)} month={period.anchorYm} />
     </div>
   );
 }

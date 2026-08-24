@@ -1,10 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-// One unified place to track personal spending (source-agnostic) plus an
-// "affordability" engine: estimate net Swiss salary → reserve savings & fixed
-// costs → drip the rest across waking hours into a live "spend now" balance.
-
-export interface FixedExpense { id: string; label: string; amount: number }
+// One unified place to track personal spending. The model is deliberately
+// simple: you say how much you can spend per month, the app turns it into a
+// daily budget over your own "budget month" (which can start on any day, e.g.
+// the 25th when the salary lands), and unspent money rolls forward.
 
 export interface Expense {
   id: string;
@@ -13,49 +12,31 @@ export interface Expense {
   amount: number;  // CHF
   category: string;
   note?: string;
-  source?: "applepay"; // auto-imported from the Apple Pay Shortcut automation
+  source?: "applepay"; // auto-imported from the old Apple Pay Shortcut automation
 }
 
-// One-time income (bonus, 13th salary, side gig) allocated across the month's
-// buckets. Everything allocated to tax / fixed / spending frees or adds money
-// this month → raises the month's spendable pool and the daily/hourly rates.
-// Only the savings share stays out of the meter.
+// One-time income (bonus, 13th salary, side gig). Whatever isn't put into
+// savings raises that month's spendable pool and the daily rate. The
+// toTax/toFixed buckets are legacy — old entries still count toward the boost.
 export interface ExtraIncome {
   id: string;
   at: number;
-  month: string;     // YYYY-MM the income applies to
+  month: string;     // YYYY-MM — the budget month it applies to (period anchor)
   label: string;
   amount: number;
-  toTax: number;     // covers (part of) the month's tax reserve
-  toFixed: number;   // covers (part of) fixed costs, e.g. this month's rent
+  toTax: number;     // legacy bucket — counts toward the boost
+  toFixed: number;   // legacy bucket — counts toward the boost
   toSavings: number; // straight to savings — not spendable
   toSpend: number;   // directly into the daily budget
 }
 
-export type Canton =
-  | "ZH" | "BE" | "LU" | "UR" | "SZ" | "OW" | "NW" | "GL" | "ZG" | "FR" | "SO" | "BS" | "BL"
-  | "SH" | "AR" | "AI" | "SG" | "GR" | "AG" | "TG" | "TI" | "VD" | "VS" | "NE" | "GE" | "JU" | "OTHER";
-export type MaritalStatus = "single" | "married" | "divorced";
-export type TaxSystem = "CH" | "UK" | "none";
-
 export interface MoneySettings {
-  // The monthly income figure. Its meaning depends on the tax system:
-  //  CH   — what lands on the bank account (social insurances already deducted;
-  //         income tax is NOT withheld in Switzerland, so it's reserved here).
-  //  UK   — gross salary; PAYE (Income Tax + National Insurance) is estimated
-  //         and deducted to get take-home.
-  //  none — taken as-is, no tax deduction at all.
-  bankMonthly: number;
-  taxSystem: TaxSystem;
-  canton: Canton;                  // CH only
-  gemeinde: string;                // CH only — free text, refined via AI lookup
-  status: MaritalStatus;
-  taxPct: number | null;           // manual effective tax % (null = estimate)
-  currency: string;                // display currency (CHF, GBP, …)
-  savingsMode: "amount" | "percent";
-  savingsValue: number;            // amount/month or % of after-tax income
-  trackingSince: string;           // YYYY-MM-DD — accrual never starts earlier
-                                   // (no phantom credit for pre-tracking days)
+  monthlyBudget: number;  // the one number: what you can spend per month
+  currency: string;       // display currency (CHF, EUR, …)
+  monthStartDay: number;  // 1–28 — your budget month runs from this day to the
+                          // day before the next start (e.g. 25th → 25.–24.)
+  trackingSince: string;  // YYYY-MM-DD — budget never accrues earlier
+                          // (no phantom credit for pre-tracking days)
 }
 
 export interface MoneyState {
@@ -77,39 +58,8 @@ export function categoryOf(key: string) {
   return CATEGORIES.find((c) => c.key === key) || CATEGORIES[CATEGORIES.length - 1];
 }
 
-export const CANTONS: { key: Canton; label: string }[] = [
-  { key: "AG", label: "Aargau" },
-  { key: "AR", label: "Appenzell A.Rh." },
-  { key: "AI", label: "Appenzell I.Rh." },
-  { key: "BL", label: "Basel-Landschaft" },
-  { key: "BS", label: "Basel-Stadt" },
-  { key: "BE", label: "Bern" },
-  { key: "FR", label: "Fribourg" },
-  { key: "GE", label: "Genève" },
-  { key: "GL", label: "Glarus" },
-  { key: "GR", label: "Graubünden" },
-  { key: "JU", label: "Jura" },
-  { key: "LU", label: "Luzern" },
-  { key: "NE", label: "Neuchâtel" },
-  { key: "NW", label: "Nidwalden" },
-  { key: "OW", label: "Obwalden" },
-  { key: "SH", label: "Schaffhausen" },
-  { key: "SZ", label: "Schwyz" },
-  { key: "SO", label: "Solothurn" },
-  { key: "SG", label: "St. Gallen" },
-  { key: "TI", label: "Ticino" },
-  { key: "TG", label: "Thurgau" },
-  { key: "UR", label: "Uri" },
-  { key: "VD", label: "Vaud" },
-  { key: "VS", label: "Valais" },
-  { key: "ZG", label: "Zug" },
-  { key: "ZH", label: "Zürich" },
-  { key: "OTHER", label: "Other" },
-];
-
 const KEY = "vrent.money.v1";
-// Fixed expenses live in settings so they persist with the config.
-interface Persisted extends MoneyState { fixed: FixedExpense[]; extras: ExtraIncome[] }
+interface Persisted extends MoneyState { extras: ExtraIncome[] }
 
 function uid(): string {
   try { return crypto.randomUUID(); } catch { return `m_${Date.now()}_${Math.floor(Math.random() * 1e6)}`; }
@@ -117,16 +67,49 @@ function uid(): string {
 
 function defaults(): Persisted {
   return {
-    settings: {
-      bankMonthly: 0, taxSystem: "CH", canton: "ZH", gemeinde: "", status: "single", taxPct: null,
-      currency: "CHF",
-      savingsMode: "amount", savingsValue: 0,
-      trackingSince: "",
-    },
+    settings: { monthlyBudget: 0, currency: "CHF", monthStartDay: 1, trackingSince: "" },
     expenses: [],
-    fixed: [],
     extras: [],
   };
+}
+
+// ── Legacy migration ─────────────────────────────────────────────────────────
+// The old model derived the spendable pool from income − tax − fixed − savings.
+// On first load after the update, that derived number becomes the new
+// monthlyBudget so nothing jumps; from then on only monthlyBudget is stored.
+const LEGACY_CANTON_FACTOR: Record<string, number> = {
+  ZG: 0.45, NW: 0.5, SZ: 0.55, UR: 0.6, OW: 0.6, AI: 0.6,
+  AR: 0.75, GL: 0.75, TG: 0.75, LU: 0.8,
+  SG: 0.85, GR: 0.85, AG: 0.85, SH: 0.85, ZH: 0.9, BL: 0.95,
+  SO: 1.0, VS: 1.0, TI: 1.0, FR: 1.05, BS: 1.05, BE: 1.1,
+  GE: 1.15, VD: 1.15, NE: 1.2, JU: 1.2, OTHER: 1.0,
+};
+function legacyTaxPct(raw: any): number {
+  if (raw.taxPct != null) return raw.taxPct;
+  const sys = raw.taxSystem || "CH";
+  if (sys === "none") return 0;
+  const annual = (raw.bankMonthly || 0) * 12;
+  if (sys === "UK") {
+    if (annual <= 0) return 0;
+    const allowance = Math.max(0, 12570 - Math.max(0, annual - 100000) / 2);
+    const taxable = Math.max(0, annual - allowance);
+    const it = 0.2 * Math.min(taxable, 37700) + 0.4 * Math.min(Math.max(taxable - 37700, 0), 112570 - 37700) + 0.45 * Math.max(taxable - 112570, 0);
+    const ni = 0.08 * Math.min(Math.max(annual - 12570, 0), 50270 - 12570) + 0.02 * Math.max(annual - 50270, 0);
+    return ((it + ni) / annual) * 100;
+  }
+  const base = annual <= 55000 ? 7 : annual <= 90000 ? 12 : annual <= 135000 ? 16 : 20;
+  let pct = base * (LEGACY_CANTON_FACTOR[raw.canton] ?? 1.0);
+  if (raw.status === "married") pct *= 0.8;
+  return pct;
+}
+function legacyMonthlyBudget(raw: any, fixed: { amount: number }[]): number {
+  const bank = raw.bankMonthly ?? (raw.netOverride > 0 ? raw.netOverride : raw.grossMonthly ? Math.round(raw.grossMonthly * 0.875) : 0);
+  if (!(bank > 0)) return 0;
+  const afterTax = Math.max(0, bank * (1 - legacyTaxPct({ ...raw, bankMonthly: bank }) / 100));
+  const fixedSum = fixed.reduce((a, f) => a + (f.amount || 0), 0);
+  const sv = Math.max(0, raw.savingsValue || 0);
+  const savings = raw.savingsMode === "percent" ? (afterTax * sv) / 100 : sv;
+  return Math.max(0, Math.round(afterTax - fixedSum - savings));
 }
 
 function load(): Persisted {
@@ -136,26 +119,18 @@ function load(): Persisted {
     if (!p) return d;
     const raw = p.settings || {};
     const expenses: Expense[] = Array.isArray(p.expenses) ? p.expenses : [];
-    // Migrate the old gross-salary model: the closest stand-in for "received on
-    // the bank account" is the old net override, else gross minus ~12.5% social.
-    const bankMonthly =
-      raw.bankMonthly ?? (raw.netOverride != null && raw.netOverride > 0 ? raw.netOverride : raw.grossMonthly ? Math.round(raw.grossMonthly * 0.875) : 0);
-    // Accrual must not start before the user actually began tracking — for
+    const fixed: { amount: number }[] = Array.isArray(p.fixed) ? p.fixed : [];
+    const monthlyBudget = raw.monthlyBudget ?? legacyMonthlyBudget(raw, fixed);
+    // Budget must not accrue before the user actually began tracking — for
     // existing data, the earliest logged expense is the honest start; a
-    // configured legacy store with no expenses starts today (never month-start,
-    // which would grant phantom credit).
+    // configured store with no expenses starts today.
     const trackingSince =
       raw.trackingSince ||
-      (expenses.length ? expenses.map((e) => e.date).sort()[0] : bankMonthly > 0 ? todayKey() : "");
-    const settings = { ...d.settings, ...raw, bankMonthly, taxPct: raw.taxPct ?? null, trackingSince };
-    // Drop legacy keys so they don't get re-persisted forever.
-    delete (settings as any).grossMonthly;
-    delete (settings as any).netOverride;
-    delete (settings as any).deductionPct;
+      (expenses.length ? expenses.map((e) => e.date).sort()[0] : monthlyBudget > 0 ? todayKey() : "");
+    const monthStartDay = Math.min(28, Math.max(1, Math.round(raw.monthStartDay || 1)));
     return {
-      settings,
+      settings: { monthlyBudget: Math.max(0, monthlyBudget || 0), currency: raw.currency || "CHF", monthStartDay, trackingSince },
       expenses,
-      fixed: Array.isArray(p.fixed) ? p.fixed : [],
       extras: Array.isArray(p.extras) ? p.extras : [],
     };
   } catch { return d; }
@@ -174,31 +149,21 @@ export function useMoney(): Persisted {
 // Mutations -------------------------------------------------------------------
 export function setSettings(patch: Partial<MoneySettings>) {
   const next = { ...state.settings, ...patch };
-  // Stamp the tracking start the moment affordability is first configured, so
-  // the meter never credits days that were never tracked. Only auto-stamp when
-  // the patch didn't touch trackingSince — an explicit user value must win.
-  if (!("trackingSince" in patch) && !next.trackingSince && next.bankMonthly > 0) next.trackingSince = todayKey();
-  // Switching tax system implies the natural currency (unless set explicitly);
-  // the manual tax % also resets since it belonged to the previous system.
-  if ("taxSystem" in patch && patch.taxSystem !== state.settings.taxSystem) {
-    if (!("currency" in patch)) next.currency = patch.taxSystem === "UK" ? "GBP" : patch.taxSystem === "CH" ? "CHF" : next.currency;
-    if (!("taxPct" in patch)) next.taxPct = null;
-  }
+  next.monthStartDay = Math.min(28, Math.max(1, Math.round(next.monthStartDay || 1)));
+  // Stamp the tracking start the moment the budget is first configured, so the
+  // meter never credits days that were never tracked. Only auto-stamp when the
+  // patch didn't touch trackingSince — an explicit user value must win.
+  if (!("trackingSince" in patch) && !next.trackingSince && next.monthlyBudget > 0) next.trackingSince = todayKey();
   set({ settings: next });
 }
-export function addFixed(label: string, amount: number) {
-  if (!label.trim() || !(amount > 0)) return;
-  set({ fixed: [...state.fixed, { id: uid(), label: label.trim(), amount }] });
-}
-export function removeFixed(id: string) { set({ fixed: state.fixed.filter((f) => f.id !== id) }); }
 
 // Extra income (bonus / one-time) -------------------------------------------
-export function addExtra(e: { month: string; label: string; amount: number; toTax: number; toFixed: number; toSavings: number; toSpend: number }): string {
+export function addExtra(e: { month: string; label: string; amount: number; toSavings: number; toSpend: number }): string {
   const id = uid();
   const nz = (n: number) => Math.max(0, Math.round((n || 0) * 100) / 100);
   set({
     extras: [
-      { id, at: Date.now(), month: e.month, label: (e.label || "Extra income").trim(), amount: nz(e.amount), toTax: nz(e.toTax), toFixed: nz(e.toFixed), toSavings: nz(e.toSavings), toSpend: nz(e.toSpend) },
+      { id, at: Date.now(), month: e.month, label: (e.label || "Extra income").trim(), amount: nz(e.amount), toTax: 0, toFixed: 0, toSavings: nz(e.toSavings), toSpend: nz(e.toSpend) },
       ...state.extras,
     ],
   });
@@ -212,7 +177,6 @@ export function extrasFor(s: Persisted, ym: string): ExtraIncome[] {
 export function boostFor(s: Persisted, ym: string): number {
   return extrasFor(s, ym).reduce((a, x) => a + (x.toTax || 0) + (x.toFixed || 0) + (x.toSpend || 0), 0);
 }
-export function fixedList(s: Persisted): FixedExpense[] { return s.fixed; }
 
 export function addExpense(e: { amount: number; category: string; note?: string; date?: string }): string {
   const id = uid();
@@ -235,101 +199,84 @@ export function updateExpense(id: string, patch: Partial<Expense>) {
 }
 
 // Dates -----------------------------------------------------------------------
-export function todayKey(): string {
-  const d = new Date();
+function keyOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function daysInMonth(d: Date): number { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
-
-// ── Tax estimates (approximate — the slider / AI lookup refine them) ──────────
-
-// Switzerland: the bank amount already excludes social insurances (employer
-// withholds AHV/ALV/BVG/NBU). What still has to be paid out of it is income
-// tax: Kantons- + Gemeinde- + Bundessteuer, which varies strongly by canton
-// (and Gemeinde — refined via the AI lookup). Base effective bands scaled by a
-// per-canton factor; married gets a rough splitting discount.
-const CANTON_FACTOR: Record<string, number> = {
-  ZG: 0.45, NW: 0.5, SZ: 0.55, UR: 0.6, OW: 0.6, AI: 0.6,
-  AR: 0.75, GL: 0.75, TG: 0.75, LU: 0.8,
-  SG: 0.85, GR: 0.85, AG: 0.85, SH: 0.85, ZH: 0.9, BL: 0.95,
-  SO: 1.0, VS: 1.0, TI: 1.0, FR: 1.05, BS: 1.05, BE: 1.1,
-  GE: 1.15, VD: 1.15, NE: 1.2, JU: 1.2, OTHER: 1.0,
-};
-function swissTaxPct(canton: Canton, status: MaritalStatus, annualIncome: number): number {
-  const base = annualIncome <= 55000 ? 7 : annualIncome <= 90000 ? 12 : annualIncome <= 135000 ? 16 : 20;
-  let pct = base * (CANTON_FACTOR[canton] ?? 1.0);
-  if (status === "married") pct *= 0.8; // rough splitting benefit
-  return pct;
+export function todayKey(): string { return keyOf(new Date()); }
+const DAY_MS = 86_400_000;
+function daysBetween(a: Date, b: Date): number {
+  // Calendar-day difference, robust across DST (round instead of truncate).
+  const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const b0 = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((b0.getTime() - a0.getTime()) / DAY_MS);
 }
 
-// United Kingdom: PAYE — Income Tax (personal allowance £12,570, tapered above
-// £100k) + employee National Insurance (8% / 2%). 2024/25 rates; the input is
-// gross salary, so the estimate IS the deduction at source.
-function ukPayePct(annualGross: number): number {
-  if (annualGross <= 0) return 0;
-  const allowance = Math.max(0, 12570 - Math.max(0, annualGross - 100000) / 2);
-  const taxable = Math.max(0, annualGross - allowance);
-  const it =
-    0.2 * Math.min(taxable, 37700) +
-    0.4 * Math.min(Math.max(taxable - 37700, 0), 112570 - 37700) +
-    0.45 * Math.max(taxable - 112570, 0);
-  const ni = 0.08 * Math.min(Math.max(annualGross - 12570, 0), 50270 - 12570) + 0.02 * Math.max(annualGross - 50270, 0);
-  return ((it + ni) / annualGross) * 100;
+// ── The budget month ─────────────────────────────────────────────────────────
+// Runs from `monthStartDay` to the day before the next start. With start day 1
+// it's the plain calendar month. `anchorYm` (the month the period starts in)
+// keys the period's extra income.
+export interface BudgetPeriod {
+  start: string;   // YYYY-MM-DD, inclusive
+  end: string;     // YYYY-MM-DD, inclusive
+  anchorYm: string; // YYYY-MM
+  days: number;
+  label: string;   // "25 Aug – 24 Sep" (or "August" for plain months)
+}
+export function periodFor(s: Persisted, now = new Date()): BudgetPeriod {
+  const sd = Math.min(28, Math.max(1, Math.round(s.settings.monthStartDay || 1)));
+  let y = now.getFullYear();
+  let m = now.getMonth();
+  if (now.getDate() < sd) { m -= 1; if (m < 0) { m = 11; y -= 1; } }
+  const startD = new Date(y, m, sd);
+  const nextD = new Date(y, m + 1, sd);
+  const endD = new Date(nextD.getTime() - DAY_MS);
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const label = sd === 1
+    ? startD.toLocaleDateString(undefined, { month: "long" })
+    : `${fmt(startD)} – ${fmt(endD)}`;
+  return {
+    start: keyOf(startD),
+    end: keyOf(endD),
+    anchorYm: `${y}-${String(m + 1).padStart(2, "0")}`,
+    days: daysBetween(startD, nextD),
+    label,
+  };
 }
 
-export function estimatedTaxPct(s: MoneySettings): number {
-  if (s.taxPct != null) return s.taxPct;
-  const annual = s.bankMonthly * 12;
-  const sys = s.taxSystem || "CH";
-  const pct = sys === "none" ? 0 : sys === "UK" ? ukPayePct(annual) : swissTaxPct(s.canton, s.status, annual);
-  return Math.round(pct * 10) / 10;
-}
-// What's actually yours to allocate: bank amount minus the tax reserve.
-export function afterTaxMonthly(s: MoneySettings): number {
-  return Math.max(0, s.bankMonthly * (1 - estimatedTaxPct(s) / 100));
-}
-export function taxReserveMonthly(s: MoneySettings): number {
-  return Math.max(0, s.bankMonthly - afterTaxMonthly(s));
-}
-
-// ── Affordability derivations ────────────────────────────────────────────────
-export function savingsMonthly(s: Persisted): number {
-  const net = afterTaxMonthly(s.settings);
-  const v = Math.max(0, s.settings.savingsValue || 0); // negative savings would inflate the meter
-  return s.settings.savingsMode === "percent" ? (net * v) / 100 : v;
-}
-export function fixedMonthly(s: Persisted): number { return s.fixed.reduce((a, f) => a + (f.amount || 0), 0); }
-// The recurring monthly pool from salary alone (no one-time income).
-export function baseSpendableMonthly(s: Persisted): number {
-  return Math.max(0, afterTaxMonthly(s.settings) - fixedMonthly(s) - savingsMonthly(s));
-}
-// A specific month's pool: recurring base + that month's extra-income boost.
-export function spendableForMonth(s: Persisted, ym: string): number {
-  return baseSpendableMonthly(s) + boostFor(s, ym);
+// ── Budget derivations ───────────────────────────────────────────────────────
+// A period's pool: the monthly budget + that period's extra-income boost.
+export function spendableForPeriod(s: Persisted, p: BudgetPeriod): number {
+  return Math.max(0, s.settings.monthlyBudget || 0) + boostFor(s, p.anchorYm);
 }
 export function spendableMonthly(s: Persisted, now = new Date()): number {
-  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  return spendableForMonth(s, ym);
+  return spendableForPeriod(s, periodFor(s, now));
 }
 export function dailyAllowance(s: Persisted, now = new Date()): number {
-  return spendableMonthly(s, now) / daysInMonth(now);
-}
-// Days of this month that count toward the budget: from the later of the 1st
-// and `trackingSince` through today (inclusive). Days before tracking began
-// earn nothing — that money was spent untracked, so crediting it would inflate
-// what's left.
-export function daysTracked(s: Persisted, now = new Date()): number {
-  const ts = s.settings.trackingSince;
-  let startDay = 1;
-  if (ts) {
-    const [y, m, d] = ts.split("-").map(Number);
-    const tsDate = new Date(y || 0, (m || 1) - 1, d || 1);
-    if (tsDate > now) return 0; // tracking starts in the future
-    if (y === now.getFullYear() && m === now.getMonth() + 1) startDay = Math.max(1, d || 1);
-  }
-  return Math.max(0, now.getDate() - startDay + 1);
+  const p = periodFor(s, now);
+  return spendableForPeriod(s, p) / p.days;
 }
 
+// Days of the current budget month that count: from the later of the period
+// start and `trackingSince` through today (inclusive). Days before tracking
+// began earn nothing — that money was spent untracked, so crediting it would
+// inflate what's left.
+export function daysTracked(s: Persisted, now = new Date()): number {
+  const p = periodFor(s, now);
+  let from = p.start;
+  const ts = s.settings.trackingSince;
+  if (ts && ts > from) from = ts;
+  if (from > keyOf(now)) return 0; // tracking starts in the future
+  const [y, m, d] = from.split("-").map(Number);
+  return Math.max(0, daysBetween(new Date(y, (m || 1) - 1, d || 1), now) + 1);
+}
+
+export function spentInPeriod(s: Persisted, p: BudgetPeriod): number {
+  return s.expenses.filter((e) => e.date >= p.start && e.date <= p.end).reduce((a, e) => a + (e.amount || 0), 0);
+}
+export function expensesInPeriod(s: Persisted, p: BudgetPeriod): Expense[] {
+  return s.expenses.filter((e) => e.date >= p.start && e.date <= p.end).sort((a, b) => b.at - a.at);
+}
+// Calendar-month total — used by stats/assistant summaries.
 export function spentInMonth(s: Persisted, ym: string): number {
   return s.expenses.filter((e) => e.date.startsWith(ym)).reduce((a, e) => a + (e.amount || 0), 0);
 }
@@ -342,17 +289,17 @@ export function spentOnDay(s: Persisted, date: string): number {
 // before `trackingSince` stay in the stats but don't drain it (those days
 // contributed no budget either).
 export function liveBalance(s: Persisted, now = new Date()): number {
+  const p = periodFor(s, now);
   const budget = dailyAllowance(s, now) * daysTracked(s, now);
-  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const ts = s.settings.trackingSince;
   const spent = s.expenses
-    .filter((e) => e.date.startsWith(ym) && (!ts || e.date >= ts))
+    .filter((e) => e.date >= p.start && e.date <= p.end && (!ts || e.date >= ts))
     .reduce((a, e) => a + (e.amount || 0), 0);
   return budget - spent;
 }
 
 export function isConfigured(s: Persisted): boolean {
-  return s.settings.bankMonthly > 0;
+  return s.settings.monthlyBudget > 0;
 }
 
 // Transparent composition of what's left today, for display:
@@ -361,7 +308,7 @@ export function meterBreakdown(s: Persisted, now = new Date()) {
   const balance = liveBalance(s, now);
   const tracked = daysTracked(s, now);
   const todayBudget = tracked > 0 ? dailyAllowance(s, now) : 0;
-  const dayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const dayKey = keyOf(now);
   const ts = s.settings.trackingSince;
   const todaySpent = s.expenses
     .filter((e) => e.date === dayKey && (!ts || e.date >= ts))
@@ -389,12 +336,7 @@ export function lastNDaysSpend(s: Persisted, n = 7): { date: string; amount: num
   const base = new Date();
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    out.push({ date: key, amount: spentOnDay(s, key) });
+    out.push({ date: keyOf(d), amount: spentOnDay(s, keyOf(d)) });
   }
   return out;
-}
-
-export function expensesInMonth(s: Persisted, ym: string): Expense[] {
-  return s.expenses.filter((e) => e.date.startsWith(ym)).sort((a, b) => b.at - a.at);
 }

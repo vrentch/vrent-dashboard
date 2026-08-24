@@ -9,7 +9,7 @@ import { fmtPct } from "../../lib/format";
 import StockDetail from "../markets/StockDetail";
 import NewsCard from "../news/NewsCard";
 import ArticleReader from "../news/ArticleReader";
-import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, spentInMonth, spendableMonthly, meterBreakdown, addExpense, lastNDaysSpend, todayKey as moneyToday } from "../../lib/money/store";
+import { useMoney, isConfigured as moneyConfigured, dailyAllowance, spentOnDay, periodFor, spentInPeriod, spendableMonthly, meterBreakdown, addExpense, lastNDaysSpend, todayKey as moneyToday } from "../../lib/money/store";
 import { useHealth, macrosOn, macroTargets, calorieTarget, addWater, waterOn, fastingStatus, foodHints, todayKey as healthToday } from "../../lib/health";
 import { prepareImage } from "../../lib/image";
 import FoodConfirmSheet from "../health/FoodConfirmSheet";
@@ -21,7 +21,7 @@ import { chf, chfRound } from "../../lib/business/format";
 type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money";
 
 // One-tap spend amounts — the everyday sums that shouldn't need typing.
-const SPEND_CHIPS = [20, 50, 100];
+const SPEND_CHIPS = [5, 10, 20];
 
 // The world at a glance: different markets, not the personal watchlist
 // (that lives in the Markets tab).
@@ -105,7 +105,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const spentToday = spentOnDay(money, moneyToday());
   const leftToday = Math.max(0, daily + carry) - spentToday;
   const monthBudget = spendableMonthly(money);
-  const monthSpent = spentInMonth(money, moneyToday().slice(0, 7));
+  const monthSpent = spentInPeriod(money, periodFor(money));
   const monthPct = monthBudget > 0 ? Math.min(1, monthSpent / monthBudget) : 0;
   const trend = useMemo(() => lastNDaysSpend(money, 7), [money]);
   const leftShown = useCountUp(moneyOn ? leftToday : 0);
