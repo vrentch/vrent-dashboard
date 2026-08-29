@@ -35,7 +35,7 @@
     color:var(--text); font-family:var(--body); font-size:16px; line-height:1.45;
     min-height:100vh;
   }
-  #app{max-width:520px; margin:0 auto; padding:14px 14px calc(28px + env(safe-area-inset-bottom));}
+  #app{max-width:520px; margin:0 auto; padding:14px 14px calc(96px + env(safe-area-inset-bottom));}
   button{font-family:inherit; color:inherit; background:none; border:none; padding:0; cursor:pointer; touch-action:manipulation;}
   button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible{outline:2px solid var(--amber); outline-offset:2px; border-radius:6px;}
   input, select{font-family:inherit;}
@@ -67,19 +67,52 @@
   .proj{display:flex; justify-content:center; gap:14px; flex-wrap:wrap; margin-top:11px; font-size:12px; color:var(--faint); font-variant-numeric:tabular-nums;}
   .proj b{color:var(--dim); font-weight:600;}
 
-  /* ---------- actions ---------- */
-  .actions{display:grid; grid-template-columns:1.2fr 1fr; gap:10px; margin-top:12px;}
-  .water-btn{
-    background:linear-gradient(180deg, #2b5560, #1f3d46); color:var(--aqua2);
-    border:1px solid #3a6b78; border-radius:var(--r2); padding:15px 10px;
-    font-weight:700; font-size:16px; letter-spacing:.01em;
-    box-shadow:inset 0 1px 0 rgba(159,228,238,.18), 0 6px 16px rgba(0,0,0,.3);
+  /* ---------- control level (mode) ---------- */
+  body{--maccent:var(--amber);}
+  body.md1{--maccent:var(--aqua);}
+  body.md2{--maccent:var(--amber);}
+  body.md3{--maccent:var(--hot);}
+  body.md4{--maccent:var(--bad);}
+  #modeBar{
+    display:flex; align-items:center; gap:12px; width:100%; text-align:left; margin:0 0 12px;
+    background:linear-gradient(180deg, var(--card2), var(--card)); border:1px solid var(--line);
+    border-radius:var(--r); padding:11px 14px;
+    transition:border-color .3s ease;
   }
-  .water-btn:active{transform:translateY(1px);}
+  #modeBar:active{transform:scale(.985);}
+  .mb-dial{display:flex; gap:4px; flex:0 0 auto;}
+  .mb-seg{width:14px; height:22px; border-radius:5px; background:var(--bg2); border:1px solid var(--line); transition:background .35s ease, border-color .35s ease, box-shadow .35s ease;}
+  .mb-seg.on{background:var(--maccent); border-color:var(--maccent); box-shadow:0 0 10px color-mix(in srgb, var(--maccent) 45%, transparent);}
+  .mb-txt{flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;}
+  .mb-txt b{font-family:var(--disp); font-weight:800; font-size:15px; letter-spacing:.01em; color:var(--maccent);}
+  .mb-txt span{font-size:11.5px; color:var(--faint); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .mb-go{color:var(--faint); font-size:20px;}
+  .mopt{display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:12px 13px; margin-top:8px; transition:border-color .15s ease, transform .1s ease;}
+  .mopt:active{transform:scale(.98);}
+  .mopt .mi{font-size:24px;}
+  .mopt .mn{font-family:var(--disp); font-weight:800; font-size:16px;}
+  .mopt .mt{display:block; font-size:12.5px; color:var(--dim); margin-top:1px;}
+  .mopt .mstate{margin-left:auto; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; color:var(--faint); white-space:nowrap;}
+  .mopt.cur{border-color:var(--maccent); background:color-mix(in srgb, var(--maccent) 9%, var(--card));}
+  .mopt.cur .mn{color:var(--maccent);}
+  .mopt.locked{opacity:.55;}
+  /* progressive disclosure: light hides most, medium+ reveals */
+  body.md1 .m2, body.md1 .m3, body.md2 .m3{display:none !important;}
+  body.md1 .gauge-wrap, body.md1 .bac-row, body.md1 #projRow, body.md1 #paceChip, body.md1 #upnext,
+  body.md1 #safeCard, body.md1 #whyCard{display:none !important;}
+  body.md1 #safeCard.armed, body.md1 #safeCard.over{display:flex !important;}
+  #lightNext{display:none; text-align:center; font-family:var(--disp); font-weight:800; font-size:34px; color:var(--aqua2); margin:10px 0 2px; font-variant-numeric:tabular-nums; letter-spacing:-.01em;}
+  #lightNext small{display:block; font-family:var(--mono); font-weight:400; font-size:11px; letter-spacing:.22em; color:var(--faint); margin-bottom:6px;}
+  body.md1 #lightNext{display:block;}
+  #startBtn{width:100%; margin-top:12px; background:linear-gradient(180deg, var(--amber2), var(--amber)); color:#2a1c05; font-weight:800; font-size:17px; border-radius:12px; padding:15px; box-shadow:0 8px 22px rgba(235,163,60,.25);}
+  #startBtn:active{transform:translateY(1px);}
+
+  /* ---------- actions ---------- */
+  .actions{display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;}
   .pace-chip{
     display:flex; align-items:center; justify-content:center; text-align:center;
     border-radius:var(--r2); border:1px solid var(--line); background:var(--card);
-    font-family:var(--mono); font-size:12.5px; line-height:1.35; padding:8px 10px;
+    font-family:var(--mono); font-size:12.5px; line-height:1.35; padding:12px 10px;
     color:var(--dim); font-variant-numeric:tabular-nums;
   }
   .pace-chip.ok{color:var(--ok); border-color:color-mix(in srgb, var(--ok) 45%, transparent);}
@@ -95,7 +128,8 @@
   .stat span{font-family:var(--mono); font-size:10px; letter-spacing:.09em; color:var(--faint); text-transform:uppercase;}
 
   /* ---------- menu ---------- */
-  .eyebrow{font-family:var(--mono); font-weight:600; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--faint); margin:22px 2px 10px;}
+  .eyebrow{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-weight:600; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--faint); margin:22px 2px 10px;}
+  .eyebrow::before{content:''; width:14px; height:3px; border-radius:2px; background:var(--maccent); opacity:.8;}
   .cat-note{font-size:12px; color:var(--faint); margin:-6px 2px 10px;}
   .cat-title{font-family:var(--disp); font-weight:600; font-size:15px; color:var(--dim); margin:16px 2px 8px;}
   .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
@@ -192,15 +226,38 @@
 
   /* ---------- table mode: dim always-on countdown ---------- */
   .pace-chip{cursor:pointer;}
-  #tableMode{position:fixed; inset:0; background:#000; z-index:70; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; cursor:pointer;}
-  #tableMode .tm-eyebrow{font-family:var(--mono); font-size:13px; letter-spacing:.3em; color:#8a6f3f;}
-  #tableMode .tm-count{font-family:var(--disp); font-weight:800; font-size:min(26vw,150px); line-height:1; color:#d9b36a; font-variant-numeric:tabular-nums; letter-spacing:-.02em;}
-  #tableMode .tm-count.ready{color:#7dbf85; font-size:min(20vw,110px);}
-  #tableMode .tm-at{font-family:var(--mono); font-size:14px; color:#6e5c3f;}
-  #tableMode .tm-water{font-size:17px; font-weight:600; color:#5f99a3; margin-top:6px;}
-  #tableMode .tm-water.done{color:#4a5f52;}
-  #tableMode .tm-bac{font-family:var(--mono); font-size:13px; color:#5c4f38; margin-top:8px;}
-  #tableMode .tm-hint{position:absolute; bottom:calc(18px + env(safe-area-inset-bottom)); left:0; right:0; font-size:11px; color:#3d3527;}
+
+  /* ---------- focus: the glanceable big timer ---------- */
+  #focus{position:fixed; inset:0; z-index:60; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center;
+    background:radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--maccent) 10%, #000) 0%, #050403 60%), #050403;}
+  #fxClose{position:absolute; top:calc(12px + env(safe-area-inset-top)); right:14px; width:44px; height:44px; border-radius:14px; border:1px solid #2a2317; color:#7a6c52; font-size:18px; display:grid; place-items:center; background:rgba(30,24,16,.5);}
+  .fx-clock{font-family:var(--mono); font-size:14px; letter-spacing:.28em; color:#5c4f38; font-variant-numeric:tabular-nums;}
+  .fx-eyebrow{font-family:var(--mono); font-size:13px; letter-spacing:.3em; color:#8a6f3f; margin-top:4px;}
+  .fx-count{font-family:var(--disp); font-weight:800; font-size:min(25vw,150px); line-height:1; color:var(--maccent); font-variant-numeric:tabular-nums; letter-spacing:-.02em; text-shadow:0 0 44px color-mix(in srgb, var(--maccent) 30%, transparent);}
+  .fx-count.ready{color:#7dbf85;}
+  .fx-sub{font-size:16px; font-weight:600; color:#5f99a3; min-height:22px;}
+  .fx-sub.done{color:#4a5f52;}
+  .fx-meta{font-family:var(--mono); font-size:13px; color:#5c4f38; font-variant-numeric:tabular-nums;}
+  .fx-btns{display:flex; gap:14px; margin-top:22px;}
+  .fx-btns button{width:88px; height:88px; border-radius:26px; border:1px solid #2c2416; background:linear-gradient(180deg, #1d1810, #141009);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:30px; color:var(--text);
+    box-shadow:0 10px 26px rgba(0,0,0,.5); transition:transform .1s ease, border-color .15s ease;}
+  .fx-btns button:active{transform:scale(.92); border-color:var(--maccent);}
+  .fx-btns button span{font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:#8a7a61; text-transform:uppercase;}
+  .fx-btns #fxWater{border-color:#274850;}
+  .fx-hint{position:absolute; bottom:calc(16px + env(safe-area-inset-bottom)); left:0; right:0; font-size:11px; color:#3d3527;}
+
+  /* ---------- quick bar (sticky bottom) ---------- */
+  #quickbar{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(10px + env(safe-area-inset-bottom)); z-index:40;
+    width:min(492px, calc(100% - 24px)); display:flex; gap:8px; padding:8px;
+    background:color-mix(in srgb, var(--bg2) 86%, transparent); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    border:1px solid var(--line2); border-radius:20px; box-shadow:0 14px 40px rgba(0,0,0,.5);}
+  .qb{flex:1; display:flex; align-items:center; justify-content:center; gap:7px; border-radius:13px; padding:13px 6px; font-weight:700; font-size:15px; transition:transform .1s ease;}
+  .qb:active{transform:scale(.95);}
+  .qb.water{background:linear-gradient(180deg, #2b5560, #1f3d46); color:var(--aqua2); border:1px solid #3a6b78;}
+  .qb.drink{background:linear-gradient(180deg, var(--card2), var(--card)); border:1px solid var(--line2); color:var(--text);}
+  .qb.drink .qlbl{max-width:12ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .qb.focus{flex:0 0 58px; background:color-mix(in srgb, var(--maccent) 14%, var(--card)); border:1px solid color-mix(in srgb, var(--maccent) 45%, transparent); color:var(--maccent); font-size:20px;}
 
   /* ---------- get home safe ---------- */
   .safe-card{display:flex; align-items:center; gap:11px; width:100%; text-align:left; margin-top:10px;
@@ -310,6 +367,14 @@
   </header>
   <div id="rearmBanner" class="rearm" hidden>🛡 Tap anywhere to re-arm night watch</div>
 
+  <button id="modeBar" type="button" aria-label="Control level">
+    <span class="mb-dial">
+      <span class="mb-seg" data-l="1"></span><span class="mb-seg" data-l="2"></span><span class="mb-seg" data-l="3"></span><span class="mb-seg" data-l="4"></span>
+    </span>
+    <span class="mb-txt"><b id="mbName">Medium control</b><span id="mbSub">auto-tightens as the night goes on</span></span>
+    <span class="mb-go">›</span>
+  </button>
+
   <section class="gauge-card">
     <div id="demoBanner" class="demo" hidden><span>DEMO NIGHT</span><button id="demoExit">exit demo</button></div>
     <div class="gauge-wrap"><svg id="gauge" viewBox="0 0 300 168" aria-hidden="true"></svg></div>
@@ -317,14 +382,15 @@
       <div class="bac-num"><span id="bacNum">0.00</span><span class="permille">‰</span></div>
       <div class="zone-tag" id="zoneTag">CLEAR</div>
     </div>
+    <div id="lightNext"><small>NEXT WATER</small><span id="lnCount">20:00</span></div>
     <p id="coachLine" class="coach">Tap your first drink when the night starts — I'll keep count and keep you on track.</p>
     <div id="projRow" class="proj" hidden>
       <span id="projDrive"></span><span id="projSober"></span>
     </div>
+    <button id="startBtn" type="button" hidden>▶ Start the night</button>
   </section>
 
   <section class="actions">
-    <button id="waterBtn" class="water-btn">💧 I drank water</button>
     <div id="paceChip" class="pace-chip">no drinks yet</div>
   </section>
   <div id="upnext" class="upnext" hidden></div>
@@ -347,20 +413,20 @@
     <span class="wc-go">›</span>
   </button>
 
-  <section class="stats" aria-label="Tonight so far">
+  <section class="stats m2" aria-label="Tonight so far">
     <div class="stat"><b id="stDrinks">0</b><span>drinks</span></div>
     <div class="stat"><b id="stUnits">0.0</b><span>std units</span></div>
     <div class="stat"><b id="stWaters">0</b><span>waters</span></div>
     <div class="stat"><b id="stSince">–</b><span>since last</span></div>
   </section>
 
-  <section>
+  <section class="m2">
     <h2 class="eyebrow">Log a drink</h2>
     <p class="cat-note">Cocktails are counted by the booze actually in them.</p>
     <div id="drinkMenu"></div>
   </section>
 
-  <section>
+  <section class="m2">
     <h2 class="eyebrow">Tonight</h2>
     <ol id="logList" class="log"></ol>
     <p id="logEmpty" class="log-empty">Nothing yet. The first one starts the clock.</p>
@@ -371,6 +437,12 @@
     <p class="fineprint">Estimates only (Widmark / Watson formulas). Food, medication and your body change the real number — if you can feel the drinks, don't drive. Not medical advice.</p>
     <p class="fineprint">Strongest alarms: install on your phone (⚙︎ → Install), enable lock-screen alarms, and keep Clearhead open during the night with 🛡 armed.</p>
   </footer>
+
+  <div id="quickbar">
+    <button id="waterBtn" class="qb water" type="button">💧 Water</button>
+    <button id="qbDrink" class="qb drink m2" type="button">🍺 <span class="qlbl" id="qbDrinkLbl">Drink</span></button>
+    <button id="qbFocus" class="qb focus" type="button" aria-label="Open the big timer">⛶</button>
+  </div>
 </div>
 
 <!-- onboarding -->
@@ -389,6 +461,15 @@
       <div class="field"><label>Weight kg</label><input id="obWeight" type="number" inputmode="decimal" min="35" max="250" placeholder="78"></div>
       <div class="field"><label>Height cm</label><input id="obHeight" type="number" inputmode="numeric" min="120" max="230" placeholder="178"></div>
       <div class="field"><label>Age</label><input id="obAge" type="number" inputmode="numeric" min="16" max="99" placeholder="30"></div>
+    </div>
+    <div class="field"><label>Tonight’s control level</label>
+      <div class="seg" id="obMode">
+        <button type="button" data-v="1">💧 Light</button>
+        <button type="button" data-v="2" class="on">🍺 Medium</button>
+        <button type="button" data-v="3">🔥 Hard</button>
+        <button type="button" data-v="4">🛡 Total</button>
+      </div>
+      <p class="tiny" style="margin-top:6px">Light = water reminders only · Total = it also gets you home. Auto-tightens as the night gets late.</p>
     </div>
     <div class="field"><label>Planned max drinks tonight</label>
       <select id="obCap">
@@ -581,14 +662,32 @@
   </div>
 </div>
 
-<!-- table mode: phone flat on the table, screen stays on, dim countdown -->
-<div id="tableMode" hidden>
-  <div class="tm-eyebrow" id="tmEyebrow">NEXT DRINK</div>
-  <div class="tm-count" id="tmCount">45:00</div>
-  <div class="tm-at" id="tmAt"></div>
-  <div class="tm-water" id="tmWater"></div>
-  <div class="tm-bac" id="tmBac"></div>
-  <div class="tm-hint">screen stays on · tap anywhere to close</div>
+<!-- focus: glanceable big timer with quick actions — phone on the table, one thumb -->
+<div id="focus" hidden>
+  <button id="fxClose" type="button" aria-label="Close">✕</button>
+  <div class="fx-clock" id="fxClock">--:--</div>
+  <div class="fx-eyebrow" id="fxEyebrow">NEXT DRINK</div>
+  <div class="fx-count" id="fxCount">45:00</div>
+  <div class="fx-sub" id="fxSub"></div>
+  <div class="fx-meta" id="fxMeta"></div>
+  <div class="fx-btns">
+    <button id="fxWater" type="button">💧<span>water</span></button>
+    <button id="fxDrink" type="button">🍺<span>drink</span></button>
+    <button id="fxHome" type="button" hidden>🏠<span>home</span></button>
+  </div>
+  <div class="fx-hint">screen stays on · alarms still ring</div>
+</div>
+
+<!-- control level picker -->
+<div id="modeDlg" class="overlay" hidden>
+  <div class="panel">
+    <h2>Control level</h2>
+    <p class="sub">How tight should Clearhead hold the reins tonight? It auto-tightens as it gets late, the session drags on, or alarms get ignored — it never loosens mid-night.</p>
+    <div id="moptHost"></div>
+    <div class="sheet-actions">
+      <button id="modeClose" class="ghost-btn" type="button">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- your why: reasons editor -->
@@ -649,7 +748,15 @@ const API = '/api/clearhead';
 // lives only in the deployment's VAPID_PRIVATE env var).
 const VAPID_PUBLIC = 'BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs';
 const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5,
-  reasons:[], reflectMin:30, reflectOn:true, drinkCost:12, currency:'CHF'};
+  reasons:[], reflectMin:30, reflectOn:true, drinkCost:12, currency:'CHF', startMode:2};
+// Control levels: how tight Clearhead holds the reins. The floor only ever rises
+// during a night (later hour, long session, ignored alarms) — never drops.
+const MODES = [null,
+  {k:'light',  n:'Light',  icon:'💧', tag:'Water reminders only — an easy one.'},
+  {k:'medium', n:'Medium', icon:'🍺', tag:'Counts your drinks and paces the next.'},
+  {k:'hard',   n:'Hard',   icon:'🔥', tag:'Caps, alarms and your-why check-ins.'},
+  {k:'total',  n:'Total',  icon:'🛡️', tag:'Everything on — and it gets you home.'},
+];
 const ETH = 0.789;               // g of ethanol per ml
 const ABSORB_MS = 30 * 60000;    // linear absorption ramp per drink
 const BETA = 0.15;               // elimination, permille per hour
@@ -733,9 +840,10 @@ const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platf
 const STANDALONE = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
 const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const normProfile = p => p ? {...PROFILE_DEFAULTS, ...p} : null;
-let tableOpen = false, tmPrevWake = false, lastTimerMin = -1;
+let focusOpen = false, fxPrevWake = false, lastTimerMin = -1;
 let safeModeOpen = false, smPrevWake = false, geoWatchId = null, holdTimer = null;
 let reflectOpen = false, reflectTimer = null, whyPickTag = '';
+let alarmShownAt = 0, alarmCounted = false; // an alarm left ringing >90s counts as ignored
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -876,9 +984,11 @@ async function swNotify(title, body, urgent){
   try{
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     const opts = {body, tag:'clearhead-alarm', renotify:true, requireInteraction:!!urgent,
-      vibrate:[400,150,400,150,600], icon:'icon-192.png', data:{url:'./'}};
+      vibrate:[400,150,400,150,600], icon:'icon-192.png', data:{url:'./#focus'},
+      // quick buttons on the notification itself (Android; iOS ignores them)
+      actions:[{action:'water', title:'💧 Logged water'}, {action:'focus', title:'⏱ Timer'}]};
     if (swReg && swReg.showNotification) await swReg.showNotification(title, opts);
-    else new Notification(title, opts);
+    else new Notification(title, {body, tag:opts.tag, icon:opts.icon});
   }catch(e){}
 }
 
@@ -1114,7 +1224,8 @@ async function updateTimerSurfaces(){
       await swReg.showNotification('⏱ Next drink in ' + minLeft + ' min — at ' + fmtClock(gapEnd), {
         tag:'clearhead-timer', silent:true,
         body:(waterDone ? '💧 water done ✓' : '💧 drink one water before the next') + ' · ' + bac.toFixed(2) + '‰ ' + ZONES[zoneOf(bac)].key,
-        icon:'icon-192.png', badge:'icon-192.png', data:{url:'./'},
+        icon:'icon-192.png', badge:'icon-192.png', data:{url:'./#focus'},
+        actions:[{action:'water', title:'💧 Logged water'}, {action:'drink', title:'🍺 Had one'}],
       });
     } else {
       const ns = await swReg.getNotifications({tag:'clearhead-timer'});
@@ -1130,47 +1241,189 @@ async function clearTimerSurfaces(){
   }catch(e){}
 }
 
-/* ============================== table mode ============================== */
-// Phone flat on the table: a dim, always-on countdown screen (wake lock held).
-function openTableMode(){
-  if (!session || !session.drinks.length){ toast('Log a drink first — then I have something to count. 🍸'); return; }
-  tableOpen = true;
-  tmPrevWake = wantWake;
-  setWake(true);
-  $('tableMode').hidden = false;
-  renderTableMode();
+/* ============================== control modes ============================== */
+// The floor a running night may not drop below: rises with the hour, the length
+// of the session and how many alarms went ignored. Insurance against drunk-you.
+function waterAnchor(){
+  // last water-relevant moment for a drink-less (light) session
+  const lastW = session.waters.length ? session.waters[session.waters.length - 1].t : 0;
+  return Math.max(session.startedAt, session.lastWaterFire || 0, lastW);
 }
-function closeTableMode(){
-  if (!tableOpen) return;
-  tableOpen = false;
-  $('tableMode').hidden = true;
-  if (!tmPrevWake) setWake(false);
+function modeFloor(now){
+  if (!session || session.demo) return 1;
+  const d = new Date(now);
+  const late = d.getHours() + d.getMinutes()/60 + (d.getHours() < 7 ? 24 : 0);
+  let f = late >= 26 ? 4 : late >= 24.5 ? 3 : late >= 23 ? 2 : 1;
+  const dur = now - session.startedAt;
+  if (dur >= 6.5*3600000) f = Math.max(f, 4); else if (dur >= 5*3600000) f = Math.max(f, 3);
+  const ign = session.ignored || 0;
+  if (ign >= 4) f = Math.max(f, 4); else if (ign >= 2) f = Math.max(f, 3);
+  return f;
 }
-function renderTableMode(){
-  if (!tableOpen) return;
-  const now = Date.now();
-  const last = session && session.drinks.length ? session.drinks[session.drinks.length - 1] : null;
-  if (!last){ closeTableMode(); return; }
-  const gapEnd = last.t + profile.gapMin * 60000;
-  const remMs = gapEnd - now;
-  const waterDone = session.waters.some(w => w.t > last.t);
-  const bac = simulate(session.drinks, now).bac;
-  const count = $('tmCount');
-  if (remMs > 0){
-    $('tmEyebrow').textContent = 'NEXT DRINK';
-    count.textContent = fmtMMSS(remMs);
-    count.classList.remove('ready');
-    $('tmAt').textContent = 'at ' + fmtClock(gapEnd);
+function modeLevel(){
+  if (!session) return (profile && profile.startMode) || 2;
+  return Math.max(session.mode || session.modeChosen || 2, modeFloor(Date.now()));
+}
+function floorWhy(now, f){
+  const d = new Date(now);
+  const late = d.getHours() + d.getMinutes()/60 + (d.getHours() < 7 ? 24 : 0);
+  const timeF = late >= 26 ? 4 : late >= 24.5 ? 3 : late >= 23 ? 2 : 1;
+  if (timeF >= f) return 'it’s past ' + (f === 4 ? '2:00' : f === 3 ? '0:30' : '23:00');
+  if ((session.ignored || 0) >= 2) return session.ignored + ' alarms ignored';
+  return 'you’ve been out ' + fmtDur(now - session.startedAt);
+}
+function checkMode(now){
+  if (!session || session.demo || session.endedAt) return;
+  const f = modeFloor(now);
+  const lvl = Math.max(session.mode || session.modeChosen || ((profile && profile.startMode) || 2), f);
+  if (lvl === session.mode) return;
+  const up = !!session.mode && lvl > session.mode;
+  session.mode = lvl; saveSession(); renderMode();
+  if (!up) return;
+  const M = MODES[lvl];
+  const why = floorWhy(now, f);
+  toast('⬆ Control moved to ' + M.n + ' — ' + why + '.', 'warn');
+  chime('soft'); buzz([160, 90, 160]);
+  swNotify('⬆ ' + M.n + ' control now', why + ' — ' + M.tag, lvl >= 3);
+  if (lvl === 4) enterTotal();
+  renderAll();
+}
+function enterTotal(){
+  const s = session.safe;
+  if (s && (s.armed || s.reached)) return;
+  if (profile.home){
+    armSafe(Date.now() + 75*60000); // be home in ~75 min; adjustable in the dialog
   } else {
-    const overCap = profile.cap && session.drinks.length >= profile.cap;
-    $('tmEyebrow').textContent = overCap ? 'CAP REACHED' : (bac >= 0.8 ? 'HOLD ON' : 'CLEAR');
-    count.textContent = overCap ? '🏁' : (bac >= 0.8 ? '🛑' : '✓');
-    count.classList.add('ready');
-    $('tmAt').textContent = overCap ? 'water rounds from here' : (bac >= 0.8 ? 'let the level drop first' : 'if you want one — no rush');
+    toast('🛡 Total control: set your home in “Get home safe” so I can bring you back.', 'warn');
+    swNotify('🏠 Set your home', 'Total control wants to get you home safe — add your address in Clearhead.', true);
   }
-  $('tmWater').textContent = waterDone ? '💧 water done ✓' : '💧 one water before the next';
-  $('tmWater').classList.toggle('done', waterDone);
-  $('tmBac').textContent = bac.toFixed(2) + '‰ · ' + ZONES[zoneOf(bac)].key;
+}
+function setModeChoice(n){
+  if (!profile) return;
+  if (!session){
+    profile.startMode = n; store.set(LS.profile, profile);
+    toast(MODES[n].icon + ' Tonight starts at ' + MODES[n].n + ' control.');
+  } else {
+    const f = modeFloor(Date.now());
+    session.modeChosen = n;
+    session.mode = Math.max(n, f);
+    saveSession();
+    if (n < f) toast('It’s a ' + MODES[f].n.toLowerCase() + '-minimum night now (' + floorWhy(Date.now(), f) + ') — can’t go below that.', 'warn');
+    else toast(MODES[session.mode].icon + ' ' + MODES[session.mode].n + ' control.');
+    if (session.mode === 4) enterTotal();
+  }
+  renderMode(); renderAll();
+  $('modeDlg').hidden = true;
+}
+function renderMode(){
+  const lvl = modeLevel();
+  document.body.classList.remove('md1','md2','md3','md4');
+  document.body.classList.add('md' + lvl);
+  for (const seg of document.querySelectorAll('.mb-seg')) seg.classList.toggle('on', parseInt(seg.dataset.l, 10) <= lvl);
+  $('mbName').textContent = MODES[lvl].n + ' control';
+  const f = session ? modeFloor(Date.now()) : 1;
+  $('mbSub').textContent = (session && f > (session.modeChosen || 0) && f === lvl)
+    ? 'auto-raised — ' + floorWhy(Date.now(), f)
+    : 'auto-tightens as the night goes on';
+}
+function openModeDlg(){
+  const lvl = modeLevel();
+  const f = session ? modeFloor(Date.now()) : 1;
+  $('moptHost').innerHTML = MODES.slice(1).map((m, i) => {
+    const n = i + 1;
+    const locked = session && n < f;
+    return `<button type="button" class="mopt${n === lvl ? ' cur' : ''}${locked ? ' locked' : ''}" data-l="${n}">
+      <span class="mi">${m.icon}</span>
+      <span style="flex:1;min-width:0"><span class="mn">${m.n}</span><span class="mt">${m.tag}</span></span>
+      <span class="mstate">${n === lvl ? 'NOW' : locked ? '🔒 BELOW MIN' : ''}</span>
+    </button>`;
+  }).join('');
+  $('modeDlg').hidden = false;
+}
+function startNight(){
+  ensureAudio();
+  if (session || !profile) return;
+  session = freshSession();
+  saveSession();
+  checkMode(Date.now());
+  if (profile.autoWatch && modeLevel() >= 2 && !watchArmed) armWatch(); // inside the tap gesture
+  syncPushSchedule();
+  toast('🌙 Night started — ' + MODES[modeLevel()].n + ' control. I’ve got you.');
+  renderMode(); renderAll();
+}
+
+/* ============================== focus (big timer) ============================== */
+// Glanceable full-screen timer with one-thumb quick actions; wake lock held.
+function openFocus(){
+  if (!profile) return;
+  if (!session){ startNight(); }
+  focusOpen = true;
+  fxPrevWake = wantWake;
+  setWake(true);
+  $('focus').hidden = false;
+  renderFocus();
+}
+function closeFocus(){
+  if (!focusOpen) return;
+  focusOpen = false;
+  $('focus').hidden = true;
+  if (!fxPrevWake) setWake(false);
+}
+function repeatDrink(){
+  const last = session && session.drinks.length ? session.drinks[session.drinks.length - 1] : null;
+  if (last) logDrink({n:last.n, e:last.e, ml:last.ml, abv:last.abv});
+  else { closeFocus(); $('drinkMenu').scrollIntoView({behavior:'smooth'}); toast('Pick your first drink from the list. 🍸'); }
+}
+function renderFocus(){
+  if (!focusOpen || !session) return;
+  const now = Date.now();
+  const lvl = modeLevel();
+  $('fxClock').textContent = fmtClock(now);
+  const last = session.drinks.length ? session.drinks[session.drinks.length - 1] : null;
+  const bac = last ? simulate(session.drinks, now).bac : 0;
+  const s = session.safe;
+  const count = $('fxCount');
+  count.classList.remove('ready');
+
+  if (s && s.armed && !s.reached && s.deadline - now < 20*60000){
+    // getting home is the thing that matters now
+    const rem = s.deadline - now;
+    $('fxEyebrow').textContent = rem > 0 ? 'HEAD HOME BY ' + fmtClock(s.deadline) : 'GET HOME NOW';
+    count.textContent = rem > 0 ? fmtHMS(rem) : '+' + fmtHMS(-rem);
+    $('fxSub').textContent = fmtDist((profile.home && s.lastFix) ? distM(s.lastFix, profile.home) : null);
+    $('fxSub').className = 'fx-sub';
+  } else if (last && lvl >= 2){
+    const gapEnd = last.t + profile.gapMin * 60000;
+    const remMs = gapEnd - now;
+    const waterDone = session.waters.some(w => w.t > last.t);
+    if (remMs > 0){
+      $('fxEyebrow').textContent = 'NEXT DRINK';
+      count.textContent = fmtMMSS(remMs);
+    } else {
+      const overCap = profile.cap && session.drinks.length >= profile.cap;
+      $('fxEyebrow').textContent = overCap ? 'CAP REACHED' : (bac >= 0.8 ? 'HOLD ON' : 'CLEAR');
+      count.textContent = overCap ? '🏁' : (bac >= 0.8 ? '🛑' : '✓');
+      count.classList.add('ready');
+    }
+    $('fxSub').textContent = waterDone ? '💧 water done ✓' : '💧 one water before the next';
+    $('fxSub').className = 'fx-sub' + (waterDone ? ' done' : '');
+  } else {
+    // light (or nothing logged yet): the water clock is the show
+    const rem = waterAnchor() + profile.waterMin * 60000 - now;
+    $('fxEyebrow').textContent = 'NEXT WATER';
+    count.textContent = rem > 0 ? fmtMMSS(rem) : '💧';
+    if (rem <= 0) count.classList.add('ready');
+    $('fxSub').textContent = rem > 0 ? '' : 'water break — tap the drop';
+    $('fxSub').className = 'fx-sub';
+  }
+
+  const bits = [];
+  if (lvl >= 2 && session.drinks.length) bits.push(bac.toFixed(2) + '‰ ' + ZONES[zoneOf(bac)].key, session.drinks.length + (session.drinks.length === 1 ? ' drink' : ' drinks'));
+  bits.push(session.waters.length + '💧', fmtDur(now - session.startedAt) + ' out');
+  $('fxMeta').textContent = bits.join('  ·  ');
+
+  $('fxDrink').hidden = lvl < 2;
+  $('fxHome').hidden = !(s && s.armed && !s.reached);
 }
 
 /* ============================== get home safe ============================== */
@@ -1413,7 +1666,8 @@ function nextReason(){
 }
 function checkReflect(now){
   if (!profile || !profile.reflectOn || !session || session.demo || !session.drinks.length) return;
-  if (reflectOpen || !$('alarm').hidden || safeModeOpen || tableOpen) return; // never stack over a bigger moment
+  if (modeLevel() < 2) return; // light nights stay quiet
+  if (reflectOpen || !$('alarm').hidden || safeModeOpen || focusOpen) return; // never stack over a bigger moment
   if (!session.lastReflect) session.lastReflect = session.drinks[0].t;
   if (now - session.lastReflect < (profile.reflectMin || 30) * 60000) return;
   const r = nextReason();
@@ -1500,7 +1754,8 @@ function toast(msg, cls){
 }
 function fireAlarm(o){ // {prio, kind:'water'|'strong'|'danger', icon, title, msg, waterAction}
   if (!$('alarm').hidden && o.prio < alarmPrio) { swNotify(o.title, o.msg, o.prio >= 2); return; }
-  closeTableMode(); // the alarm takes over the screen
+  closeFocus(); // the alarm takes over the screen
+  alarmShownAt = Date.now(); alarmCounted = false;
   alarmPrio = o.prio;
   $('alarmPanel').className = 'panel alarm-panel k-' + o.kind;
   $('alIcon').textContent = o.icon;
@@ -1514,7 +1769,9 @@ function closeAlarm(){ stopStorm(); $('alarm').hidden = true; alarmPrio = 0; }
 
 /* ============================== session logic ============================== */
 function freshSession(){
-  return {startedAt:Date.now(), drinks:[], waters:[], fired:{}, maxZone:0, nextId:1, demo:false, lastReflect:0, reasonIdx:0};
+  const m = (profile && profile.startMode) || 2;
+  return {startedAt:Date.now(), drinks:[], waters:[], fired:{}, maxZone:0, nextId:1, demo:false, lastReflect:0, reasonIdx:0,
+    modeChosen:m, mode:m, ignored:0, lastWaterFire:0};
 }
 function lastActivity(s){
   let t = s.startedAt;
@@ -1590,7 +1847,16 @@ function removeEntry(kind, id){
 
 /* ============================== alerts loop ============================== */
 function checkAlerts(now){
-  if (!session || !session.drinks.length || !$('alarm')) return;
+  if (!session || !$('alarm')) return;
+  if (!session.drinks.length){
+    // no drinks logged (a light night): a steady water rhythm from the session clock
+    if (now >= waterAnchor() + profile.waterMin * 60000){
+      session.lastWaterFire = now; saveSession();
+      fireAlarm({prio:1, kind:'water', icon:'💧', title:'Water o’clock', waterAction:true,
+        msg:'Round of water — it keeps the night long and the morning kind.'});
+    }
+    return;
+  }
   const last = session.drinks[session.drinks.length - 1];
   const bac = simulate(session.drinks, now).bac;
 
@@ -1678,7 +1944,10 @@ function renderAll(){
   tag.textContent = Z.key;
   tag.style.setProperty('--zc', Z.c);
   tag.classList.toggle('pulse', z >= 3);
-  $('coachLine').textContent = hasDrinks ? Z.msg : 'Tap your first drink when the night starts — I’ll keep count and keep you on track.';
+  $('coachLine').textContent = hasDrinks ? Z.msg
+    : (session && modeLevel() === 1) ? 'Easy night. I’ll nudge you for water every ' + profile.waterMin + ' minutes — that’s all.'
+    : session ? 'Clock’s running. Tap your first drink when it lands.'
+    : 'Start the night (or tap your first drink) and I’ll keep count and keep you on track.';
 
   // projections
   if (hasDrinks && bac > 0.05){
@@ -1700,9 +1969,22 @@ function renderAll(){
   $('stSince').textContent = last ? (sinceM < 60 ? sinceM + 'm' : Math.floor(sinceM/60) + 'h' + two(sinceM%60)) : '–';
 
   // header
-  $('elapsed').hidden = !hasDrinks;
-  if (hasDrinks) $('elapsed').textContent = fmtDur(now - session.drinks[0].t);
+  const running = !!(session && !session.endedAt);
+  $('elapsed').hidden = !running;
+  if (running) $('elapsed').textContent = fmtDur(now - (hasDrinks ? session.drinks[0].t : session.startedAt));
   $('demoBanner').hidden = !(session && session.demo);
+  $('startBtn').hidden = !!session;
+  renderMode();
+
+  // light mode: the water clock is the hero
+  if (session && modeLevel() === 1){
+    const rem = waterAnchor() + profile.waterMin * 60000 - now;
+    $('lnCount').textContent = rem > 0 ? fmtMMSS(rem) : '💧 now';
+  } else if (!session) $('lnCount').textContent = fmtMMSS(profile.waterMin * 60000);
+
+  // quick bar: repeat-a-drink label
+  const lastD = hasDrinks ? session.drinks[session.drinks.length - 1] : null;
+  $('qbDrinkLbl').textContent = lastD ? (lastD.e + ' again') : 'Drink';
 
   // pace chip
   const chip = $('paceChip');
@@ -1910,11 +2192,11 @@ function init(){
   });
 
   // onboarding
-  wireSeg('obSex'); wireSeg('seSex');
+  wireSeg('obSex'); wireSeg('seSex'); wireSeg('obMode');
   $('obStart').addEventListener('click', () => {
     const p = readProfileForm('ob');
     if (!p) return;
-    profile = {...PROFILE_DEFAULTS, ...p, cap:parseInt($('obCap').value, 10)};
+    profile = {...PROFILE_DEFAULTS, ...p, cap:parseInt($('obCap').value, 10), startMode:parseInt(segVal('obMode') || '2', 10)};
     store.set(LS.profile, profile);
     $('onboard').hidden = true; $('app').hidden = false;
     renderAll();
@@ -1944,8 +2226,46 @@ function init(){
   });
   $('endBtn').addEventListener('click', endNight);
   $('suDone').addEventListener('click', finishSummary);
-  $('paceChip').addEventListener('click', openTableMode);
-  $('tableMode').addEventListener('click', closeTableMode);
+
+  // control level + session start
+  $('modeBar').addEventListener('click', openModeDlg);
+  $('modeClose').addEventListener('click', () => { $('modeDlg').hidden = true; });
+  $('moptHost').addEventListener('click', e => {
+    const b = e.target.closest('.mopt'); if (!b) return;
+    setModeChoice(parseInt(b.dataset.l, 10));
+  });
+  $('startBtn').addEventListener('click', startNight);
+
+  // focus screen + quick bar
+  $('paceChip').addEventListener('click', openFocus);
+  $('qbFocus').addEventListener('click', openFocus);
+  $('fxClose').addEventListener('click', closeFocus);
+  $('fxWater').addEventListener('click', () => { logWater(); renderFocus(); });
+  $('fxDrink').addEventListener('click', () => { repeatDrink(); renderFocus(); });
+  $('fxHome').addEventListener('click', claimHome);
+  $('qbDrink').addEventListener('click', repeatDrink);
+
+  // quick actions arriving from notification buttons / links
+  const doQuickAct = a => {
+    if (!profile) return;
+    if (a === 'water') logWater();
+    else if (a === 'drink') repeatDrink();
+    else if (a === 'focus') openFocus();
+  };
+  const handleHash = () => {
+    const h = location.hash;
+    if (h === '#demo') return; // handled at startup
+    if (h === '#focus') openFocus();
+    else if (h.startsWith('#act=')) doQuickAct(h.slice(5));
+    if (h) history.replaceState(null, '', location.pathname + location.search);
+  };
+  window.addEventListener('hashchange', handleHash);
+  try{
+    navigator.serviceWorker.addEventListener('message', e => {
+      const a = e.data && e.data.act; if (a) doQuickAct(a);
+    });
+  }catch(e){}
+  setTimeout(handleHash, 300); // after first render (and after a notification tap cold-start)
 
   // get home safe
   $('safeCard').addEventListener('click', () => {
@@ -2126,12 +2446,19 @@ function init(){
 
   setInterval(() => {
     if (!profile || $('app').hidden) return;
+    const now = Date.now();
+    // an alarm left ringing counts as ignored — and tightens the control floor
+    if (!$('alarm').hidden && !alarmCounted && now - alarmShownAt > 90000){
+      alarmCounted = true;
+      if (session && !session.demo){ session.ignored = (session.ignored || 0) + 1; saveSession(); }
+    }
+    checkMode(now);
     renderAll();
-    renderTableMode();
+    renderFocus();
     renderSafeMode();
-    checkAlerts(Date.now());
-    checkSafe(Date.now());
-    checkReflect(Date.now());
+    checkAlerts(now);
+    checkSafe(now);
+    checkReflect(now);
     updateTimerSurfaces();
   }, 1000);
 }

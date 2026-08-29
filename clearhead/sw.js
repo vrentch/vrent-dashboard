@@ -2,7 +2,7 @@
    Location-agnostic: all URLs resolve relative to this script's scope. */
 'use strict';
 
-const CACHE = 'clearhead-v2';
+const CACHE = 'clearhead-v3';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-mask-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
@@ -59,16 +59,27 @@ self.addEventListener('push', (e) => {
     vibrate: d.urgent ? [400, 150, 400, 150, 700, 200, 700] : [300, 120, 300, 120, 500],
     icon: './icon-192.png',
     badge: './icon-192.png',
-    data: { url: d.url || './' },
+    data: { url: d.url || './#focus' },
+    // quick buttons on the notification itself (Android; iOS ignores them)
+    actions: [{ action: 'water', title: '💧 Logged water' }, { action: 'focus', title: '⏱ Timer' }],
   }));
 });
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || './';
+  const act = e.action || '';
+  let url = (e.notification.data && e.notification.data.url) || './#focus';
+  if (act === 'water') url = './#act=water';
+  else if (act === 'drink') url = './#act=drink';
+  else if (act === 'focus') url = './#focus';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
     for (const c of list) {
-      if (c.url.startsWith(self.registration.scope) && 'focus' in c) return c.focus();
+      if (c.url.startsWith(self.registration.scope) && 'focus' in c) {
+        // app already open: hand it the action instead of reloading it
+        if (act) c.postMessage({ act });
+        else c.postMessage({ act: 'focus' });
+        return c.focus();
+      }
     }
     return self.clients.openWindow(url);
   }));

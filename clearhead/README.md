@@ -42,6 +42,26 @@ The function reports `configured:false` until the Vercel project has:
 
 Then redeploy. Without these, layers 1–2 still work fully.
 
+## Control levels
+
+Pick how tight Clearhead holds the reins — it shapes the whole UI:
+
+- **Light** 💧 — just a session clock and a water reminder every ~20 min.
+- **Medium** 🍺 — + one-tap drink logging, pacing countdown, drink counter.
+- **Hard** 🔥 — + caps, zone alarms and "your why" check-ins.
+- **Total** 🛡 — everything, and get-home-safe auto-arms (with your saved
+  address) so the night ends at home.
+
+The level **auto-tightens** and never loosens mid-night: after 23:00 the floor
+is Medium, after 00:30 Hard, after 02:00 Total; very long sessions and ignored
+alarms (2 = Hard, 4 = Total) raise it too. You can always go stricter by hand.
+
+**Focus screen** ⛶ — a full-screen glanceable timer (next drink / next water /
+get-home countdown) with giant one-thumb Water / Drink / Home buttons; wake
+lock keeps it on. Notification taps open straight into it, and on Android the
+notifications carry quick-action buttons (log water / had one) so the phone
+barely needs unlocking.
+
 ## What it tracks
 
 - **Profile**: sex, weight, height, age → Widmark formula refined with the
@@ -76,8 +96,9 @@ Never a green light to drive. Not medical advice. Emergencies in CH: 144.
 
 The app is deployed file-based to the Vercel project `clearhead`
 (production alias `clearhead-vrentchs-projects.vercel.app`). `build.mjs`
-generates the icons at build time and unpacks `index.html` from the
-`chunk-NN.b64` files (gzip+base64 of `index.html`, split into ≤900-char
-pieces for transport; regenerate with `gzip -9 -c index.html | base64 -w0`
-and re-split if you edit the app). `index.html` in this folder is the
-canonical source.
+generates the icons at build time and copies `index.html`, `sw.js` and
+`manifest.webmanifest` into `public/`; when those files aren't shipped
+alongside it (a minimal deploy carrying only `build.mjs`, `package.json`
+and `api/`), it fetches the identical bytes from this public repo instead —
+deploys pin an immutable commit SHA. `index.html` in this folder is the
+canonical source; push it before deploying.

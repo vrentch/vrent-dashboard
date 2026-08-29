@@ -1,7 +1,6 @@
-// Build step: generate the app icons (indexed-color PNGs, no dependencies),
-// unpack index.html from its gzip+base64 transport form, and assemble the
-// static output in public/. Runs on Vercel via `npm run build`.
-import { deflateSync, gunzipSync } from 'node:zlib';
+// Build step: generate the app icons (indexed-color PNGs, no dependencies)
+// and assemble the static output in public/. Runs on Vercel via `npm run build`.
+import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync, copyFileSync, readFileSync, existsSync } from 'node:fs';
 
 const PAL = [
@@ -92,44 +91,26 @@ png(render(512), 'public/icon-512.png');
 png(render(512, 0.74), 'public/icon-mask-512.png');
 png(render(192), 'public/icon-192.png');
 png(render(180), 'public/apple-touch-icon.png');
-// index.html normally assembles from the local gzip+base64 chunks (chunk-00.b64 ..
-// chunk-47.b64; gzip's CRC catches any transport error, per-chunk md5 logs pinpoint
-// where). When those chunks aren't shipped — a size-limited inline deploy carries
-// only this script plus the static files — fall back to fetching the exact same
-// index.html from the app's own public repo, pinned to an immutable commit. The
-// bytes are identical either way; the md5 logged below proves which was produced.
+// index.html / sw.js / manifest.webmanifest: copy the local files when present
+// (normal repo build). When they aren't shipped — a size-limited inline deploy
+// carries only this script plus package.json and api/ — fetch the exact same
+// bytes from the app's own public repo instead (deploys pin an immutable commit
+// SHA here; the repo copy falls back to the working branch).
 const { createHash } = await import('node:crypto');
 const md5 = (s) => createHash('md5').update(s).digest('hex').slice(0, 12);
-const HTML_SRC = 'https://raw.githubusercontent.com/vrentch/vrent-dashboard/7379b8d7985d0e43de89ea643f164d8a4a5818eb/clearhead/index.html';
-let html;
-if (existsSync('chunk-00.b64')) {
-  const PARTS = Array.from({ length: 48 }, (_, i) => String(i).padStart(2, '0'));
-  let b64 = '';
-  for (const p of PARTS) {
-    const part = readFileSync(`chunk-${p}.b64`, 'utf8').replace(/\s+/g, '');
-    console.log(`chunk-${p} md5 ${md5(part)} len ${part.length}`);
-    b64 += part;
-  }
-  html = gunzipSync(Buffer.from(b64, 'base64'));
-} else {
-  console.log('chunks absent — fetching index.html from', HTML_SRC);
-  const r = await fetch(HTML_SRC);
-  if (!r.ok) throw new Error('index.html fetch failed: ' + r.status);
-  html = Buffer.from(await r.arrayBuffer());
+const SRC = 'https://raw.githubusercontent.com/vrentch/vrent-dashboard/claude/alcohol-intake-tracker-3sblp4/clearhead/';
+async function localOrFetch(f, out) {
+  if (existsSync(f)) { copyFileSync(f, out); return readFileSync(f); }
+  const r = await fetch(SRC + f);
+  if (!r.ok) throw new Error(f + ' fetch failed: ' + r.status);
+  const buf = Buffer.from(await r.arrayBuffer());
+  writeFileSync(out, buf);
+  console.log('fetched', f);
+  return buf;
 }
-writeFileSync('public/index.html', html);
+const html = await localOrFetch('index.html', 'public/index.html');
+await localOrFetch('sw.js', 'public/sw.js');
+await localOrFetch('manifest.webmanifest', 'public/manifest.webmanifest');
 console.log('index.html', html.length, 'bytes, md5', md5(html.toString('binary')));
 console.log('api md5', md5(readFileSync('api/clearhead.ts', 'utf8')));
-// sw.js / manifest.webmanifest: copy the local files when present, otherwise fetch
-// them from the same pinned commit (same size-limited-deploy fallback as above).
-const STATIC_SRC = 'https://raw.githubusercontent.com/vrentch/vrent-dashboard/7379b8d7985d0e43de89ea643f164d8a4a5818eb/clearhead/';
-for (const f of ['sw.js', 'manifest.webmanifest']) {
-  if (existsSync(f)) { copyFileSync(f, 'public/' + f); }
-  else {
-    const r = await fetch(STATIC_SRC + f);
-    if (!r.ok) throw new Error(f + ' fetch failed: ' + r.status);
-    writeFileSync('public/' + f, Buffer.from(await r.arrayBuffer()));
-    console.log('fetched', f);
-  }
-}
 console.log('build done');
