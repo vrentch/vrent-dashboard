@@ -451,7 +451,7 @@
   <footer class="foot">
     <button id="endBtn" class="ghost-btn">End the night</button>
     <p class="fineprint">Estimates only (Widmark / Watson formulas). Food, medication and your body change the real number — if you can feel the drinks, don't drive. Not medical advice.</p>
-    <p class="fineprint">Strongest alarms: install on your phone (⚙︎ → Install), enable lock-screen alarms, and keep Curfew open during the night with 🛡 armed.</p>
+    <p class="fineprint">Strongest alarms: install on your phone (⚙︎ → Install), allow notifications, and keep Curfew on screen during the night with 🛡 armed.</p>
   </footer>
 
   <div id="quickbar">
@@ -574,10 +574,10 @@
       <div class="field"><label>&nbsp;</label><span></span></div>
     </div>
     <div class="row2">
-      <button id="sePush" class="ghost-btn" type="button">Lock-screen alarms</button>
+      <button id="sePush" class="ghost-btn" type="button">Notifications</button>
       <button id="seInstall" class="ghost-btn" type="button">Install on phone</button>
     </div>
-    <p id="iosHint" class="tiny" hidden>iPhone: open this page in Safari → Share → <b>Add to Home Screen</b>. Lock-screen alarms need the installed app.</p>
+    <p id="iosHint" class="tiny" hidden>iPhone: open this page in Safari → Share → <b>Add to Home Screen</b>. Alarms ring best from the installed app.</p>
     <div class="row2" style="margin-top:10px">
       <button id="seTest" class="ghost-btn" type="button">Test the full alarm</button>
       <button id="seLic" class="ghost-btn" type="button">Unlock status</button>
@@ -714,7 +714,7 @@
     <ul class="pay-list">
       <li>🎚 All four control levels, incl. auto-escalation</li>
       <li>🏠 Get-home-safe with address &amp; alarms</li>
-      <li>⛶ Focus timer &amp; lock-screen reminders</li>
+      <li>⛶ Focus timer &amp; smart reminders</li>
       <li>💛 Your-why check-ins &amp; night history</li>
     </ul>
     <div class="pay-price" id="payPrice">CHF 10 · once</div>
@@ -790,7 +790,6 @@
 'use strict';
 /* ============================== constants ============================== */
 const LS = {profile:'clearhead.v1.profile', session:'clearhead.v1.session', history:'clearhead.v1.history', lic:'clearhead.v1.lic'};
-const API = '/api/clearhead';
 // One-time-unlock licensing. Disarmed on the open web (free preview); the store
 // build enforces it by launching with ?lic=1 in the TWA start_url. Purchases go
 // through the store (Digital Goods API) — no account, no server, nothing about
@@ -800,10 +799,7 @@ const LIC_ENFORCED = new URLSearchParams(location.search).has('lic');
 const TRIAL_NIGHTS = 3;
 const SKU_UNLOCK = 'curfew_unlock';
 const PRICE_LABEL = 'CHF 10';  // display fallback — the store quotes the real local price
-// Curfew's own standalone VAPID identity (public half; the private half
-// lives only in the deployment's VAPID_PRIVATE env var).
-const VAPID_PUBLIC = 'BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs';
-const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5,
+const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, cap:5,
   reasons:[], reflectMin:30, reflectOn:true, drinkCost:12, currency:'CHF', startMode:2, theme:'auto'};
 // Control levels: how tight Curfew holds the reins. The floor only ever rises
 // during a night (later hour, long session, ignored alarms) — never drops.
@@ -889,7 +885,7 @@ let wakeLock = null, wantWake = false;
 let alarmPrio = 0;           // 0 none, 1 water, 2 strong, 3 danger
 let toastSeq = 0;
 let watchArmed = false, keepNodes = null, keepEl = null;
-let swReg = null, pushSub = null, deferredInstall = null;
+let swReg = null, deferredInstall = null;
 let sirenStop = null, syncT = null;
 const storm = {rering:null, vib:null, torchStop:null, rings:0, active:false};
 const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1175,53 +1171,27 @@ function stopStorm(keepOverlay){
   if (!keepOverlay) storm.rings = 0;
 }
 
-/* ============================== push alarms (server) ============================== */
-function b64ToU8(base64){
-  const pad = '='.repeat((4 - (base64.length % 4)) % 4);
-  const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(b64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-async function apiCall(op, payload){
-  try{
-    const r = await fetch(API + '?op=' + op, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload || {})});
-    const j = await r.json();
-    return !!(j && j.ok);
-  }catch(e){ return false; }
-}
+/* ============================== notifications ============================== */
+// No servers anywhere: everything rings from this page and the service
+// worker. The store build (Capacitor) hooks syncPushSchedule() below and
+// mirrors the same alarm list into native alarms scheduled by the phone
+// itself — which is what makes them ring on a locked screen.
 async function initSW(){
   if (!('serviceWorker' in navigator)) return;
   try{ swReg = await navigator.serviceWorker.register('sw.js'); }catch(e){ swReg = null; }
-  try{ if (swReg) pushSub = await swReg.pushManager.getSubscription(); }catch(e){ pushSub = null; }
-  if (pushSub && profile && profile.push) syncPushSchedule();
 }
 async function enablePush(){
   if (typeof Notification === 'undefined'){ toast('Not available here — in-app alarms still work.', 'warn'); return; }
-  if (!swReg || !('PushManager' in window)){
-    // No push here — at least get local notification permission.
-    try{
-      const p = await Notification.requestPermission();
-      toast(p === 'granted' ? '🔔 Notifications on (this device, app open).' : 'No permission — in-app alarms still work.', p === 'granted' ? '' : 'warn');
-    }catch(e){ toast('Not available here — in-app alarms still work.', 'warn'); }
-    return;
-  }
   try{
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted'){ toast('No permission — in-app alarms still work.', 'warn'); return; }
-    pushSub = (await swReg.pushManager.getSubscription())
-      || (await swReg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC)}));
-    profile.push = true; store.set(LS.profile, profile);
-    const ok = await apiCall('test', {subscription: pushSub});
-    syncPushSchedule();
-    toast(ok ? '🔒 Lock-screen alarms armed — a test just hit your phone.' : 'Registered — server push not configured yet; in-app alarms still work.', ok ? '' : 'warn');
-  }catch(e){
-    toast('Push not available here — in-app alarms still work.', 'warn');
-  }
+    const p = await Notification.requestPermission();
+    if (p !== 'granted'){ toast('No permission — in-app alarms still ring while Curfew is open.', 'warn'); return; }
+    openSettings();
+    toast('🔔 Notifications on — the drink countdown and reminders now show outside the app too.');
+  }catch(e){ toast('Not available here — in-app alarms still work.', 'warn'); }
 }
-// The pending-alarm list for the server: derived from the session, replaced
-// wholesale on every change (and cleared when the night ends).
+// The pending-alarm list: derived from the session, replaced wholesale on
+// every change (and cleared when the night ends). The store build schedules
+// exactly this list as native lock-screen alarms.
 function buildPushAlarms(){
   const out = [];
   if (session && !session.demo && session.drinks.length){
@@ -1243,9 +1213,11 @@ function buildPushAlarms(){
   return out;
 }
 function syncPushSchedule(){
-  if (!pushSub || !profile || !profile.push) return;
+  if (!profile) return;
   clearTimeout(syncT);
-  syncT = setTimeout(() => { apiCall('schedule', {subscription: pushSub, alarms: buildPushAlarms()}); }, 1200);
+  syncT = setTimeout(() => {
+    try{ if (window.CurfewNative && window.CurfewNative.setAlarms) window.CurfewNative.setAlarms(buildPushAlarms()); }catch(e){}
+  }, 1200);
 }
 
 /* ============================== lock-screen countdown ============================== */
@@ -2277,8 +2249,8 @@ function openSettings(){
   $('seTheme').value = profile.theme || 'auto';
   const pb = $('sePush');
   if (typeof Notification === 'undefined'){ pb.disabled = true; pb.textContent = '🔕 Alarms: in-app only here'; }
-  else if (profile.push && pushSub){ pb.disabled = false; pb.textContent = '🔒 Lock-screen alarms ON'; }
-  else { pb.disabled = false; pb.textContent = '🔒 Enable lock-screen alarms'; }
+  else if (Notification.permission === 'granted'){ pb.disabled = true; pb.textContent = '🔔 Notifications ON'; }
+  else { pb.disabled = false; pb.textContent = '🔔 Allow notifications'; }
   const ib = $('seInstall');
   if (STANDALONE){ ib.disabled = true; ib.textContent = '📲 Installed ✓'; }
   else if (deferredInstall){ ib.disabled = false; ib.textContent = '📲 Install on phone'; }
@@ -2358,7 +2330,7 @@ function init(){
     renderAll();
     toast('Set. Have a good one — I’ve got the counting. 🍸');
     if (!STANDALONE && (deferredInstall || IS_IOS))
-      setTimeout(() => toast('📲 Tip: install Curfew on your phone (Settings ⚙︎ → Install) for lock-screen alarms.'), 4200);
+      setTimeout(() => toast('📲 Tip: install Curfew on your phone (Settings ⚙︎ → Install) for the best alarms.'), 4200);
   });
   $('obDemo').addEventListener('click', startDemo);
   $('demoExit').addEventListener('click', exitDemo);
@@ -2578,7 +2550,6 @@ function init(){
   $('seTest').addEventListener('click', () => {
     fireAlarm({prio:2, kind:'strong', icon:'🚨', title:'Full alarm test',
       msg:'Siren, flash, vibration, notification — a real alarm does all of this until you dismiss it. Keep Curfew open tonight and it cuts through anything.'});
-    if (profile.push && pushSub) apiCall('test', {subscription: pushSub});
   });
   $('sePush').addEventListener('click', enablePush);
   $('seInstall').addEventListener('click', async () => {
@@ -2592,7 +2563,6 @@ function init(){
   });
   $('seWipe').addEventListener('click', () => {
     if (!confirm('Erase your profile, tonight’s log and history?')) return;
-    if (pushSub) apiCall('schedule', {subscription: pushSub, alarms: []});
     clearTimerSurfaces();
     stopGeoWatch(); closeSafeMode(); closeReflect();
     disarmWatch();
