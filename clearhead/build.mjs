@@ -111,6 +111,9 @@ async function localOrFetch(f, out) {
 const html = await localOrFetch('index.html', 'public/index.html');
 await localOrFetch('sw.js', 'public/sw.js');
 await localOrFetch('manifest.webmanifest', 'public/manifest.webmanifest');
+await localOrFetch('privacy.html', 'public/privacy.html');
+await localOrFetch('terms.html', 'public/terms.html');
+await localOrFetch('about.html', 'public/about.html');
 console.log('index.html', html.length, 'bytes, md5', md5(html.toString('binary')));
 console.log('api md5', md5(readFileSync('api/clearhead.ts', 'utf8')));
 console.log('build done');

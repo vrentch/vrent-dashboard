@@ -107,6 +107,21 @@
   #startBtn{width:100%; margin-top:12px; background:linear-gradient(180deg, var(--amber2), var(--amber)); color:#2a1c05; font-weight:800; font-size:17px; border-radius:12px; padding:15px; box-shadow:0 8px 22px rgba(235,163,60,.25);}
   #startBtn:active{transform:translateY(1px);}
 
+  /* ---------- licensing ---------- */
+  #licPill{display:block; width:100%; text-align:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.06em;
+    color:var(--amber2); background:color-mix(in srgb, var(--amber) 10%, transparent);
+    border:1px dashed color-mix(in srgb, var(--amber) 45%, transparent); border-radius:10px; padding:7px 10px; margin:-4px 0 12px;}
+  #licPill.out{color:#ffd9dc; border-color:var(--bad); background:color-mix(in srgb, var(--bad) 12%, transparent);}
+  .pay-panel{text-align:center;}
+  .pay-panel .pay-ico{font-size:44px; line-height:1; margin-bottom:6px;}
+  .pay-list{list-style:none; margin:12px 0 4px; padding:0; text-align:left; display:flex; flex-direction:column; gap:8px;}
+  .pay-list li{background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:14px; font-weight:500;}
+  .pay-price{font-family:var(--disp); font-weight:800; font-size:26px; color:var(--amber2); margin:12px 0 4px;}
+  .trustbox{background:color-mix(in srgb, var(--aqua) 8%, var(--bg2)); border:1px solid color-mix(in srgb, var(--aqua) 35%, transparent);
+    border-radius:12px; padding:11px 13px; font-size:13.5px; line-height:1.45; color:var(--dim); margin:0 0 16px;}
+  .trustbox b{color:var(--aqua2);}
+  .trustbox a{color:var(--aqua2); text-underline-offset:3px;}
+
   /* ---------- actions ---------- */
   .actions{display:grid; grid-template-columns:1fr; gap:10px; margin-top:12px;}
   .pace-chip{
@@ -374,6 +389,7 @@
     <span class="mb-txt"><b id="mbName">Medium control</b><span id="mbSub">auto-tightens as the night goes on</span></span>
     <span class="mb-go">›</span>
   </button>
+  <button id="licPill" type="button" hidden>🎟 trial</button>
 
   <section class="gauge-card">
     <div id="demoBanner" class="demo" hidden><span>DEMO NIGHT</span><button id="demoExit">exit demo</button></div>
@@ -449,7 +465,8 @@
 <div id="onboard" class="overlay" hidden>
   <div class="panel">
     <h2>CLEAR<em style="font-style:normal;color:var(--amber)">HEAD</em></h2>
-    <p class="sub">Your night-out copilot. One tap per drink — it estimates your blood alcohol, reminds you to drink water, paces your rounds and tells you when it's time to stop. Everything stays on this device.</p>
+    <p class="sub">Your night-out copilot. One tap per drink — it estimates your blood alcohol, reminds you to drink water, paces your rounds and tells you when it's time to stop.</p>
+    <div class="trustbox">🔒 <b>Private by design.</b> No account, no analytics, no data collection — your nights stay on this phone, where only you can see them. Be as honest as you like. <a href="privacy.html" target="_blank" rel="noopener">How your data is handled</a></div>
     <div class="field"><label>Sex (it changes the math)</label>
       <div class="seg" id="obSex">
         <button type="button" data-v="m">Male</button>
@@ -553,7 +570,7 @@
     <p id="iosHint" class="tiny" hidden>iPhone: open this page in Safari → Share → <b>Add to Home Screen</b>. Lock-screen alarms need the installed app.</p>
     <div class="row2" style="margin-top:10px">
       <button id="seTest" class="ghost-btn" type="button">🚨 Test the full alarm</button>
-      <span></span>
+      <button id="seLic" class="ghost-btn" type="button">💛 Unlock status</button>
     </div>
     <details class="math">
       <summary>About the math</summary>
@@ -678,6 +695,26 @@
   <div class="fx-hint">screen stays on · alarms still ring</div>
 </div>
 
+<!-- one-time unlock -->
+<div id="payDlg" class="overlay" hidden>
+  <div class="panel pay-panel">
+    <div class="pay-ico">🍸</div>
+    <h2>Yours, forever</h2>
+    <p class="sub" id="payLead"></p>
+    <ul class="pay-list">
+      <li>🎚 All four control levels, incl. auto-escalation</li>
+      <li>🏠 Get-home-safe with address &amp; alarms</li>
+      <li>⛶ Focus timer &amp; lock-screen reminders</li>
+      <li>💛 Your-why check-ins &amp; night history</li>
+    </ul>
+    <div class="pay-price" id="payPrice">CHF 10 · once</div>
+    <button id="payBuy" class="cta" type="button">Unlock forever</button>
+    <button id="payRestore" class="ghost-btn" type="button" style="width:100%; margin-top:9px">Restore purchase</button>
+    <button id="payLater" class="linkish" type="button">Not now</button>
+    <p class="tiny">One payment, no subscription, no account. The store handles the payment — we never see your name, your card, or your nights. A running night is never interrupted, paid or not.</p>
+  </div>
+</div>
+
 <!-- control level picker -->
 <div id="modeDlg" class="overlay" hidden>
   <div class="panel">
@@ -742,8 +779,17 @@
 <script>
 'use strict';
 /* ============================== constants ============================== */
-const LS = {profile:'clearhead.v1.profile', session:'clearhead.v1.session', history:'clearhead.v1.history'};
+const LS = {profile:'clearhead.v1.profile', session:'clearhead.v1.session', history:'clearhead.v1.history', lic:'clearhead.v1.lic'};
 const API = '/api/clearhead';
+// One-time-unlock licensing. Disarmed on the open web (free preview); the store
+// build enforces it by launching with ?lic=1 in the TWA start_url. Purchases go
+// through the store (Digital Goods API) — no account, no server, nothing about
+// the buyer ever reaches us. Trial nights are honor-level by design: wiping
+// browser data resets them, and that's the privacy trade we accept.
+const LIC_ENFORCED = new URLSearchParams(location.search).has('lic');
+const TRIAL_NIGHTS = 3;
+const SKU_UNLOCK = 'clearhead_unlock';
+const PRICE_LABEL = 'CHF 10';  // display fallback — the store quotes the real local price
 // Clearhead's own standalone VAPID identity (public half; the private half
 // lives only in the deployment's VAPID_PRIVATE env var).
 const VAPID_PUBLIC = 'BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs';
@@ -844,6 +890,7 @@ let focusOpen = false, fxPrevWake = false, lastTimerMin = -1;
 let safeModeOpen = false, smPrevWake = false, geoWatchId = null, holdTimer = null;
 let reflectOpen = false, reflectTimer = null, whyPickTag = '';
 let alarmShownAt = 0, alarmCounted = false; // an alarm left ringing >90s counts as ignored
+let lic = {full:false, nights:0};
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1241,6 +1288,99 @@ async function clearTimerSurfaces(){
   }catch(e){}
 }
 
+/* ============================== licensing (one-time unlock) ============================== */
+// Rules: the first TRIAL_NIGHTS real nights are free; after that, starting a NEW
+// night asks for the one-time unlock. A running night is never interrupted —
+// safety features don't stop mid-night, ever. Purchase state lives with the
+// store (restore = re-ask the store); we hold only a local boolean.
+function licSave(){ store.set(LS.lic, lic); }
+function licNightsLeft(){ return Math.max(0, TRIAL_NIGHTS - (lic.nights || 0)); }
+function licUnlocked(){ return !LIC_ENFORCED || !!lic.full; }
+function licCanStartNight(){ return licUnlocked() || licNightsLeft() > 0; }
+function markUnlocked(src){
+  if (lic.full) return;
+  lic.full = true; lic.src = src || 'store'; lic.at = Date.now(); licSave();
+  renderLic();
+  toast('💛 Unlocked — Clearhead is yours forever. Thank you.');
+}
+function consumeTrialNight(s){
+  // a night "counts" only if it was really used: something logged, or get-home armed.
+  // Merely opening the app and forgetting it never burns a free night.
+  if (!LIC_ENFORCED || lic.full || !s || s.demo) return;
+  const real = (s.drinks && s.drinks.length > 0) || (s.waters && s.waters.length > 0) || !!s.safe || !!s.hadSafe;
+  if (!real) return;
+  lic.nights = (lic.nights || 0) + 1; licSave();
+  renderLic();
+}
+function renderLic(){
+  const pill = $('licPill'); if (!pill) return;
+  const show = LIC_ENFORCED && !lic.full;
+  pill.hidden = !show;
+  if (show){
+    const left = licNightsLeft();
+    pill.textContent = left > 0 ? '🎟 trial · ' + left + (left === 1 ? ' night left' : ' nights left') : '🎟 trial over — unlock';
+    pill.classList.toggle('out', left === 0);
+  }
+}
+// --- store plumbing (Play Billing via the Digital Goods API; no-ops elsewhere) ---
+async function storeService(){
+  try{
+    if ('getDigitalGoodsService' in window) return await window.getDigitalGoodsService('https://play.google.com/billing');
+  }catch(e){}
+  return null;
+}
+async function checkStoreEntitlement(){
+  try{
+    const svc = await storeService(); if (!svc) return false;
+    const purchases = await svc.listPurchases();
+    if (purchases && purchases.some(p => p.itemId === SKU_UNLOCK)){ markUnlocked('play'); return true; }
+  }catch(e){}
+  return false;
+}
+async function buyUnlock(){
+  const svc = await storeService();
+  if (!svc){
+    toast(LIC_ENFORCED ? 'Purchasing runs through the store version of the app.' : 'Free preview — the unlock arrives with the store release.', 'warn');
+    return;
+  }
+  try{
+    const details = await svc.getDetails([SKU_UNLOCK]);
+    const item = details && details[0];
+    const req = new PaymentRequest(
+      [{supportedMethods:'https://play.google.com/billing', data:{sku:SKU_UNLOCK}}],
+      {total:{label:'Clearhead — unlock forever', amount: item ? item.price : {currency:'CHF', value:'10.00'}}});
+    const resp = await req.show();
+    // completing with 'success' lets the browser acknowledge the purchase with Play
+    await resp.complete('success');
+    markUnlocked('play');
+    $('payDlg').hidden = true;
+  }catch(e){
+    if (!e || e.name !== 'AbortError') toast('The purchase didn’t go through — nothing was charged.', 'warn');
+  }
+}
+async function openPayDlg(){
+  const left = licNightsLeft();
+  $('payLead').textContent = lic.full
+    ? 'You’re unlocked — everything, forever, on this phone. Thank you for backing it.'
+    : !LIC_ENFORCED
+      ? 'Clearhead is in free preview right now. When it lands on the stores: three nights on the house, then one payment — yours forever.'
+      : left > 0
+        ? 'You have ' + left + (left === 1 ? ' free night' : ' free nights') + ' left. After that: one payment, yours forever. No subscription.'
+        : 'Your three free nights are done. One payment unlocks Clearhead forever — no subscription, no account.';
+  $('payBuy').hidden = !!lic.full;
+  $('payRestore').hidden = !!lic.full;
+  $('payPrice').hidden = !!lic.full;
+  $('payDlg').hidden = false;
+  // ask the store for the real local price when we can
+  try{
+    const svc = await storeService();
+    if (svc){
+      const d = await svc.getDetails([SKU_UNLOCK]);
+      if (d && d[0] && d[0].price) $('payPrice').textContent = d[0].price.currency + ' ' + d[0].price.value + ' · once';
+    }
+  }catch(e){}
+}
+
 /* ============================== control modes ============================== */
 // The floor a running night may not drop below: rises with the hour, the length
 // of the session and how many alarms went ignored. Insurance against drunk-you.
@@ -1343,6 +1483,7 @@ function openModeDlg(){
 function startNight(){
   ensureAudio();
   if (session || !profile) return;
+  if (!licCanStartNight()){ openPayDlg(); return; }
   session = freshSession();
   saveSession();
   checkMode(Date.now());
@@ -1485,9 +1626,11 @@ function stopGeoWatch(){ try{ if (geoWatchId != null) navigator.geolocation.clea
 function armSafe(deadline){
   if (!profile.home){ toast('Set your home first — type an address, or use where you are now.', 'warn'); return; }
   if (!(deadline > Date.now())){ toast('Pick a time that’s still ahead.', 'warn'); return; }
+  if (!session && !licCanStartNight()){ $('safeDlg').hidden = true; openPayDlg(); return; }
   session = session || freshSession();
   session.safe = {armed:true, deadline, reached:false, overdue:false, startedAt:Date.now(),
     lastFix:(session.safe && session.safe.lastFix) || null};
+  session.hadSafe = true; // a night that armed get-home counts as a real night
   saveSession();
   if (profile.autoWatch && !watchArmed && !session.demo) armWatch(); // keep the tab alive to watch
   startGeoWatch();
@@ -1783,6 +1926,7 @@ function saveSession(){ store.set(LS.session, session); }
 
 function logDrink(item, tOverride){
   ensureAudio();
+  if (!session && !licCanStartNight()){ openPayDlg(); return; }
   if (!session) session = freshSession();
   const now = tOverride || Date.now();
   const prev = session.drinks[session.drinks.length - 1] || null;
@@ -1823,6 +1967,7 @@ function logDrink(item, tOverride){
 }
 function logWater(){
   ensureAudio();
+  if (!session && !licCanStartNight()){ openPayDlg(); return; }
   if (!session) session = freshSession();
   session.waters.push({id:session.nextId++, t:Date.now()});
   const last = session.drinks[session.drinks.length - 1];
@@ -2020,6 +2165,7 @@ function renderAll(){
 /* ============================== night end ============================== */
 function endNight(){
   if (!session || !session.drinks.length){
+    consumeTrialNight(session);
     session = null; store.del(LS.session); renderAll();
     syncPushSchedule();
     clearTimerSurfaces();
@@ -2053,6 +2199,7 @@ function endNight(){
 function finishSummary(){
   $('summary').hidden = true;
   const wasDemo = session && session.demo;
+  consumeTrialNight(session);
   session = null;
   store.del(LS.session);
   syncPushSchedule();
@@ -2158,7 +2305,9 @@ function init(){
 
   profile = normProfile(store.get(LS.profile));
   session = store.get(LS.session);
+  lic = store.get(LS.lic) || {full:false, nights:0};
   if (session && !session.demo && Date.now() - lastActivity(session) > 16*3600000){
+    consumeTrialNight(session); // it was a real night, it just never got closed
     session = null; store.del(LS.session); // stale night; start fresh
   }
   if (session && session.demo && !profile){
@@ -2226,6 +2375,19 @@ function init(){
   });
   $('endBtn').addEventListener('click', endNight);
   $('suDone').addEventListener('click', finishSummary);
+
+  // one-time unlock
+  $('licPill').addEventListener('click', openPayDlg);
+  $('seLic').addEventListener('click', () => { $('settings').hidden = true; openPayDlg(); });
+  $('payBuy').addEventListener('click', buyUnlock);
+  $('payRestore').addEventListener('click', async () => {
+    const found = await checkStoreEntitlement();
+    if (found) $('payDlg').hidden = true;
+    else toast(await storeService() ? 'No previous purchase found on this store account.' : 'Restore runs through the store version of the app.', 'warn');
+  });
+  $('payLater').addEventListener('click', () => { $('payDlg').hidden = true; });
+  renderLic();
+  checkStoreEntitlement(); // silent: picks up a purchase already on this store account
 
   // control level + session start
   $('modeBar').addEventListener('click', openModeDlg);

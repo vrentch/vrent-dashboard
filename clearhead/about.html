@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clearhead — your night-out copilot</title>
+<meta name="description" content="Count your drinks, pace your rounds, and get home safe. Four control levels that tighten as the night gets late. Private by design: no account, no data collection.">
+<style>
+  :root{--bg:#171208; --bg2:#1e1810; --card:#241c11; --card2:#2c2315; --line:#3b2f1c; --text:#f4ead6; --dim:#b5a184; --faint:#8a7a61;
+    --amber:#eba33c; --amber2:#f5c169; --aqua:#59c7d6; --aqua2:#9fe4ee; --hot:#e46a38; --bad:#e04b55;}
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); background-image:radial-gradient(120% 55% at 50% -8%, #2a2010 0%, rgba(42,32,16,0) 62%); background-repeat:no-repeat;
+    color:var(--text); font:16px/1.5 'Instrument Sans','Segoe UI',system-ui,sans-serif; padding:34px 18px 60px;}
+  main{max-width:640px; margin:0 auto;}
+  .mark{font-weight:800; letter-spacing:.14em; font-size:15px; font-family:'Bricolage Grotesque','Avenir Next',system-ui,sans-serif;}
+  .mark em{font-style:normal; color:var(--amber);}
+  h1{font-family:'Bricolage Grotesque','Avenir Next',system-ui,sans-serif; font-weight:800; font-size:clamp(30px,7vw,44px); line-height:1.08; letter-spacing:-.015em; margin:18px 0 10px;}
+  h1 em{font-style:normal; color:var(--amber);}
+  .sub{color:var(--dim); font-size:17.5px; max-width:46ch;}
+  .cta{display:inline-block; background:linear-gradient(180deg,var(--amber2),var(--amber)); color:#2a1c05; font-weight:800; font-size:17px;
+    border-radius:13px; padding:15px 26px; text-decoration:none; margin:20px 0 6px; box-shadow:0 10px 26px rgba(235,163,60,.25);}
+  .hint{font-size:12.5px; color:var(--faint);}
+  .cards{display:grid; gap:10px; margin:34px 0 0;}
+  .card{background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line); border-radius:16px; padding:16px 17px;}
+  .card h3{margin:0 0 5px; font-size:16.5px;}
+  .card p{margin:0; color:var(--dim); font-size:14.5px;}
+  .lvls{display:flex; gap:6px; flex-wrap:wrap; margin-top:9px;}
+  .lvl{font-family:'Spline Sans Mono',monospace; font-size:11.5px; border:1px solid var(--line); border-radius:99px; padding:5px 10px; color:var(--dim);}
+  .lvl.l1{color:var(--aqua2); border-color:color-mix(in srgb,var(--aqua) 50%,transparent);}
+  .lvl.l2{color:var(--amber2); border-color:color-mix(in srgb,var(--amber) 50%,transparent);}
+  .lvl.l3{color:var(--hot); border-color:color-mix(in srgb,var(--hot) 50%,transparent);}
+  .lvl.l4{color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent);}
+  .trust{background:color-mix(in srgb, var(--aqua) 8%, var(--bg2)); border:1px solid color-mix(in srgb, var(--aqua) 35%, transparent);
+    border-radius:16px; padding:16px 18px; margin:26px 0; font-size:15px; color:var(--dim);}
+  .trust b{color:var(--aqua2);}
+  .price{margin:26px 0 0; text-align:center; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px;}
+  .price b{display:block; font-family:'Bricolage Grotesque',system-ui,sans-serif; font-weight:800; font-size:26px; color:var(--amber2);}
+  .price span{color:var(--faint); font-size:13.5px;}
+  .foot{margin-top:40px; border-top:1px solid var(--line); padding-top:16px; font-size:13px; color:var(--faint); display:flex; gap:14px; flex-wrap:wrap;}
+  .foot a{color:var(--aqua2); text-underline-offset:3px;}
+  .fine{font-size:12px; color:var(--faint); margin-top:22px; max-width:56ch;}
+</style>
+</head>
+<body>
+<main>
+  <div class="mark">CLEAR<em>HEAD</em></div>
+  <h1>Big night out.<br><em>Clear head about it.</em></h1>
+  <p class="sub">One tap per drink. Clearhead estimates your blood alcohol, reminds you to
+  drink water, paces your rounds, shows you why you're keeping it together — and gets you
+  home. Alarms that actually cut through a loud bar.</p>
+  <a class="cta" href="./">Open Clearhead</a>
+  <div class="hint">Works in your browser · install it to your home screen for the full alarm arsenal</div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>🎚 Pick how tight it holds the reins</h3>
+      <p>Four control levels reshape the whole app — and auto-tighten as it gets late or
+      alarms get ignored. It never loosens mid-night.</p>
+      <div class="lvls"><span class="lvl l1">💧 LIGHT — water only</span><span class="lvl l2">🍺 MEDIUM — counts &amp; paces</span><span class="lvl l3">🔥 HARD — caps &amp; check-ins</span><span class="lvl l4">🛡 TOTAL — gets you home</span></div>
+    </div>
+    <div class="card">
+      <h3>⛶ A timer made for a table in a loud bar</h3>
+      <p>Full-screen countdown to your next drink or water with giant one-thumb buttons.
+      Notifications open straight into it; on Android they carry quick-log buttons.</p>
+    </div>
+    <div class="card">
+      <h3>🏠 Get home safe</h3>
+      <p>Type your address, set a be-home-by time. Miss it and the app takes over the
+      screen and rings until GPS says you've arrived. Your live location never leaves the phone.</p>
+    </div>
+  </div>
+
+  <div class="trust">🔒 <b>Private by design.</b> No account, no analytics, no ads, no data
+  collection. Your nights are stored on your phone and nowhere else — we couldn't read
+  them if we wanted to. That's the point: you can be completely honest in here.
+  <a href="privacy.html" style="color:var(--aqua2)">The full policy is genuinely short.</a></div>
+
+  <div class="price"><b>Three nights free, then CHF 10 — once.</b>
+  <span>No subscription. No account. A running night is never interrupted.</span></div>
+
+  <p class="fine">Estimates only (Widmark/Watson) — never a green light to drive. Not medical
+  advice. 18+. Emergencies in Switzerland: 144, Europe: 112. If drinking feels bigger than a
+  pacing app: safezone.ch.</p>
+
+  <div class="foot">
+    <a href="privacy.html">Privacy</a>
+    <a href="terms.html">Terms &amp; safety</a>
+    <span>Made in Switzerland</span>
+  </div>
+</main>
+</body>
+</html>

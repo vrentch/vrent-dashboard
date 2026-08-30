@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Clearhead</title>
+<meta name="description" content="Clearhead's privacy policy in plain language: no account, no analytics, no data collection — your nights stay on your phone.">
+<style>
+  :root{--bg:#171208; --card:#241c11; --line:#3b2f1c; --text:#f4ead6; --dim:#b5a184; --faint:#8a7a61; --amber:#eba33c; --aqua:#9fe4ee;}
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font:16px/1.55 'Instrument Sans','Segoe UI',system-ui,sans-serif; padding:28px 18px 60px;}
+  main{max-width:640px; margin:0 auto;}
+  h1{font-size:30px; line-height:1.15; margin:8px 0 4px; letter-spacing:-.01em;}
+  h1 em{font-style:normal; color:var(--amber);}
+  h2{font-size:19px; margin:30px 0 8px;}
+  p, li{color:var(--dim); font-size:15.5px;}
+  a{color:var(--aqua); text-underline-offset:3px;}
+  .lede{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:18px 0; color:var(--text); font-size:16.5px;}
+  .stamp{font-family:'Spline Sans Mono',monospace; font-size:12px; color:var(--faint); letter-spacing:.08em;}
+  ul{padding-left:20px;}
+  li{margin:6px 0;}
+  .foot{margin-top:40px; border-top:1px solid var(--line); padding-top:16px; font-size:13px; color:var(--faint);}
+  .todo{color:#e0a; display:none;} /* operator placeholders — fill before launch */
+</style>
+</head>
+<body>
+<main>
+  <p class="stamp">CLEARHEAD · PRIVACY POLICY</p>
+  <h1>You can be honest here.<br><em>We can't see any of it.</em></h1>
+
+  <div class="lede">
+    The short version: Clearhead has <b>no accounts, no analytics, no ads, no trackers,
+    and no database of you</b>. What you log on a night out is stored on your phone and
+    nowhere else. We built it this way on purpose — an honesty app only works if nobody
+    is watching.
+  </div>
+
+  <h2>What stays on your phone (everything)</h2>
+  <p>Your profile (sex, weight, height, age), your drinks and waters, your night history,
+  your reasons ("your why"), your saved home location and your settings are stored in your
+  browser's local storage on your device. They are never uploaded, synced or backed up by us.
+  Deleting the app (or using <i>Settings → Erase everything</i>) destroys them permanently —
+  we could not recover them for you even if you asked, because we never had them.</p>
+
+  <h2>The two narrow exceptions</h2>
+  <ul>
+    <li><b>Optional lock-screen alarms (push).</b> If you switch these on, your phone's
+    anonymous push token and the pending alarm times (just timestamps and generic titles
+    like "Water o'clock") are held on our server so the reminder can reach a locked phone.
+    No drinks, no amounts, no location, no identity. Records expire and are deleted
+    automatically within about 28 hours. Switch push off and the schedule is cleared.</li>
+    <li><b>Typing your home address.</b> If you type an address in "Get home safe", that
+    one address is sent once to OpenStreetMap's Nominatim service to be turned into map
+    coordinates (geocoding © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>
+    contributors, <a href="https://osmfoundation.org/wiki/Privacy_Policy" rel="noopener">OSMF privacy policy</a>).
+    The resulting coordinates are stored only on your phone. If you'd rather not, use
+    "use where I am right now" instead — that variant never leaves your device at all.
+    Your live location during the night is read by your phone's GPS locally and is
+    <b>never transmitted anywhere</b>.</li>
+  </ul>
+
+  <h2>Payment</h2>
+  <p>Clearhead is a one-time purchase made through the app store (Google Play / Apple
+  App Store). The store processes the payment and knows what stores know; we receive
+  no name, no card details, no address — only the store's anonymous confirmation that
+  this device owns the unlock.</p>
+
+  <h2>No analytics, no crash reporters, no third-party SDKs</h2>
+  <p>The app contains no advertising or analytics code of any kind. We don't know how
+  often you open it, what you tap, or how much you drink. We prefer it that way.</p>
+
+  <h2>Your controls</h2>
+  <ul>
+    <li><i>Settings → Erase everything</i> wipes profile, nights and history from the device.</li>
+    <li>Disabling lock-screen alarms clears the server-side alarm schedule immediately
+    (and it self-expires within ~28 h regardless).</li>
+  </ul>
+
+  <h2>Legal bits</h2>
+  <p>Because we do not collect personal data, there is essentially nothing for us to hand
+  over, sell, leak or lose. For the two narrow exceptions above, the legal basis is your
+  action requesting them (arming push alarms; looking up an address), and the data is
+  minimised and short-lived as described. This policy is governed by Swiss law
+  (revFADP/DSG); where the GDPR applies to you, the same promises hold.</p>
+
+  <div class="foot">
+    <p>Operator: <span class="op">[COMPANY NAME &amp; ADDRESS — fill in before launch]</span><br>
+    Contact: <span class="op">[contact email]</span></p>
+    <p>Last updated: August 2026 · <a href="terms.html">Terms &amp; safety notes</a> · <a href="./">Open Clearhead</a></p>
+  </div>
+</main>
+</body>
+</html>
