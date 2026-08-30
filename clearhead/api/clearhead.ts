@@ -4,15 +4,20 @@
 //   VAPID_PRIVATE                     — private half of the app's VAPID pair
 //   KV_REST_API_URL + KV_REST_API_TOKEN (or the UPSTASH_REDIS_REST_* names)
 //                                     — an Upstash Redis (Vercel Marketplace)
+//   QSTASH_TOKEN (optional)           — lets ?op=setup maintain the QStash
+//                                       schedule that pings tick every 5 min
 // No relative imports (Vercel runs this file as native ESM).
 //
-// Ops (single route /api/clearhead, selected via ?op=):
+// Ops (single route /api/clearhead, ?op= or {"op":...} in a POST body —
+// QStash calls the bare route with a JSON body):
 //   POST ?op=schedule  {subscription, alarms:[{id,at,title,body,urgent?}]}
 //                      Replaces the device's pending alarm list (empty = clear).
-//   GET  ?op=tick      Fires every due alarm; pinged ~every 5 min by the
-//                      clearhead-tick GitHub Actions workflow.
+//   GET  ?op=tick      Fires every due alarm; pinged every 5 min by a QStash
+//                      schedule (created via ?op=setup).
+//   GET  ?op=setup     Ensures exactly one such QStash schedule exists
+//                      (idempotent, deletes duplicates, inert without token).
 //   POST ?op=test      {subscription} — sends one push immediately.
-//   GET  ?op=status    {configured} — whether KV + VAPID are set up.
+//   GET  ?op=status    {configured, tick} — whether push + heartbeat are set up.
 //
 // An alarm only ever notifies the device that scheduled it (the push
 // subscription IS the address); nothing personal is stored beyond that.
@@ -25,6 +30,7 @@ const VAPID_PUBLIC = "BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWx
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
+const QSTASH_TOKEN = process.env.QSTASH_TOKEN;
 
 function configured(): boolean {
   return !!(KV_URL && KV_TOKEN && VAPID_PRIVATE);
@@ -177,6 +183,31 @@ async function testHandler(body: Json | undefined): Promise<Out> {
   return { status: 200, body: { ok } };
 }
 
+// Self-bootstrap of the heartbeat: ensure exactly one QStash schedule pings
+// this deployment's tick every 5 minutes. Safe to expose publicly — it is
+// idempotent (extra duplicates get deleted) and inert without QSTASH_TOKEN.
+const TICK_DEST = "https://clearhead-vrentchs-projects.vercel.app/api/clearhead";
+async function setupHandler(): Promise<Out> {
+  if (!QSTASH_TOKEN) return { status: 200, body: { ok: false, tick: false, missing: "QSTASH_TOKEN" } };
+  const auth = { Authorization: `Bearer ${QSTASH_TOKEN}` };
+  const ls = await fetch("https://qstash.upstash.io/v2/schedules", { headers: auth, signal: AbortSignal.timeout(8000) });
+  if (!ls.ok) return { status: 502, body: { ok: false, error: `qstash list ${ls.status}` } };
+  const all = (await ls.json()) as Record<string, unknown>[];
+  const ours = (Array.isArray(all) ? all : []).filter((s) => String(s.destination || "").startsWith(TICK_DEST));
+  for (const s of ours.slice(1)) {
+    await fetch(`https://qstash.upstash.io/v2/schedules/${String(s.scheduleId)}`, { method: "DELETE", headers: auth }).catch(() => undefined);
+  }
+  if (ours.length) return { status: 200, body: { ok: true, tick: true, already: true } };
+  const mk = await fetch(`https://qstash.upstash.io/v2/schedules/${TICK_DEST}`, {
+    method: "POST",
+    headers: { ...auth, "Upstash-Cron": "*/5 * * * *", "Content-Type": "application/json" },
+    body: JSON.stringify({ op: "tick" }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!mk.ok) return { status: 502, body: { ok: false, error: `qstash create ${mk.status}` } };
+  return { status: 200, body: { ok: true, tick: true, created: true } };
+}
+
 function readBody(req: IncomingMessage): Promise<Json | undefined> {
   return new Promise((resolve) => {
     const pre = (req as IncomingMessage & { body?: unknown }).body;
@@ -200,13 +231,14 @@ function safeJson(s: string): Json | undefined {
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url || "/", "http://localhost");
-  const op = url.searchParams.get("op") || "";
   const body = req.method === "POST" ? await readBody(req) : undefined;
+  const op = url.searchParams.get("op") || str(body?.op, 16);
 
   let out: Out;
   try {
-    if (op === "status") out = { status: 200, body: { ok: true, configured: configured() } };
+    if (op === "status") out = { status: 200, body: { ok: true, configured: configured(), tick: !!QSTASH_TOKEN } };
     else if (op === "tick") out = await tickHandler();
+    else if (op === "setup") out = await setupHandler();
     else if (op === "schedule") out = await scheduleHandler(body);
     else if (op === "test") out = await testHandler(body);
     else out = { status: 404, body: { ok: false, error: `unknown op: ${op}` } };
