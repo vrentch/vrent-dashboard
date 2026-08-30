@@ -6,10 +6,18 @@
 <title>Curfew — your night-out copilot</title>
 <meta name="description" content="Count your drinks, pace your rounds, and get home safe. Four control levels that tighten as the night gets late. Private by design: no account, no data collection.">
 <style>
-  :root{--bg:#171208; --bg2:#1e1810; --card:#241c11; --card2:#2c2315; --line:#3b2f1c; --text:#f4ead6; --dim:#b5a184; --faint:#8a7a61;
-    --amber:#eba33c; --amber2:#f5c169; --aqua:#59c7d6; --aqua2:#9fe4ee; --hot:#e46a38; --bad:#e04b55;}
+  :root{color-scheme:light dark;
+  --bg:#f7f7f8; --bg2:#f1f1f3; --card:#ffffff; --card2:#ffffff; --line:#e8e9eb; --line2:#dcdde0;
+  --text:#151619; --dim:#5c6066; --faint:#9a9ea6;
+  --accent:#e8930c; --accent-ink:#231500;
+  --amber:var(--accent); --amber2:var(--accent); --aqua:#0284c7; --aqua2:#0284c7;
+  --hot:#e8590c; --bad:#d93025; --ok:#188038;}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f1012; --bg2:#1d1e22; --card:#17181b; --card2:#17181b; --line:#26272b; --line2:#33343a;
+  --text:#f2f3f5; --dim:#a6abb3; --faint:#686d75;
+  --accent:#f5a524; --aqua:#38bdf8; --aqua2:#38bdf8; --hot:#f97316; --bad:#f0555d; --ok:#3fb950;}}
   *{box-sizing:border-box;}
-  body{margin:0; background:var(--bg); background-image:radial-gradient(120% 55% at 50% -8%, #2a2010 0%, rgba(42,32,16,0) 62%); background-repeat:no-repeat;
+  body{margin:0; background:var(--bg);
     color:var(--text); font:16px/1.5 'Instrument Sans','Segoe UI',system-ui,sans-serif; padding:34px 18px 60px;}
   main{max-width:640px; margin:0 auto;}
   .mark{font-weight:800; letter-spacing:.14em; font-size:15px; font-family:'Bricolage Grotesque','Avenir Next',system-ui,sans-serif;}
@@ -17,8 +25,8 @@
   h1{font-family:'Bricolage Grotesque','Avenir Next',system-ui,sans-serif; font-weight:800; font-size:clamp(30px,7vw,44px); line-height:1.08; letter-spacing:-.015em; margin:18px 0 10px;}
   h1 em{font-style:normal; color:var(--amber);}
   .sub{color:var(--dim); font-size:17.5px; max-width:46ch;}
-  .cta{display:inline-block; background:linear-gradient(180deg,var(--amber2),var(--amber)); color:#2a1c05; font-weight:800; font-size:17px;
-    border-radius:13px; padding:15px 26px; text-decoration:none; margin:20px 0 6px; box-shadow:0 10px 26px rgba(235,163,60,.25);}
+  .cta{display:inline-block; background:linear-gradient(180deg,var(--amber2),var(--amber)); color:var(--accent-ink); font-weight:800; font-size:17px;
+    border-radius:13px; padding:15px 26px; text-decoration:none; margin:20px 0 6px;}
   .hint{font-size:12.5px; color:var(--faint);}
   .cards{display:grid; gap:10px; margin:34px 0 0;}
   .card{background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line); border-radius:16px; padding:16px 17px;}
