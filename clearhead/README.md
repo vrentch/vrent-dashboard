@@ -1,4 +1,4 @@
-# Clearhead
+# Curfew
 
 A standalone night-out copilot: log every drink with one tap and it estimates
 your blood alcohol (‰), reminds you to drink water, paces your rounds and tells
@@ -18,7 +18,7 @@ function; everything personal stays on the device (`localStorage`).
 
 ## How the alarms work (three layers)
 
-1. **In-app storm** — while Clearhead is open: repeating two-tone siren,
+1. **In-app storm** — while Curfew is open: repeating two-tone siren,
    screen strobe (≤2 flashes/sec), vibration loop, flashlight blink (Android,
    with camera permission), full-screen takeover that re-rings until dismissed.
 2. **Night watch** (🛡, auto-armed on your first drink) — a whisper-quiet audio
@@ -44,7 +44,7 @@ Then redeploy. Without these, layers 1–2 still work fully.
 
 ## Control levels
 
-Pick how tight Clearhead holds the reins — it shapes the whole UI:
+Pick how tight Curfew holds the reins — it shapes the whole UI:
 
 - **Light** 💧 — just a session clock and a water reminder every ~20 min.
 - **Medium** 🍺 — + one-tap drink logging, pacing countdown, drink counter.

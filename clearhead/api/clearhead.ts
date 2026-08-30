@@ -1,4 +1,4 @@
-// Push-alarm scheduler for Clearhead — the whole backend of this standalone
+// Push-alarm scheduler for Curfew — the whole backend of this standalone
 // app. Requires two things in the deployment's env to be active (otherwise
 // every op reports configured:false and the app quietly runs in-app-only):
 //   VAPID_PRIVATE                     — private half of the app's VAPID pair
@@ -20,7 +20,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import * as webpush from "web-push";
 
-// Clearhead's own standalone VAPID identity (public half).
+// Curfew's own standalone VAPID identity (public half).
 const VAPID_PUBLIC = "BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs";
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -171,7 +171,7 @@ async function testHandler(body: Json | undefined): Promise<Out> {
   if (!subscription?.endpoint) return { status: 400, body: { ok: false, error: "subscription required" } };
   const ok = await sendPush(
     { subscription, alarms: [], updatedAt: Date.now() },
-    { title: "Clearhead 🛡", body: "Lock-screen alarms are armed. Lock your phone — reminders will still reach you.", tag: "clearhead-test" },
+    { title: "Curfew 🛡", body: "Lock-screen alarms are armed. Lock your phone — reminders will still reach you.", tag: "clearhead-test" },
     subId(subscription.endpoint)
   );
   return { status: 200, body: { ok } };

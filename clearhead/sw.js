@@ -1,8 +1,8 @@
-/* Clearhead service worker — offline shell, push alarms, notification clicks.
+/* Curfew service worker — offline shell, push alarms, notification clicks.
    Location-agnostic: all URLs resolve relative to this script's scope. */
 'use strict';
 
-const CACHE = 'clearhead-v3';
+const CACHE = 'curfew-v1';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-mask-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
@@ -13,7 +13,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith('clearhead-') && k !== CACHE).map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((k) => (k.startsWith('clearhead-') || k.startsWith('curfew-')) && k !== CACHE).map((k) => caches.delete(k)));
     await self.clients.claim();
   })());
 });
@@ -51,7 +51,7 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Clearhead', {
+  e.waitUntil(self.registration.showNotification(d.title || 'Curfew', {
     body: d.body || '',
     tag: d.tag || 'clearhead-alarm',
     renotify: true,

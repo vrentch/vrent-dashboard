@@ -1,7 +1,7 @@
 {
-  "name": "Clearhead",
-  "short_name": "Clearhead",
-  "description": "Night-out copilot — one-tap drink logging, live blood-alcohol estimate, water & pacing alarms.",
+  "name": "Curfew",
+  "short_name": "Curfew",
+  "description": "Night-out copilot — one-tap drink logging, live blood-alcohol estimate, water & pacing alarms, and a curfew that gets you home.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

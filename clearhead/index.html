@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#171208">
-<title>Clearhead</title>
+<title>Curfew</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Clearhead">
+<meta name="apple-mobile-web-app-title" content="Curfew">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap">
@@ -372,7 +372,7 @@
 
 <div id="app" hidden>
   <header class="top">
-    <div class="wordmark">CLEAR<em>HEAD</em></div>
+    <div class="wordmark">CUR<em>FEW</em></div>
     <div class="top-right">
       <span id="elapsed" class="pill" hidden>0h 00m</span>
       <button id="watchBtn" class="iconbtn" title="Night watch (strong alarms)" aria-label="Night watch">🛡</button>
@@ -451,7 +451,7 @@
   <footer class="foot">
     <button id="endBtn" class="ghost-btn">🏁 End the night</button>
     <p class="fineprint">Estimates only (Widmark / Watson formulas). Food, medication and your body change the real number — if you can feel the drinks, don't drive. Not medical advice.</p>
-    <p class="fineprint">Strongest alarms: install on your phone (⚙︎ → Install), enable lock-screen alarms, and keep Clearhead open during the night with 🛡 armed.</p>
+    <p class="fineprint">Strongest alarms: install on your phone (⚙︎ → Install), enable lock-screen alarms, and keep Curfew open during the night with 🛡 armed.</p>
   </footer>
 
   <div id="quickbar">
@@ -464,7 +464,7 @@
 <!-- onboarding -->
 <div id="onboard" class="overlay" hidden>
   <div class="panel">
-    <h2>CLEAR<em style="font-style:normal;color:var(--amber)">HEAD</em></h2>
+    <h2>CUR<em style="font-style:normal;color:var(--amber)">FEW</em></h2>
     <p class="sub">Your night-out copilot. One tap per drink — it estimates your blood alcohol, reminds you to drink water, paces your rounds and tells you when it's time to stop.</p>
     <div class="trustbox">🔒 <b>Private by design.</b> No account, no analytics, no data collection — your nights stay on this phone, where only you can see them. Be as honest as you like. <a href="privacy.html" target="_blank" rel="noopener">How your data is handled</a></div>
     <div class="field"><label>Sex (it changes the math)</label>
@@ -608,7 +608,7 @@
 <div id="safeDlg" class="overlay" hidden>
   <div class="panel">
     <h2>Get home safe</h2>
-    <p class="sub">Set your home and a time to be back by. If you’re not home by then, Clearhead takes over the screen and sounds the alarm until you arrive.</p>
+    <p class="sub">Set your home and a time to be back by. If you’re not home by then, Curfew takes over the screen and sounds the alarm until you arrive.</p>
     <div class="field">
       <label>Home address</label>
       <div class="addr-row">
@@ -633,7 +633,7 @@
       <button id="sfArm" class="cta" type="button">Arm get-home</button>
     </div>
     <button id="sfDisarm" class="danger-link" type="button" hidden>Turn get-home off</button>
-    <p class="tiny">Get-home needs location permission to tell when you’ve arrived — allow it when your phone asks. Typing an address looks it up once via OpenStreetMap; your live location while you’re out stays on this phone. Works best with Clearhead open in your pocket. A helper, not a guarantee — for real trouble call 144 / 112.</p>
+    <p class="tiny">Get-home needs location permission to tell when you’ve arrived — allow it when your phone asks. Typing an address looks it up once via OpenStreetMap; your live location while you’re out stays on this phone. Works best with Curfew open in your pocket. A helper, not a guarantee — for real trouble call 144 / 112.</p>
   </div>
 </div>
 
@@ -719,7 +719,7 @@
 <div id="modeDlg" class="overlay" hidden>
   <div class="panel">
     <h2>Control level</h2>
-    <p class="sub">How tight should Clearhead hold the reins tonight? It auto-tightens as it gets late, the session drags on, or alarms get ignored — it never loosens mid-night.</p>
+    <p class="sub">How tight should Curfew hold the reins tonight? It auto-tightens as it gets late, the session drags on, or alarms get ignored — it never loosens mid-night.</p>
     <div id="moptHost"></div>
     <div class="sheet-actions">
       <button id="modeClose" class="ghost-btn" type="button">Close</button>
@@ -731,7 +731,7 @@
 <div id="whyDlg" class="overlay" hidden>
   <div class="panel">
     <h2>Your why</h2>
-    <p class="sub">The people, plans and goals that matter. Through the night Clearhead quietly reminds you of these — gently at first, firmer as the drinks add up.</p>
+    <p class="sub">The people, plans and goals that matter. Through the night Curfew quietly reminds you of these — gently at first, firmer as the drinks add up.</p>
     <ul id="rlist" class="rlist"></ul>
     <div class="field" style="margin-top:14px">
       <label>Add a reason — what kind?</label>
@@ -788,14 +788,14 @@ const API = '/api/clearhead';
 // browser data resets them, and that's the privacy trade we accept.
 const LIC_ENFORCED = new URLSearchParams(location.search).has('lic');
 const TRIAL_NIGHTS = 3;
-const SKU_UNLOCK = 'clearhead_unlock';
+const SKU_UNLOCK = 'curfew_unlock';
 const PRICE_LABEL = 'CHF 10';  // display fallback — the store quotes the real local price
-// Clearhead's own standalone VAPID identity (public half; the private half
+// Curfew's own standalone VAPID identity (public half; the private half
 // lives only in the deployment's VAPID_PRIVATE env var).
 const VAPID_PUBLIC = 'BI-y6GbVdZiDP3_JT4-LuGODcO16aqsA07Pofkgcry6Yn-IcBkY3zY5NWxWoycRDBiuR_K9ensyEIHDYaLEdCVs';
 const PROFILE_DEFAULTS = {waterMin:20, gapMin:45, sound:true, siren:true, strobe:true, torch:false, autoWatch:true, push:false, cap:5,
   reasons:[], reflectMin:30, reflectOn:true, drinkCost:12, currency:'CHF', startMode:2};
-// Control levels: how tight Clearhead holds the reins. The floor only ever rises
+// Control levels: how tight Curfew holds the reins. The floor only ever rises
 // during a night (later hour, long session, ignored alarms) — never drops.
 const MODES = [null,
   {k:'light',  n:'Light',  icon:'💧', tag:'Water reminders only — an easy one.'},
@@ -1233,7 +1233,7 @@ function buildPushAlarms(){
   }
   if (session && session.safe && session.safe.armed && !session.safe.reached && session.safe.deadline > Date.now()){
     out.push({id:'home', at:session.safe.deadline, title:'🏠 Head home',
-      body:'Your get-home time is up — start heading back. Clearhead sounds the alarm here until you arrive.', urgent:true});
+      body:'Your get-home time is up — start heading back. Curfew sounds the alarm here until you arrive.', urgent:true});
   }
   return out;
 }
@@ -1301,7 +1301,7 @@ function markUnlocked(src){
   if (lic.full) return;
   lic.full = true; lic.src = src || 'store'; lic.at = Date.now(); licSave();
   renderLic();
-  toast('💛 Unlocked — Clearhead is yours forever. Thank you.');
+  toast('💛 Unlocked — Curfew is yours forever. Thank you.');
 }
 function consumeTrialNight(s){
   // a night "counts" only if it was really used: something logged, or get-home armed.
@@ -1348,7 +1348,7 @@ async function buyUnlock(){
     const item = details && details[0];
     const req = new PaymentRequest(
       [{supportedMethods:'https://play.google.com/billing', data:{sku:SKU_UNLOCK}}],
-      {total:{label:'Clearhead — unlock forever', amount: item ? item.price : {currency:'CHF', value:'10.00'}}});
+      {total:{label:'Curfew — unlock forever', amount: item ? item.price : {currency:'CHF', value:'10.00'}}});
     const resp = await req.show();
     // completing with 'success' lets the browser acknowledge the purchase with Play
     await resp.complete('success');
@@ -1363,10 +1363,10 @@ async function openPayDlg(){
   $('payLead').textContent = lic.full
     ? 'You’re unlocked — everything, forever, on this phone. Thank you for backing it.'
     : !LIC_ENFORCED
-      ? 'Clearhead is in free preview right now. When it lands on the stores: three nights on the house, then one payment — yours forever.'
+      ? 'Curfew is in free preview right now. When it lands on the stores: three nights on the house, then one payment — yours forever.'
       : left > 0
         ? 'You have ' + left + (left === 1 ? ' free night' : ' free nights') + ' left. After that: one payment, yours forever. No subscription.'
-        : 'Your three free nights are done. One payment unlocks Clearhead forever — no subscription, no account.';
+        : 'Your three free nights are done. One payment unlocks Curfew forever — no subscription, no account.';
   $('payBuy').hidden = !!lic.full;
   $('payRestore').hidden = !!lic.full;
   $('payPrice').hidden = !!lic.full;
@@ -1435,7 +1435,7 @@ function enterTotal(){
     armSafe(Date.now() + 75*60000); // be home in ~75 min; adjustable in the dialog
   } else {
     toast('🛡 Total control: set your home in “Get home safe” so I can bring you back.', 'warn');
-    swNotify('🏠 Set your home', 'Total control wants to get you home safe — add your address in Clearhead.', true);
+    swNotify('🏠 Set your home', 'Total control wants to get you home safe — add your address in Curfew.', true);
   }
 }
 function setModeChoice(n){
@@ -1767,7 +1767,7 @@ function openSafeDlg(){
   geoPermState().then(st => {
     if (st === 'denied' && !$('safeDlg').hidden){
       $('sfHomeState').className = 'tiny';
-      $('sfHomeState').textContent = 'Location is blocked for this site — switch it on in your browser so Clearhead can tell when you’re home.';
+      $('sfHomeState').textContent = 'Location is blocked for this site — switch it on in your browser so Curfew can tell when you’re home.';
     }
   });
 }
@@ -2323,7 +2323,7 @@ function init(){
   initSW();
 
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });
-  window.addEventListener('appinstalled', () => { deferredInstall = null; toast('📲 Installed — open Clearhead from your home screen tonight.'); });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; toast('📲 Installed — open Curfew from your home screen tonight.'); });
 
   // First touch: unlock audio, and re-arm night watch if a night is running
   // (audio can only start inside a user gesture, so a reload needs one tap).
@@ -2337,7 +2337,7 @@ function init(){
 
   $('watchBtn').addEventListener('click', () => {
     if (watchArmed){ disarmWatch(); toast('Night watch off — alarms only while the app is visible.', 'warn'); }
-    else { armWatch(); toast('🛡 Night watch armed — keep Clearhead open and alarms ring even with the screen locked.'); }
+    else { armWatch(); toast('🛡 Night watch armed — keep Curfew open and alarms ring even with the screen locked.'); }
   });
 
   // onboarding
@@ -2351,7 +2351,7 @@ function init(){
     renderAll();
     toast('Set. Have a good one — I’ve got the counting. 🍸');
     if (!STANDALONE && (deferredInstall || IS_IOS))
-      setTimeout(() => toast('📲 Tip: install Clearhead on your phone (Settings ⚙︎ → Install) for lock-screen alarms.'), 4200);
+      setTimeout(() => toast('📲 Tip: install Curfew on your phone (Settings ⚙︎ → Install) for lock-screen alarms.'), 4200);
   });
   $('obDemo').addEventListener('click', startDemo);
   $('demoExit').addEventListener('click', exitDemo);
@@ -2568,7 +2568,7 @@ function init(){
   });
   $('seTest').addEventListener('click', () => {
     fireAlarm({prio:2, kind:'strong', icon:'🚨', title:'Full alarm test',
-      msg:'Siren, flash, vibration, notification — a real alarm does all of this until you dismiss it. Keep Clearhead open tonight and it cuts through anything.'});
+      msg:'Siren, flash, vibration, notification — a real alarm does all of this until you dismiss it. Keep Curfew open tonight and it cuts through anything.'});
     if (profile.push && pushSub) apiCall('test', {subscription: pushSub});
   });
   $('sePush').addEventListener('click', enablePush);
@@ -2576,7 +2576,7 @@ function init(){
     if (deferredInstall){
       try{ deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; }catch(e){}
     } else if (IS_IOS){
-      toast('Safari: tap Share, then "Add to Home Screen". Open Clearhead from that icon.', 'water');
+      toast('Safari: tap Share, then "Add to Home Screen". Open Curfew from that icon.', 'water');
     } else {
       toast('In your browser menu choose "Install app" / "Add to Home screen".', 'water');
     }
