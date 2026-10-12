@@ -1591,7 +1591,16 @@ function subId(endpoint: string): string {
 
 interface SubRecord {
   subscription: any;
-  settings: { marketOpen: boolean; marketClose: boolean; dailyRecap: boolean; recapTime: string };
+  settings: {
+    marketOpen: boolean;
+    marketClose: boolean;
+    dailyRecap: boolean;
+    recapTime: string;
+    // The Daily Game's full-time whistle. The server never sees the score —
+    // targets and logs stay on the device — so this is purely the nudge.
+    dayClose?: boolean;
+    dayCloseTime?: string;
+  };
   tz: string;
 }
 
@@ -1636,7 +1645,7 @@ async function testHandler(body: any) {
   const sub = body?.subscription;
   if (!sub?.endpoint) return { status: 400, body: { ok: false } };
   const ok = await sendTo(
-    { subscription: sub, settings: { marketOpen: true, marketClose: true, dailyRecap: true, recapTime: "" }, tz: "UTC" },
+    { subscription: sub, settings: { marketOpen: true, marketClose: true, dailyRecap: true, recapTime: "", dayClose: false, dayCloseTime: "" }, tz: "UTC" },
     { title: "AC App", body: "🔔 Notifications are working — you're all set!", url: "/" },
     subId(sub.endpoint)
   );
@@ -1906,6 +1915,22 @@ async function tickHandler() {
         if (await once(id, t.day, "recap")) {
           if (recap == null) recap = await recapText();
           const ok = await sendTo(rec, { title: "📊 Market recap", body: recap, url: "/" }, id);
+          if (ok) sent++;
+        }
+      }
+    }
+
+    if (s.dayClose && s.dayCloseTime) {
+      const t = tzParts(rec.tz || "UTC", now);
+      const [dh, dm] = s.dayCloseTime.split(":").map(Number);
+      const target = (dh || 0) * 60 + (dm || 0);
+      if (t.minutes >= target && t.minutes < target + WINDOW) {
+        if (await once(id, t.day, "dayclose")) {
+          const ok = await sendTo(
+            rec,
+            { title: "⏱️ Full time", body: "The day is being scored. Open AC App for tonight's verdict.", url: "/" },
+            id
+          );
           if (ok) sent++;
         }
       }

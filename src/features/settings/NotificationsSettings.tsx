@@ -11,9 +11,11 @@ import {
   sendTestPush,
 } from "../../lib/push";
 import { Bell, Check, Loader2, ExternalLink } from "lucide-react";
+import { useGame } from "../../lib/game/store";
 
 export default function NotificationsSettings() {
   const s = usePushSettings();
+  const gameClose = useGame().settings.closeTime;
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [supported] = useState(() => pushSupported());
   const [busy, setBusy] = useState(false);
@@ -56,7 +58,7 @@ export default function NotificationsSettings() {
         </div>
         <div>
           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">Market open/close &amp; a daily recap</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Markets, a daily recap &amp; the {gameClose} whistle</p>
         </div>
       </div>
 
@@ -105,6 +107,13 @@ export default function NotificationsSettings() {
                     className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 outline-none"
                   />
                 </div>
+              )}
+              <Toggle label="Day close (the game)" on={s.dayClose} onChange={(v) => update({ dayClose: v })} />
+              {s.dayClose && (
+                <p className="pb-1 text-xs text-slate-400 dark:text-slate-500">
+                  The full-time whistle at {gameClose}, so you can settle the day before it scores itself.
+                  Change the time in <b>The Daily Game → settings</b>.
+                </p>
               )}
               <button onClick={test} disabled={busy} className="mt-1 text-sm font-medium text-brand-600 dark:text-brand-400">
                 Send a test notification

@@ -17,8 +17,10 @@ import StatRing from "../../components/StatRing";
 import Sparkline from "../../components/Sparkline";
 import { useCountUp } from "../../lib/useCountUp";
 import { chf, chfRound } from "../../lib/business/format";
+import { useGame, todayKey as gameToday, toggleLog, canLog as gameCanLog } from "../../lib/game/store";
+import { timeline as gameTimeline, scoreDay, isSealed } from "../../lib/game/scoring";
 
-type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money";
+type Tab = "home" | "news" | "markets" | "sports" | "health" | "scan" | "calendar" | "settings" | "briefing" | "money" | "game";
 
 // One-tap spend amounts — the everyday sums that shouldn't need typing.
 const SPEND_CHIPS = [5, 10, 20];
@@ -108,6 +110,18 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
   const monthPct = monthBudget > 0 ? Math.min(1, monthSpent / monthBudget) : 0;
   const trend = useMemo(() => lastNDaysSpend(money, 7), [money]);
   const leftShown = useCountUp(moneyOn ? leftToday : 0);
+
+  // The Daily Game — today's duel, tickable straight from Home.
+  const game = useGame();
+  const gToday = gameToday();
+  const gameTl = gameTimeline(game, gToday);
+  const gameDay = gameTl.today;
+  const gameSc = useMemo(() => scoreDay(game, gToday), [game, gToday]);
+  const gameSealed = isSealed(game, gToday);
+  const gameOpen = gameCanLog(gToday);
+  const gameLeft = gameSc.items.filter((i) => i.required && !i.done);
+  const gameQuick = gameLeft.slice(0, 3);
+  const gameScoreShown = useCountUp(gameDay.score, 800);
 
   // Food photo straight from Home — same flow as the Health tab.
   const foodFileRef = useRef<HTMLInputElement>(null);
@@ -264,6 +278,67 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (t: Tab) => voi
                         : new Date(e.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
                     </span>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* ── The Daily Game — today's score against your rival ───────── */}
+        <section className="rounded-3xl p-4 relative overflow-hidden hero-ink text-white">
+          <div className="absolute -right-8 -top-10 w-36 h-36 rounded-full bg-brand-500/25 blur-2xl" aria-hidden />
+          <button onClick={() => onNavigate("game")} className="relative w-full flex items-center gap-3.5 text-left active:opacity-80 transition-opacity">
+            <StatRing pct={gameDay.score / 100} size={62} stroke={6} from="#818cf8" to="#22d3ee">
+              <div>
+                <p className="text-[15px] font-black leading-none tabular-nums">{Math.round(gameScoreShown)}</p>
+                <p className="text-[7px] font-bold uppercase tracking-wider text-white/50">score</p>
+              </div>
+            </StatRing>
+            <div className="min-w-0 flex-1">
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-white/55">
+                Daily game · {gameSealed ? "sealed" : `closes ${game.settings.closeTime}`}
+              </p>
+              <p className="text-[14px] font-extrabold leading-tight mt-0.5">
+                {game.targets.length === 0
+                  ? "Set your first targets →"
+                  : gameDay.restDay
+                    ? "Rest day — nothing due"
+                    : `You ${gameDay.score} · ${game.settings.rivalEmoji} ${gameDay.ghost}`}
+              </p>
+              <p className="text-[11px] text-white/65 tabular-nums mt-0.5">
+                {game.targets.length === 0
+                  ? "Score yourself every day at 22:00"
+                  : <>
+                      {gameLeft.length ? `${gameLeft.length} left today` : "all done today"}
+                      {gameTl.dayStreak > 0 && ` · 🔥 ${gameTl.dayStreak}`}
+                      {` · Lv ${gameTl.level.level}`}
+                    </>}
+              </p>
+            </div>
+            <ChevronRight size={16} className="text-white/60 shrink-0" />
+          </button>
+
+          {/* Tick the next few straight from here */}
+          {gameQuick.length > 0 && (
+            <div className="relative mt-3 flex gap-1.5">
+              {gameQuick.map((item) => {
+                const isCheck = item.target.measure === "check";
+                return (
+                  <button
+                    key={item.target.id}
+                    onClick={() => {
+                      if (!isCheck || !gameOpen) { onNavigate("game"); return; }
+                      toggleLog(gToday, item.target);
+                      note(`${item.target.emoji} done ✓`);
+                    }}
+                    className="flex-1 min-w-0 flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/12 text-left transition-transform duration-150 active:scale-[0.94]"
+                  >
+                    <span className="text-[13px] leading-none shrink-0">{item.target.emoji}</span>
+                    <span className="min-w-0 flex-1 text-[10.5px] font-semibold truncate">{item.target.title}</span>
+                    {isCheck
+                      ? <Check size={12} className="text-white/55 shrink-0" />
+                      : <span className="text-[9px] font-bold text-white/55 shrink-0 tabular-nums">{item.target.goal}</span>}
+                  </button>
                 );
               })}
             </div>

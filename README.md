@@ -81,6 +81,56 @@ The **Studio** tab turns your photos into ready-to-publish Instagram content:
    AI assigns. Download anything, or use **Share** on your phone to send a
    design straight into the Instagram app.
 
+## The Daily Game (targets, scored at 22:00)
+
+A game you play against yourself. Open it from the **tile on Home**.
+
+**Targets.** Add, adjust, retire or delete them at any time. Each one carries:
+
+- a **measure** — tick it off, log a number against a goal, or keep a limit
+  clean ("avoid it", which starts the day satisfied and breaks when you log a
+  slip);
+- a **priority** — Low ×1, Normal ×2, Important ×3, Non-negotiable ×5, which is
+  literally its weight in the day score;
+- a **cadence** — every day, Mon–Fri, weekends, chosen weekdays, *n*× a week or
+  month, or a one-off. A quota target ("4× a week") sits on the board as
+  optional and turns **required** only once you can no longer afford to skip
+  it;
+- a **timeline** — a plain daily habit, or a week/month/quarter/year campaign
+  where the daily logs add up to a bigger total with its own pace bar;
+- an optional **end date** plus a **renewal mode** — retire on that date, or
+  shift the whole window forward a week/month/quarter/year and come back for
+  another term.
+
+**The score.** At your close time (22:00 by default) the day is sealed and
+scored 0–100: the weighted share of the required targets you actually
+delivered. Overachievement and quota work banked early land in a bonus pool, so
+a day can never exceed 100 but extra effort still pays XP. A day with nothing
+due is a rest day — it costs you nothing and doesn't break a streak.
+
+**The rival.** A ghost whose daily form is built from *your* last few scores,
+then shifted by the difficulty you pick (Warm-up → Nemesis) and a deterministic
+daily wobble. It learns: a winning run makes it raise its game, a losing run
+makes it ease off. Its number is visible from the morning, so you always know
+the bar. Beat it and the verdict screen celebrates; lose and it tells you
+exactly which single target would have flipped the result.
+
+**Prizes.** XP and levels (Rookie → Legend) with a growth path you can see,
+~49 achievements across four tiers, and weekly / monthly / yearly medals
+(bronze → platinum) that need both a quality average *and* a number of days
+played. Each calendar month is a season with its own recap. Weekly challenges
+and a monthly boss fight are generated from the targets you actually own.
+
+**Everything stays on the device.** Targets, logs, scores and trophies live in
+`localStorage` — nothing about them is sent anywhere. The only optional server
+touch is a "day close" push notification (Settings → Notifications), and it
+carries no data, just the whistle.
+
+Internally, the store holds **only facts** (targets, logs, settings); every
+score, streak, badge and medal is derived by pure functions, so fixing a
+forgotten entry honestly re-scores the day instead of leaving a stale total
+behind.
+
 ## Project structure
 
 ```
@@ -90,6 +140,8 @@ api/[...path].ts      Serverless entry (production)
 vite.config.ts        Dev middleware serves the same /api in dev
 src/features/news      News section
 src/features/markets   Markets section
+src/features/game      The Daily Game (Arena / Targets / Growth / Trophies)
+src/lib/game           Game engine — store (facts) + pure scoring/achievements
 src/features/settings  Settings / about
 ```
 
@@ -108,8 +160,8 @@ the deployed project:
 4. **Redeploy**, then in the installed app: **Settings → Notifications →
    Enable**.
 
-Only market open/close and the daily recap are sent — no calendar or watchlist
-data leaves the device. Generate a fresh VAPID pair anytime with
+Only market open/close, the daily recap and the Daily Game's close-time whistle
+are sent — no calendar, watchlist or target data leaves the device. Generate a fresh VAPID pair anytime with
 `node -e "console.log(require('web-push').generateVAPIDKeys())"` (update the
 public key in `src/lib/push.ts` and `VAPID_PUBLIC` in `api/[...path].ts`).
 

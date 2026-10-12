@@ -10,6 +10,9 @@ export interface PushSettings {
   marketClose: boolean;
   dailyRecap: boolean;
   recapTime: string; // HH:MM in the device's local time
+  /** The Daily Game's full-time whistle. */
+  dayClose: boolean;
+  dayCloseTime: string; // mirrors the game's close time so the server can fire it
 }
 
 const KEY = "vrent.push.v1";
@@ -19,6 +22,8 @@ const defaults: PushSettings = {
   marketClose: false,
   dailyRecap: true,
   recapTime: "18:00",
+  dayClose: true,
+  dayCloseTime: "22:00",
 };
 
 function load(): PushSettings {
@@ -55,6 +60,17 @@ export function usePushSettings(): PushSettings {
     () => state,
     () => state
   );
+}
+
+/**
+ * Keep the server's idea of the day-close time in step with the game's own
+ * setting. Called whenever the close time moves; a no-op when push is off.
+ */
+export function syncDayCloseTime(time: string): void {
+  if (!/^\d{1,2}:\d{2}$/.test(time) || state.dayCloseTime === time) return;
+  const next = { ...state, dayCloseTime: time };
+  setPushSettings({ dayCloseTime: time });
+  if (next.enabled) void syncPush(next);
 }
 
 export function pushSupported(): boolean {

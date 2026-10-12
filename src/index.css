@@ -298,6 +298,127 @@ body {
   }
 }
 
+/* ── The Daily Game ────────────────────────────────────────────────────────
+   The day's verdict is the emotional beat of the whole section, so it gets
+   real choreography: the result stamps in, the loser's panel shudders, badges
+   pop one by one, and the XP bar fills. All of it collapses to plain fades
+   under prefers-reduced-motion (bottom of this block). */
+
+/* Verdict word slams in from oversized to settled. */
+@keyframes stamp-in {
+  0% { opacity: 0; transform: scale(2.4) rotate(-9deg); filter: blur(10px); }
+  55% { opacity: 1; transform: scale(0.94) rotate(1.5deg); filter: blur(0); }
+  75% { transform: scale(1.04) rotate(-0.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.animate-stamp { animation: stamp-in 0.72s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+/* The defeated side takes a knock. */
+@keyframes shudder {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  12% { transform: translateX(-7px) rotate(-1.2deg); }
+  28% { transform: translateX(6px) rotate(1deg); }
+  45% { transform: translateX(-4px) rotate(-0.6deg); }
+  62% { transform: translateX(3px) rotate(0.4deg); }
+  80% { transform: translateX(-1.5px) rotate(0); }
+}
+.animate-shudder { animation: shudder 0.66s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.28s both; }
+
+/* Winner's panel swells and glows. */
+@keyframes victory-rise {
+  0% { opacity: 0; transform: translateY(14px) scale(0.93); }
+  60% { opacity: 1; transform: translateY(0) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-victory { animation: victory-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Badge cabinet arrival — each one lands with a tiny overshoot. */
+@keyframes badge-pop {
+  0% { opacity: 0; transform: scale(0.3) rotate(-18deg); }
+  65% { opacity: 1; transform: scale(1.14) rotate(4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.animate-badge { animation: badge-pop 0.5s cubic-bezier(0.2, 1.5, 0.45, 1) both; }
+
+/* Slow breathing glow for a live streak / unlocked trophy. */
+@keyframes aura {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.42), 0 8px 26px rgba(79, 70, 229, 0.26); }
+  50% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0), 0 8px 30px rgba(79, 70, 229, 0.4); }
+}
+.animate-aura { animation: aura 2.4s ease-in-out infinite; }
+
+/* Rival ghost bobbing — gives the opponent a pulse of its own. */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.animate-bob { animation: bob 2.8s ease-in-out infinite; }
+
+/* A sweep of light across a hero surface when a day is won. */
+@keyframes sheen {
+  0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+  28% { opacity: 0.85; }
+  100% { transform: translateX(240%) skewX(-18deg); opacity: 0; }
+}
+.animate-sheen { animation: sheen 1.5s cubic-bezier(0.3, 0.8, 0.3, 1) 0.35s both; }
+
+/* Score counter flash when a target is ticked. */
+@keyframes tick-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.animate-tick { animation: tick-pop 0.34s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+/* The growth path's travelling spark. */
+@keyframes path-pulse {
+  0% { opacity: 0.25; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 0.25; transform: scale(0.9); }
+}
+.animate-path { animation: path-pulse 2s ease-in-out infinite; }
+
+/* Hairline gold edge for earned trophies. */
+.trophy-gold {
+  background: linear-gradient(145deg, rgba(251, 191, 36, 0.22) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+.trophy-locked {
+  background: rgba(120, 120, 140, 0.07);
+  border: 1px dashed rgba(120, 120, 140, 0.32);
+}
+:root.dark .trophy-locked {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+}
+
+/* Victory / defeat backdrops for the verdict screen. */
+.verdict-win {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(99, 102, 241, 0.5) 0%, transparent 60%),
+    radial-gradient(90% 70% at 20% 100%, rgba(34, 211, 238, 0.28) 0%, transparent 60%),
+    linear-gradient(170deg, #1e1b4b 0%, #0b0b16 100%);
+}
+.verdict-loss {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(148, 163, 184, 0.3) 0%, transparent 60%),
+    linear-gradient(170deg, #1c1c22 0%, #08080c 100%);
+}
+.verdict-draw {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(245, 158, 11, 0.3) 0%, transparent 60%),
+    linear-gradient(170deg, #211c14 0%, #0a0a0e 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stamp, .animate-shudder, .animate-victory, .animate-badge,
+  .animate-sheen, .animate-tick {
+    animation-duration: 0.18s;
+    animation-name: fade-in-up;
+  }
+  .animate-aura, .animate-bob, .animate-path { animation: none; }
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
 }
